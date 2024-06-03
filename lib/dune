@@ -1,0 +1,3 @@
+(library
+ (name lltz_ir)
+ (libraries tezos-micheline))
