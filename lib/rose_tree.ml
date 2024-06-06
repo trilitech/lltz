@@ -1,4 +1,6 @@
 type ('k, 'v) t = Leaf of 'v | Node of ('k * ('k, 'v) t) list
+[@@deriving show]
+
 type 'k path = 'k list
 
 let map f =
