@@ -21,11 +21,13 @@ module Fixpoint (F : Base_functor) = struct
   (* Just because I noticed it's a cofree comonad and I'm that knida guy *)
   let extract { deco; _ } = deco
 
-  let rec duplicate { inner; _ } =
-    { deco = inner; inner = F.map duplicate inner }
+  let rec duplicate : 'a t -> 'a t t = function
+    | { inner; _ } as deco -> { deco; inner = F.map duplicate inner }
 
-  let extend f =
-    let rec iter { inner; _ } = { deco = f inner; inner = F.map iter inner } in
+  let extend (f : 'a t -> 'b) : 'a t -> 'b t =
+    let rec iter = function
+      | { inner; _ } as deco -> { deco = f deco; inner = F.map iter inner }
+    in
     iter
 
   let unwrap { inner; _ } = inner
@@ -46,8 +48,7 @@ module Fixpoint (F : Base_functor) = struct
     iter
 
   (* histomorphism? *)
-  let redecorate (alg : 'deco_a -> 'deco_b F.t -> 'deco_b) :
-      'deco_a t -> 'deco_b t =
+  let redecorate (alg : 'a -> 'b F.t -> 'b) : 'a t -> 'b t =
     let rec iter { deco; inner } =
       let inner = F.map iter inner in
       { deco = alg deco (F.map extract inner); inner }

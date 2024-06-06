@@ -1,2 +1,2 @@
-type annot = string Option.t
+type annot = string
 type location = { source : string; start : int; length : int }
