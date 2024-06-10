@@ -1,6 +1,7 @@
 (*  constructors taken from smartpy but conflated into a single structure *)
-type 'ty t =
-  (* arity 0 *)
+
+(* arity 0 *)
+type 'ty t0 =
   | Amount
   | Balance
   | Chain_id
@@ -18,7 +19,9 @@ type 'ty t =
   | None_ of 'ty
   | Sapling_empty_state of { memo : int }
   | Unit_
-  (* arity 1 *)
+
+(* arity 1 *)
+type 'ty t1 =
   | Car
   | Cdr
   | Left of string option * string option * 'ty
@@ -59,10 +62,11 @@ type 'ty t =
   | Cast of 'ty
   | Rename of string option
   | Emit of string option * 'ty option
-  (* arity 1 (can fail)*)
   | Failwith
   | Never
-  (* arity 2 *)
+
+(* arity 2 *)
+type 'ty t2 =
   | Pair of string option * string option
   | Add
   | Mul
@@ -86,8 +90,10 @@ type 'ty t =
   | Ticket_deprecated
   | Split_ticket
   | Updaten of int
-  | View of string (* view name *) * 'ty (* return type *)
-  (* arity 3 *)
+  | View of string (* view name *) * 'ty (*return type *)
+
+(* arity 3 *)
+type 'ty t3 =
   | Slice
   | Update
   | Get_and_update

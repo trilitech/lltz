@@ -47,11 +47,11 @@ module Fixpoint (F : Base_functor) = struct
     in
     iter
 
-  (* histomorphism? *)
-  let redecorate (alg : 'a -> 'b F.t -> 'b) : 'a t -> 'b t =
+  let redecorate (alg : 'a -> 'b t F.t -> 'b) : 'a t -> 'b t =
     let rec iter { deco; inner } =
       let inner = F.map iter inner in
-      { deco = alg deco (F.map extract inner); inner }
+      let deco = alg deco inner in
+      { deco; inner }
     in
     iter
 end
