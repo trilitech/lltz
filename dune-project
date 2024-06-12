@@ -1,4 +1,4 @@
-(lang dune 2.0)
+(lang dune 3.15)
 
 (name lltz)
 
@@ -17,11 +17,9 @@
  (name lltz)
  (synopsis "A common compiler IR for targetting Michelson, the stack-based language of the Tezos blockchain.")
  (depends
-  (dune
-   (>= "2.0"))
-  (ocaml
-   (>= 4.08.0))
-  (octez-libs.micheline
-   (>= 1.73.0))
+  (ocaml (= 4.14.2))
+  dune 
+  tezos-micheline 
+  ppx_deriving
   (cmdliner
    (>= 1.1.0))))
