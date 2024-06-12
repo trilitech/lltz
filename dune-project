@@ -1,23 +1,21 @@
 (lang dune 2.0)
 
-(name lltz_ir)
+(name lltz)
 
 (generate_opam_files true)
 
 (source
- (github trilitech/lltz-draft-implementation))
+ (github trilitech/lltz))
 
-(license Unlicense)
+(license MIT)
 
-(authors "Sam Finch  <sam.finch@trili.tech>")
+(authors "TriliTech <contact@trili.tech>")
 
-(maintainers "Sam Finch  <sam.finch@trili.tech>")
+(maintainers "TriliTech <contact@trili.tech>")
 
 (package
- (name lltz_ir)
- (synopsis "Darft implementation of lltz ir")
- (description
-  "TODO")
+ (name lltz)
+ (synopsis "A common compiler IR for targetting Michelson, the stack-based language of the Tezos blockchain.")
  (depends
   (dune
    (>= "2.0"))
