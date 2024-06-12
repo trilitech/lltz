@@ -13,6 +13,11 @@
       inputs.flake-utils.follows = "flake-utils";
       inputs.opam-repository.follows = "opam-repository";
     };
+
+    grace = {
+      url = "github:johnyob/grace/d15a6d7d07a2551d1a9934fa79c2cf84c918f990";
+      flake = false;
+    };
   };
 
   outputs = inputs:
@@ -37,6 +42,13 @@
                       name = "lltz";
                       src = ./.;
                       opam = ./lltz.opam;
+                    }
+
+                    {
+                      name = "grace";
+                      version = "0.2.0";
+                      opam = "${grace}/grace.opam";
+                      src = "${grace}";
                     }
                   ];
 

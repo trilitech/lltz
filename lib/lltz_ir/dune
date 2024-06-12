@@ -1,0 +1,6 @@
+(library
+ (name lltz_ir)
+ (public_name lltz.ir)
+ (libraries core grace tezos-micheline)
+ (preprocess
+  (pps ppx_jane)))

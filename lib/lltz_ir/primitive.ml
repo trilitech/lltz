@@ -1,7 +1,7 @@
-(*  constructors taken from smartpy but conflated into a single structure *)
+open Core
 
-(* arity 0 *)
-type 'ty t0 =
+type t =
+  (* Arity 0 *)
   | Amount
   | Balance
   | Chain_id
@@ -12,20 +12,18 @@ type 'ty t0 =
   | Sender
   | Source
   | Total_voting_power
-  | Empty_bigmap of 'ty * 'ty
-  | Empty_map of 'ty * 'ty
-  | Empty_set of 'ty
-  | Nil of 'ty
-  | None_ of 'ty
+  | Empty_bigmap of Type.t * Type.t
+  | Empty_map of Type.t * Type.t
+  | Empty_set of Type.t
+  | Nil of Type.t
+  | None_ of Type.t
   | Sapling_empty_state of { memo : int }
   | Unit_
-
-(* arity 1 *)
-type 'ty t1 =
+  (* Arity 1 *)
   | Car
   | Cdr
-  | Left of string option * string option * 'ty
-  | Right of string option * string option * 'ty
+  | Left of string option * string option * Type.t
+  | Right of string option * string option * Type.t
   | Some_
   | Eq
   | Abs
@@ -33,20 +31,20 @@ type 'ty t1 =
   | Nat
   | Int
   | Bytes
-  | IsNat
+  | Is_nat
   | Neq
   | Le
   | Lt
   | Ge
   | Gt
   | Not
-  | Concat1
+  | Concat
   | Size
   | Address
   | Implicit_account
-  | Contract of string option * 'ty
+  | Contract of string option * Type.t
   | Pack
-  | Unpack of 'ty
+  | Unpack of Type.t
   | Hash_key
   | Blake2b
   | Sha256
@@ -59,14 +57,12 @@ type 'ty t1 =
   | Pairing_check
   | Voting_power
   | Getn of int
-  | Cast of 'ty
+  | Cast of Type.t
   | Rename of string option
-  | Emit of string option * 'ty option
+  | Emit of string option * Type.t option
   | Failwith
   | Never
-
-(* arity 2 *)
-type 'ty t2 =
+  (* Arity 2 *)
   | Pair of string option * string option
   | Add
   | Mul
@@ -80,7 +76,6 @@ type 'ty t2 =
   | Or
   | Cons
   | Compare
-  | Concat2
   | Get
   | Mem
   | Exec
@@ -90,13 +85,11 @@ type 'ty t2 =
   | Ticket_deprecated
   | Split_ticket
   | Updaten of int
-  | View of string (* view name *) * 'ty (*return type *)
-
-(* arity 3 *)
-type 'ty t3 =
+  | View of string (* view name *) * Type.t (*return type *)
   | Slice
   | Update
   | Get_and_update
   | Transfer_tokens
   | Check_signature
   | Open_chest
+[@@deriving sexp, equal, compare]

@@ -19,7 +19,8 @@
  (depends
   (ocaml (= 4.14.2))
   dune 
-  tezos-micheline 
-  ppx_deriving
-  (cmdliner
-   (>= 1.1.0))))
+  tezos-micheline
+  core
+  grace
+  ppx_jane
+  visitors))
