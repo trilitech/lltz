@@ -1,8 +1,8 @@
-open Core
+open Import
 
 (*  constructors taken from smartpy but conflated into a single structure *)
 
-type 'ty t =
+type t =
   (* arity 0 *)
   | Amount
   | Balance
@@ -14,18 +14,18 @@ type 'ty t =
   | Sender
   | Source
   | Total_voting_power
-  | Empty_bigmap of 'ty * 'ty
-  | Empty_map of 'ty * 'ty
-  | Empty_set of 'ty
-  | Nil of 'ty
-  | None of 'ty
+  | Empty_bigmap of Type.t * Type.t
+  | Empty_map of Type.t * Type.t
+  | Empty_set of Type.t
+  | Nil of Type.t
+  | None of Type.t
   | Sapling_empty_state of { memo : int }
   | Unit
   (* arity 1 *)
   | Car
   | Cdr
-  | Left of string option * string option * 'ty
-  | Right of string option * string option * 'ty
+  | Left of string option * string option * Type.t
+  | Right of string option * string option * Type.t
   | Some
   | Eq
   | Abs
@@ -43,9 +43,9 @@ type 'ty t =
   | Size
   | Address
   | Implicit_account
-  | Contract of string option * 'ty
+  | Contract of string option * Type.t
   | Pack
-  | Unpack of 'ty
+  | Unpack of Type.t
   | Hash_key
   | Blake2b
   | Sha256
@@ -58,9 +58,9 @@ type 'ty t =
   | Pairing_check
   | Voting_power
   | Getn of int
-  | Cast of 'ty
+  | Cast of Type.t
   | Rename of string option
-  | Emit of string option * 'ty option
+  | Emit of string option * Type.t option
   | Failwith
   | Never
   | Pair of string option * string option
@@ -86,7 +86,7 @@ type 'ty t =
   | Ticket_deprecated
   | Split_ticket
   | Updaten of int
-  | View of string (* view name *) * 'ty (* return type *)
+  | View of string (* view name *) * Type.t (* return type *)
   (* arity 3 *)
   | Slice
   | Update
