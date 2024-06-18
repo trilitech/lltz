@@ -19,6 +19,8 @@
  (depends
   (ocaml (= 4.14.2))
   dune 
+  core 
+  ppx_jane
   tezos-micheline 
   ppx_deriving
   (cmdliner
