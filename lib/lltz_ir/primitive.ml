@@ -1,3 +1,5 @@
+open Core
+
 (*  constructors taken from smartpy but conflated into a single structure *)
 
 (* arity 0 *)
@@ -19,6 +21,7 @@ type 'ty t0 =
   | None_ of 'ty
   | Sapling_empty_state of { memo : int }
   | Unit_
+[@@deriving sexp, equal, compare]
 
 (* arity 1 *)
 type 'ty t1 =
@@ -64,6 +67,7 @@ type 'ty t1 =
   | Emit of string option * 'ty option
   | Failwith
   | Never
+[@@deriving sexp, equal, compare]
 
 (* arity 2 *)
 type 'ty t2 =
@@ -91,6 +95,7 @@ type 'ty t2 =
   | Split_ticket
   | Updaten of int
   | View of string (* view name *) * 'ty (*return type *)
+[@@deriving sexp, equal, compare]
 
 (* arity 3 *)
 type 'ty t3 =
@@ -100,3 +105,4 @@ type 'ty t3 =
   | Transfer_tokens
   | Check_signature
   | Open_chest
+[@@deriving sexp, equal, compare]
