@@ -1,5 +1,6 @@
 (library
- (name lltz)
+ (name lltz_ir)
+ (public_name lltz.ir)
  (libraries tezos-micheline)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.map)))

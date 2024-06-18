@@ -1,7 +1,7 @@
 (executable
  (name main)
  (public_name lltz)
- (libraries lltz cmdliner))
+ (libraries lltz.ir cmdliner))
 
 (rule
  (alias runtest)
