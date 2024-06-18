@@ -13,6 +13,7 @@ depends: [
   "core"
   "ppx_jane"
   "tezos-micheline"
+  "ppxlib"
   "grace"
   "odoc" {with-doc}
 ]
