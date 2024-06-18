@@ -51,10 +51,7 @@ module T = struct
         ; arg : 'expr
         }
     | Const of constant
-    | Prim0 of type_ Primitive.t0
-    | Prim1 of type_ Primitive.t1 * 'expr
-    | Prim2 of type_ Primitive.t2 * 'expr * 'expr
-    | Prim3 of type_ Primitive.t3 * 'expr * 'expr * 'expr
+    | Prim of type_ Primitive.t * 'expr list
     (* mutability *)
     | Let_mut_in of
         { let_var : mut_var
@@ -154,10 +151,7 @@ module T = struct
       Lambda_rec { lam_var; mu_var; return; body = f body }
     | App { abs; arg } -> App { abs = f abs; arg = f arg }
     | Const c -> Const c
-    | Prim0 p -> Prim0 p
-    | Prim1 (p, e) -> Prim1 (p, f e)
-    | Prim2 (p, e1, e2) -> Prim2 (p, f e1, f e2)
-    | Prim3 (p, e1, e2, e3) -> Prim3 (p, f e1, f e2, f e3)
+    | Prim (p, es) -> Prim (p, List.map es ~f)
     | Let_mut_in { let_var; rhs; in_ } -> Let_mut_in { let_var; rhs = f rhs; in_ = f in_ }
     | Deref v -> Deref v
     | Assign (v, e) -> Assign (v, f e)

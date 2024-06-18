@@ -2,8 +2,8 @@ open Core
 
 (*  constructors taken from smartpy but conflated into a single structure *)
 
-(* arity 0 *)
-type 'ty t0 =
+type 'ty t =
+  (* arity 0 *)
   | Amount
   | Balance
   | Chain_id
@@ -18,32 +18,28 @@ type 'ty t0 =
   | Empty_map of 'ty * 'ty
   | Empty_set of 'ty
   | Nil of 'ty
-  | None_ of 'ty
+  | None of 'ty
   | Sapling_empty_state of { memo : int }
-  | Unit_
-[@@deriving sexp, equal, compare]
-
-(* arity 1 *)
-type 'ty t1 =
+  | Unit
+  (* arity 1 *)
   | Car
   | Cdr
   | Left of string option * string option * 'ty
   | Right of string option * string option * 'ty
-  | Some_
+  | Some
   | Eq
   | Abs
   | Neg
   | Nat
   | Int
   | Bytes
-  | IsNat
+  | Is_nat
   | Neq
   | Le
   | Lt
   | Ge
   | Gt
   | Not
-  | Concat1
   | Size
   | Address
   | Implicit_account
@@ -67,10 +63,6 @@ type 'ty t1 =
   | Emit of string option * 'ty option
   | Failwith
   | Never
-[@@deriving sexp, equal, compare]
-
-(* arity 2 *)
-type 'ty t2 =
   | Pair of string option * string option
   | Add
   | Mul
@@ -94,11 +86,8 @@ type 'ty t2 =
   | Ticket_deprecated
   | Split_ticket
   | Updaten of int
-  | View of string (* view name *) * 'ty (*return type *)
-[@@deriving sexp, equal, compare]
-
-(* arity 3 *)
-type 'ty t3 =
+  | View of string (* view name *) * 'ty (* return type *)
+  (* arity 3 *)
   | Slice
   | Update
   | Get_and_update
