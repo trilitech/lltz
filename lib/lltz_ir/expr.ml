@@ -1,7 +1,7 @@
 open Core
-open Common
+open Grace
 
-type type_ = location Type.t [@@deriving sexp, equal, compare]
+type type_ = Range.t Type.t [@@deriving sexp, equal, compare]
 type 'a row = 'a Type.row [@@deriving sexp, equal, compare]
 type row_path = Type.row_path [@@deriving sexp, equal, compare]
 type var = Var of string [@@deriving sexp, equal, compare]
@@ -26,7 +26,7 @@ type constant =
   | Signature of string
 [@@deriving sexp, equal, compare]
 
-type micheline = (location, string) Tezos_micheline.Micheline.node
+type micheline = (Range.t, string) Tezos_micheline.Micheline.node
 
 module T = struct
   type 'expr t =

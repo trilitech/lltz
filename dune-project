@@ -23,4 +23,5 @@
   dune
   core
   ppx_jane
-  tezos-micheline))
+  tezos-micheline
+  grace))
