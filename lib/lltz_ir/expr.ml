@@ -2,8 +2,6 @@ open Core
 open Grace
 
 type type_ = Range.t Type.t [@@deriving sexp, equal, compare]
-type 'a row = 'a Type.row [@@deriving sexp, equal, compare]
-type row_path = Type.row_path [@@deriving sexp, equal, compare]
 type var = Var of string [@@deriving sexp, equal, compare]
 type mut_var = Mut_var of string [@@deriving sexp, equal, compare]
 
@@ -128,16 +126,16 @@ module T = struct
         ; rhs : 'expr
         ; in_ : 'expr
         }
-    | Tuple of 'expr row
-    | Proj of 'expr * row_path
+    | Tuple of 'expr Row.t
+    | Proj of 'expr * Row.Path.t
     | Update of
         { tuple : 'expr
-        ; component : row_path
+        ; component : Row.Path.t
         ; update : 'expr
         }
     (* sums *)
-    | Inj of row_path * 'expr
-    | Match of 'expr * 'expr row
+    | Inj of Row.Path.t * 'expr
+    | Match of 'expr * 'expr Row.t
     (* tezos specific *)
     | Raw_michelson of (micheline[@sexp.opaque] [@equal.ignore] [@compare.ignore])
     | Create_contract of
@@ -193,12 +191,12 @@ module T = struct
       Fold_right { collection = f collection; init = f init; fold = xs, f fold }
     | Let_tuple_in { components; rhs; in_ } ->
       Let_tuple_in { components; rhs = f rhs; in_ = f in_ }
-    | Tuple row -> Tuple (Rose_tree.map row ~f)
+    | Tuple row -> Tuple (Row.map row ~f)
     | Proj (e, p) -> Proj (f e, p)
     | Update { tuple; component; update } ->
       Update { tuple = f tuple; component; update = f update }
     | Inj (p, e) -> Inj (p, f e)
-    | Match (e, row) -> Match (f e, Rose_tree.map row ~f)
+    | Match (e, row) -> Match (f e, Row.map row ~f)
     | Raw_michelson m -> Raw_michelson m
     | Create_contract { storage; parameter; code } ->
       Create_contract { storage; parameter; code = f code }
