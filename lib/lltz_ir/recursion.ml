@@ -8,19 +8,19 @@ end
 (* Bacause of the decoration there's it no added boilerplate for recursion schemes so the *)
 (* recursive type is identical to what wo would make if used a single recursive definition *)
 module Fixpoint (F : Functor) = struct
-  type 'deco t = { deco : 'deco; inner : 'deco t F.t }
+  type 'deco t =
+    { deco : 'deco
+    ; inner : 'deco t F.t
+    }
   [@@deriving sexp, equal, compare]
 
-  let rec map { deco; inner } ~f =
-    { deco = f deco; inner = F.map inner ~f:(map ~f) }
-
+  let rec map { deco; inner } ~f = { deco = f deco; inner = F.map inner ~f:(map ~f) }
   let extract { deco; _ } = deco
-
-  let rec duplicate ({ inner; _ } as t) =
-    { deco = t; inner = F.map ~f:duplicate inner }
+  let rec duplicate ({ inner; _ } as t) = { deco = t; inner = F.map ~f:duplicate inner }
 
   let rec extend ({ inner; _ } as t) ~f =
     { deco = f t; inner = F.map ~f:(extend ~f) inner }
+  ;;
 
   let unwrap { inner; _ } = inner
 
@@ -30,9 +30,11 @@ module Fixpoint (F : Functor) = struct
   let rec unfold inner ~f =
     let deco, inner = f inner in
     { deco; inner = F.map inner ~f:(unfold ~f) }
+  ;;
 
   let rec redecorate { deco; inner } ~f =
     let inner = F.map ~f:(redecorate ~f) inner in
     let deco = f deco inner in
     { deco; inner }
+  ;;
 end
