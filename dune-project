@@ -20,6 +20,8 @@
  (depends
   (ocaml
    (= 4.14.1))
+  (ocaml-base-compiler 
+   (= 4.14.1))
   dune
   core
   ppx_jane
