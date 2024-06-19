@@ -19,7 +19,7 @@
   "A common compiler IR for targetting Michelson, the stack-based language of the Tezos blockchain.")
  (depends
   (ocaml
-   (= 4.14.2))
+   (= 4.14.1))
   dune
   core
   ppx_jane
