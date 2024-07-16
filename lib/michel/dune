@@ -1,0 +1,4 @@
+(library
+  (name michel)
+  (libraries michelson_base utils)
+  (flags :standard -w -32))

@@ -1,0 +1,7 @@
+(library
+  (name michelson_base)
+  (private_modules
+  )
+  (flags (:standard -w -9@27-30@32-40@8 -safe-string))
+  (preprocess (pps ppx_deriving.eq ppx_deriving.ord ppx_deriving.show ppx_deriving.map ppx_deriving.fold ppx_sexp_conv ppx_yojson_conv))
+  (libraries num sexplib))
