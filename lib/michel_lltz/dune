@@ -1,0 +1,3 @@
+(library
+  (name michel_lltz)
+  (libraries michel michelson_base lltz_ir))

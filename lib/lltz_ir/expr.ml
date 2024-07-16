@@ -4,10 +4,10 @@ open Grace
 type micheline = (Range.t, string) Tezos_micheline.Micheline.node
 
 module T = struct
-  type var = Var of string
+  type var = Variable of string
   and mut_var = Mut_var of string
 
-  and constant =
+  and constant = 
     | Unit
     | Bool of bool
     | Nat of (Z.t[@sexp.opaque])

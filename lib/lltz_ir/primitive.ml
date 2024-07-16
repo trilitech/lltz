@@ -76,6 +76,7 @@ type t =
   | Or
   | Cons
   | Compare
+  | Concat1
   | Concat2
   | Get
   | Mem
