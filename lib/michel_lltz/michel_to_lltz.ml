@@ -328,7 +328,7 @@ let rec translate_expr (expr : M.expr) : L.t =
     let translated_init = List.map translate_expr init in
     let vars = List.map (fun x -> match x with Some str -> L.Variable str | None -> L.Variable "none" ) xs in
     L.Map {collection = {desc = L.Prim (LP.Not, translated_init); range = dummy}; (*Invariant needs to be changed*)
-      map = (vars, translate_expr step)}
+      map = (vars, translate_expr step)} 
 
   | M.Iter_over (init, xs, step) ->
     let translated_init = List.map translate_expr init in
