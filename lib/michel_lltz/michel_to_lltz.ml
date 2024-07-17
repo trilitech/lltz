@@ -26,10 +26,27 @@ let rec convert_ty (m_ty : Michel.Type.ty) : LT.t =
   | Michel.Type.T0 t0 -> convert_t0 t0
   | Michel.Type.T1 (t1, ty) -> convert_t1 t1 (convert_ty ty)
   | Michel.Type.T2 (t2, ty1, ty2) -> convert_t2 t2 (convert_ty ty1) (convert_ty ty2)
-  (*| Michel.Type.Record r -> LT.Tuple (convert_row r)
-  | Michel.Type.Variant r -> LT.Or (convert_row r)
-  | Michel.Type.Vector tys -> LT.List (LT.Tuple (convert_vector tys))*)
+  | Michel.Type.Record r -> {desc =LT.Tuple (convert_row r); range = dummy}
+  | Michel.Type.Variant r -> {desc = LT.Or (convert_row r); range = dummy}
+  | Michel.Type.Vector tys -> {desc = LT.List {desc = LT.Tuple (convert_vector tys); range = dummy}; range = dummy}
   | Michel.Type.Missing s -> failwith ("Cannot convert missing type: " ^ s)
+
+and convert_row (tree: Michel.Type.row) : LT.t Row.t =
+  match tree with
+  | Binary_tree.Leaf (label, ty) -> Row.Leaf (convert_label_option label, convert_ty ty)
+  | Binary_tree.Node (left, right) ->
+      let left_converted = convert_row left in
+      let right_converted = convert_row right in
+      Row.Node [left_converted; right_converted]
+
+and convert_label_option = function
+| Some s -> Some (LR.Label s)
+| None -> None
+
+and convert_vector (tys: Michel.Type.ty list) : LT.t Row.t =
+  let converted_tys = List.map convert_ty tys in
+  let converted_row_leaves = List.map (fun ty -> Row.Leaf (None, ty)) converted_tys in
+  Row.Node converted_row_leaves
 
 (* Conversion function for M.T0 to L.Base.t *)
 and convert_t0 (t0 : MBT.type0) : LT.t =
@@ -273,7 +290,7 @@ let rec translate_expr (expr : M.expr) : L.t =
   | M.Prim1_fail (op, e) -> L.Prim (translate_prim1_fail op, [translate_expr e]) (* same as Prim1 *)
   | M.Prim2 (op, e1, e2) -> L.Prim (translate_prim2 op, [translate_expr e1; translate_expr e2])
   | M.Prim3 (op, e1, e2, e3) -> L.Prim (translate_prim3 op, [translate_expr e1; translate_expr e2; translate_expr e3])
-  | M.Proj_field (fld, e) -> L.Proj (translate_expr e, Here []) (*TODO*)
+  | M.Proj_field (_fld, e) -> L.Proj (translate_expr e, Here [])
   | M.Stack_op (op, xs) -> translate_stack_op op xs
   | M.Record r -> L.Tuple (translate_record r)
   | M.Variant (lbl, rc, e) -> translate_variant lbl rc (translate_expr e)
@@ -348,15 +365,6 @@ let rec translate_expr (expr : M.expr) : L.t =
   | M.Record_of_tree (lbls, e) -> translate_record_of_tree lbls (translate_expr e)
   | M.Comment (_, e) -> (translate_expr e).desc
 
-and compile_annotated_type_expression (annot_type : I.type_expression I.annotated) =
-  let annot, type_ = annot_type in
-  compile_annot annot, compile_type_expression type_
-
-and compile_row annot_types =
-  let open LR in
-  let labelled_types = List.map annot_types ~f:compile_annotated_type_expression in
-  Node (List.map labelled_types ~f:(fun (label, type_) -> Leaf (label, type_)))
-
 (* Additional helper functions *)
 and translate_stack_op op xs = match op, xs with
 (* Placeholders, the LLTZ-IR does not have stack operations*)
@@ -367,27 +375,39 @@ and translate_stack_op op xs = match op, xs with
   | M.Drop n, hd::_ -> L.Prim (LP.Getn n, [translate_expr hd])
   | _, [] -> failwith "Empty list"
 
-and translate_record r =
-  Binary_tree.map (fun (lbl, e) -> lbl, translate_expr e) r
+and translate_record (tree: (tag option * M.expr) Binary_tree.t) : L.t Row.t =
+  match tree with
+  | Binary_tree.Leaf (label, ty) -> Row.Leaf (convert_label_option label, translate_expr ty)
+  | Binary_tree.Node (left, right) ->
+      let left_converted = translate_record left in
+      let right_converted = translate_record right in
+      Row.Node [left_converted; right_converted]
 
-and translate_variant lbl rc e =
+and translate_variant lbl _rc e =
   match lbl with
-  | Some l -> L.Inj ([l], e)
+  | Some _l -> L.Inj (LR.Path.Here [], e) (*seems like it needs change in lltz to use context but no expression using it is available*)
   | None -> failwith "anonymous variant not supported"
 
-and translate_match_record rp e1 e2 =
-  L.Let_tuple_in (Binary_tree.fold (fun acc lbl -> lbl :: acc) [] rp, e1, e2)
+and translate_match_record rp e1 _e2 =
+  let lbls_list = Binary_tree.fold (fun acc lbl -> lbl :: acc) [] rp in
+  let converted_row_leaves = List.map (fun (lbl) -> Row.Leaf (convert_label_option lbl, e1)) lbls_list in
+  L.Tuple (Row.Node converted_row_leaves)
 
 and translate_match_variant e clauses =
   let rec translate_clauses = function
-    | Binary_tree.Leaf { M.cons; var; rhs } -> [cons, translate_expr rhs]
+    | Binary_tree.Leaf { M.cons; var; rhs } -> [translate_expr rhs]
     | Binary_tree.Node (l, r) -> translate_clauses l @ translate_clauses r
   in
-  L.Match (e, translate_clauses clauses)
+  L.Match (e, convert_list (translate_clauses clauses))
+
+and convert_list (exprs: L.t list) : L.t Row.t =
+  let converted_row_leaves = List.map (fun ty -> Row.Leaf (None, ty)) exprs in
+  Row.Node converted_row_leaves
 
 and translate_record_of_tree lbls e =
-  let lbls = Binary_tree.fold (fun acc lbl -> lbl :: acc) [] lbls in
-  L.Tuple (lbls @ [translate_expr e])
+  let lbls_list = Binary_tree.fold (fun acc lbl -> (lbl, e) :: acc) [] lbls in
+  let converted_row_leaves = List.map (fun (lbl, ty) -> Row.Leaf (convert_label_option lbl, ty)) lbls_list in
+  L.Tuple (Row.Node converted_row_leaves)
 
 (* Top-level function to translate a Michelle program *)
 let translate_program (program : M.expr) : L.t =
