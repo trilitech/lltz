@@ -13,8 +13,6 @@ depends: [
   "core"
   "ppx_jane"
   "tezos-micheline"
-  "ppx_deriving"
-  "cmdliner" {>= "1.1.0"}
   "odoc" {with-doc}
 ]
 build: [

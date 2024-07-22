@@ -18,7 +18,7 @@ module T = struct
     | Function of 'ty * 'ty
     | Map of 'ty * 'ty
     | Big_map of 'ty * 'ty
-    (* primitive types  *)
+    (* primitive types *)
     | Unit
     | Bool
     | Nat
@@ -77,6 +77,7 @@ module T = struct
     | Bls12_381_fr -> Bls12_381_fr
     | Chest_key -> Chest_key
     | Chest -> Chest
+  ;;
 end
 
 include Recursion.Fixpoint (T)
