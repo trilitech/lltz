@@ -1,2 +1,3 @@
-type annot = string
-type location = { source : string; start : int; length : int }
+open Core
+
+type label = Label of string [@@ocaml.unboxed] [@@deriving sexp, equal, compare]

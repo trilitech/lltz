@@ -15,11 +15,13 @@
 
 (package
  (name lltz)
- (synopsis "A common compiler IR for targetting Michelson, the stack-based language of the Tezos blockchain.")
+ (synopsis
+  "A common compiler IR for targetting Michelson, the stack-based language of the Tezos blockchain.")
  (depends
-  (ocaml (= 4.14.2))
-  dune 
-  tezos-micheline 
-  ppx_deriving
-  (cmdliner
-   (>= 1.1.0))))
+  (ocaml
+   (= 4.14.2))
+  dune
+  core
+  ppx_jane
+  tezos-micheline
+  grace))

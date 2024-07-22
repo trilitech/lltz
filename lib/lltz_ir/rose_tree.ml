@@ -1,11 +1,16 @@
-type ('k, 'v) t = Leaf of 'v | Node of ('k * ('k, 'v) t) list
-[@@deriving show]
+open Core
 
-type 'k path = 'k list
+type ('k, 'v) t =
+  | Leaf of 'v
+  | Node of ('k * ('k, 'v) t) list
+[@@deriving sexp, equal, compare]
 
-let map f =
-  let rec iter = function
-    | Leaf a -> Leaf (f a)
-    | Node rts -> Node (List.map (fun (k, rt) -> (k, iter rt)) rts)
-  in
-  iter
+let rec map t ~f =
+  match t with
+  | Leaf a -> Leaf (f a)
+  | Node rts -> Node (List.map ~f:(fun (k, rt) -> k, map rt ~f) rts)
+;;
+
+module Path = struct
+  type 'k t = Here of 'k list [@@ocaml.unboxed] [@@deriving sexp, equal, compare]
+end
