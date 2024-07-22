@@ -13,6 +13,7 @@ depends: [
   "core"
   "ppx_jane"
   "tezos-micheline"
+  "grace"
   "odoc" {with-doc}
 ]
 build: [
