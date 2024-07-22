@@ -1,14 +1,10 @@
 open Core
-open Common
-
-type 'ty row = (label, 'ty) Rose_tree.t [@@deriving sexp, equal, compare]
-type row_path = label Rose_tree.Path.t [@@deriving sexp, equal, compare]
 
 module T = struct
   type 'ty t =
     (* sum and product types *)
-    | Tuple of 'ty row
-    | Or of 'ty row
+    | Tuple of 'ty Row.t
+    | Or of 'ty Row.t
     (* parameterized types *)
     | Option of 'ty
     | List of 'ty
@@ -45,8 +41,8 @@ module T = struct
 
   let map t ~f =
     match t with
-    | Tuple row -> Tuple (Rose_tree.map row ~f)
-    | Or row -> Or (Rose_tree.map row ~f)
+    | Tuple row -> Tuple (Row.map row ~f)
+    | Or row -> Or (Row.map row ~f)
     | Option ty -> Option (f ty)
     | List ty -> List (f ty)
     | Set ty -> Set (f ty)
