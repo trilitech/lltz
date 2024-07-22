@@ -1,19 +1,25 @@
-open Core
+open Import
+open Grace
 
 module T = struct
-  type 'ty t =
+  type t =
+    { desc : desc
+    ; range : Range.t
+    }
+
+  and desc =
     (* sum and product types *)
-    | Tuple of 'ty Row.t
-    | Or of 'ty Row.t
+    | Tuple of t Row.t
+    | Or of t Row.t
     (* parameterized types *)
-    | Option of 'ty
-    | List of 'ty
-    | Set of 'ty
-    | Contract of 'ty
-    | Ticket of 'ty
-    | Function of 'ty * 'ty
-    | Map of 'ty * 'ty
-    | Big_map of 'ty * 'ty
+    | Option of t
+    | List of t
+    | Set of t
+    | Contract of t
+    | Ticket of t
+    | Function of t * t
+    | Map of t * t
+    | Big_map of t * t
     (* primitive types *)
     | Unit
     | Bool
@@ -25,7 +31,7 @@ module T = struct
     | Chain_id
     | Timestamp
     | Address
-    | Key
+    | Keys
     | Key_hash
     | Signature
     | Operation
@@ -37,43 +43,49 @@ module T = struct
     | Bls12_381_fr
     | Chest_key
     | Chest
-  [@@deriving sexp, equal, compare]
-
-  let map t ~f =
-    match t with
-    | Tuple row -> Tuple (Row.map row ~f)
-    | Or row -> Or (Row.map row ~f)
-    | Option ty -> Option (f ty)
-    | List ty -> List (f ty)
-    | Set ty -> Set (f ty)
-    | Contract ty -> Contract (f ty)
-    | Ticket ty -> Ticket (f ty)
-    | Function (ty1, ty2) -> Function (f ty1, f ty2)
-    | Map (ty1, ty2) -> Map (f ty1, f ty2)
-    | Big_map (ty1, ty2) -> Big_map (f ty1, f ty2)
-    | Unit -> Unit
-    | Bool -> Bool
-    | Nat -> Nat
-    | Int -> Int
-    | Mutez -> Mutez
-    | String -> String
-    | Bytes -> Bytes
-    | Chain_id -> Chain_id
-    | Timestamp -> Timestamp
-    | Address -> Address
-    | Key -> Key
-    | Key_hash -> Key_hash
-    | Signature -> Signature
-    | Operation -> Operation
-    | Sapling_state { memo } -> Sapling_state { memo }
-    | Sapling_transaction { memo } -> Sapling_transaction { memo }
-    | Never -> Never
-    | Bls12_381_g1 -> Bls12_381_g1
-    | Bls12_381_g2 -> Bls12_381_g2
-    | Bls12_381_fr -> Bls12_381_fr
-    | Chest_key -> Chest_key
-    | Chest -> Chest
-  ;;
+  [@@deriving sexp, equal, compare, traverse]
 end
 
-include Recursion.Fixpoint (T)
+include T
+
+module Traverse = struct
+  class map =
+    object
+      inherit Traverse_builtins.map
+      inherit Row.Traverse_builtins.map
+      inherit T.map
+      method range__t = Traverse_builtins.map_zero
+    end
+
+  class iter =
+    object
+      inherit Traverse_builtins.iter
+      inherit Row.Traverse_builtins.iter
+      inherit T.iter
+      method range__t = Traverse_builtins.iter_zero
+    end
+
+  class ['acc] fold =
+    object
+      inherit ['acc] Traverse_builtins.fold
+      inherit ['acc] Row.Traverse_builtins.fold
+      inherit ['acc] T.fold
+      method range__t = Traverse_builtins.fold_zero
+    end
+
+  class ['acc] fold_map =
+    object
+      inherit ['acc] Traverse_builtins.fold_map
+      inherit ['acc] Row.Traverse_builtins.fold_map
+      inherit ['acc] T.fold_map
+      method range__t = Traverse_builtins.fold_map_zero
+    end
+
+  class ['ctx] map_with_context =
+    object
+      inherit ['ctx] Traverse_builtins.map_with_context
+      inherit ['ctx] Row.Traverse_builtins.map_with_context
+      inherit ['ctx] T.map_with_context
+      method range__t = Traverse_builtins.map_with_context_zero
+    end
+end

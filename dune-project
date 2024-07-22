@@ -24,4 +24,5 @@
   core
   ppx_jane
   tezos-micheline
+  ppxlib
   grace))
