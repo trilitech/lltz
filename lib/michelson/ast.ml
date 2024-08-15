@@ -22,12 +22,12 @@ module Prim = struct
       | "storage" -> Storage
       | "code" -> Code
       | "view" -> View
-      | recieved ->
+      | received ->
         raise_s
           [%message
             "Michelson.Prim.Keyword.of_string: one of 'parameter', 'storage', 'code', \
              'view' is expected"
-              (recieved : string)]
+              (received : string)]
     ;;
   end
 
@@ -363,10 +363,10 @@ module Prim = struct
       | "VIEW" -> View
       | "BYTES" -> Bytes
       | "NAT" -> Nat
-      | recieved ->
+      | received ->
         raise_s
           [%message
-            "Michelson.Prim.Instruction.of_string: unexpected input" (recieved : string)]
+            "Michelson.Prim.Instruction.of_string: unexpected input" (received : string)]
     ;;
   end
 
@@ -408,10 +408,10 @@ module Prim = struct
       | "True" -> True
       | "Unit" -> Unit
       | "Lambda_rec" -> Lambda_rec
-      | recieved ->
+      | received ->
         raise_s
           [%message
-            "Michelson.Prim.Constant.of_string: unexpected input" (recieved : string)]
+            "Michelson.Prim.Constant.of_string: unexpected input" (received : string)]
     ;;
   end
 
@@ -525,9 +525,9 @@ module Prim = struct
       | "ticket" -> Ticket
       | "chest_key" -> Chest_key
       | "chest" -> Chest
-      | recieved ->
+      | received ->
         raise_s
-          [%message "Michelson.Prim.Type.of_string: unexpected input" (recieved : string)]
+          [%message "Michelson.Prim.Type.of_string: unexpected input" (received : string)]
     ;;
   end
 
@@ -538,11 +538,11 @@ module Prim = struct
 
     let of_string = function
       | "constant" -> Constant
-      | recieved ->
+      | received ->
         raise_s
           [%message
             "Michelson.Prim.Global_storage.of_string: 'constant' is expected"
-              (recieved : string)]
+              (received : string)]
     ;;
   end
 
@@ -562,15 +562,15 @@ module Prim = struct
     | G global_storage -> Global_storage.to_string global_storage
   ;;
 
-  let of_string recieved =
+  let of_string received =
     let rec loop fs =
       match fs with
       | f :: fs ->
-        (try f recieved with
+        (try f received with
         | _ -> loop fs)
       | [] ->
         raise_s
-          [%message "Michelson.Prim.of_string: unexpected input" (recieved : string)]
+          [%message "Michelson.Prim.of_string: unexpected input" (received : string)]
     in
     loop
       [ (fun str -> K (Keyword.of_string str))
