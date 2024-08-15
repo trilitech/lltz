@@ -1,7 +1,7 @@
-(*
-   lltz_michelson.ml
-   Compiles types, constants, primitives and expressions from LLTZ-IR to Michelson Ast.
-*)
+(* 
+  lltz_michelson.ml 
+  Compiles types, constants, primitives and expressions from LLTZ-IR to Michelson Ast.
+*) 
 
 module LLTZ = struct
   module E = Lltz_ir.Expr
