@@ -381,7 +381,7 @@ module Prim = struct
       | Some
       | True
       | Unit
-      | Lambda_rec
+      | Lambda_rec (* Serialised representation of recursive lambda functions *)
     [@@deriving equal, compare, sexp]
 
     let to_string = function
