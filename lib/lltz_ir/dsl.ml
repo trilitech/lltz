@@ -1,183 +1,188 @@
-(* dsl.ml *)
+(* dsl.ml 
+   This file adds a domain specific language (DSL), consisting of functions for easier creation of expressions using LLTZ-IR. 
+*)
 open Grace
-module LE = Expr
-module LT = Type
-module LP = Primitive
+module LLTZ = struct
+  module E = Expr
+  module T = Type
+  module P = Primitive
+end
 
-module T = struct
+module DSL = struct
   type var = Var of string
   type mut_var = Mut_var of string
 
   let dummy : Range.t = Range.initial (`String { content = ""; name = Some "" })
 
+  (* Creation with optional range *)
+  let create ?(range = dummy) desc = LLTZ.E.{ desc; range }
+
   (* Constants *)
-  let unit = LE.{ desc = LE.Const(Unit); range = dummy }
-  let bool b = LE.{ desc = LE.Const(Bool b); range = dummy }
-  let nat n = LE.{ desc = LE.Const(Nat (Z.of_int n)); range = dummy }
-  let int n = LE.{ desc = LE.Const(Int (Z.of_int n)); range = dummy }
-  let mutez n = LE.{ desc = LE.Const(Mutez (Z.of_int n)); range = dummy }
-  let string s = LE.{ desc = LE.Const(String s); range = dummy }
-  let key s = LE.{ desc = LE.Const(Key s); range = dummy }
-  let key_hash s = LE.{ desc = LE.Const(Key_hash s); range = dummy }
-  let bytes s = LE.{ desc = LE.Const(Bytes s); range=dummy }
-  let chain_id s = LE.{ desc = LE.Const(Chain_id s); range = dummy }
+  let unit ?(range = dummy) () = create ~range (LLTZ.E.Const(Unit))
+  let bool ?(range = dummy) b = create ~range (LLTZ.E.Const(Bool b))
+  let nat ?(range = dummy) n = create ~range (LLTZ.E.Const(Nat (Z.of_int n)))
+  let int ?(range = dummy) n = create ~range (LLTZ.E.Const(Int (Z.of_int n)))
+  let mutez ?(range = dummy) n = create ~range (LLTZ.E.Const(Mutez (Z.of_int n)))
+  let string ?(range = dummy) s = create ~range (LLTZ.E.Const(String s))
+  let key ?(range = dummy) s = create ~range (LLTZ.E.Const(Key s))
+  let key_hash ?(range = dummy) s = create ~range (LLTZ.E.Const(Key_hash s))
+  let bytes ?(range = dummy) s = create ~range (LLTZ.E.Const(Bytes s))
+  let chain_id ?(range = dummy) s = create ~range (LLTZ.E.Const(Chain_id s))
 
-  let address_const s = LE.{ desc = LE.Const(Address s); range = dummy }
+  let address_const ?(range = dummy) s = create ~range (LLTZ.E.Const(Address s))
 
-  let timestamp s = LE.{ desc = LE.Const(Timestamp s); range = dummy }
-  let bls12_381_g1 s = LE.{ desc = LE.Const(Bls12_381_g1 s); range = dummy }
-  let bls12_381_g2 s = LE.{ desc = LE.Const(Bls12_381_g2 s); range = dummy }
-  let bls12_381_fr s = LE.{ desc = LE.Const(Bls12_381_fr s); range=dummy }
-  let signature s = LE.{ desc = LE.Const(Signature s); range = dummy }
+  let timestamp ?(range = dummy) s = create ~range (LLTZ.E.Const(Timestamp s))
+  let bls12_381_g1 ?(range = dummy) s = create ~range (LLTZ.E.Const(Bls12_381_g1 s))
+  let bls12_381_g2 ?(range = dummy) s = create ~range (LLTZ.E.Const(Bls12_381_g2 s))
+  let bls12_381_fr ?(range = dummy) s = create ~range (LLTZ.E.Const(Bls12_381_fr s))
+  let signature ?(range = dummy) s = create ~range (LLTZ.E.Const(Signature s))
 
   (* Variables *)
-  let var name = (LE.Var name)
-  let mut_var name = LE.Mut_var name
+  let var name = LLTZ.E.Var name
+  let mut_var name = LLTZ.E.Mut_var name
 
   (* Types *)
-  let unit_ty = LT.{ desc = Unit; range = dummy }
-  let bool_ty = LT.{ desc = Bool; range = dummy  }
-  let nat_ty = LT.{ desc = Nat ; range = dummy }
-  let int_ty = LT.{ desc = Int ; range = dummy }
-  let mutez_ty = LT.{ desc = Mutez; range = dummy  }
-  let string_ty = LT.{ desc = String; range = dummy  }
-  let bytes_ty = LT.{ desc = Bytes ; range = dummy }
-  let chain_id_ty = LT.{ desc = Chain_id; range = dummy  }
-  let timestamp_ty = LT.{ desc = Timestamp; range = dummy  }
-  let address_ty = LT.{ desc = Address; range = dummy  }
-  let key_ty = LT.{ desc = Keys; range = dummy  }
-  let key_hash_ty = LT.{ desc = Key_hash; range = dummy  }
-  let signature_ty = LT.{ desc = Signature ; range = dummy }
+  let unit_ty ?(range = dummy) () = LLTZ.T.{ desc = Unit; range }
+  let bool_ty ?(range = dummy) () = LLTZ.T.{ desc = Bool; range }
+  let nat_ty ?(range = dummy) () = LLTZ.T.{ desc = Nat; range }
+  let int_ty ?(range = dummy) () = LLTZ.T.{ desc = Int; range }
+  let mutez_ty ?(range = dummy) () = LLTZ.T.{ desc = Mutez; range }
+  let string_ty ?(range = dummy) () = LLTZ.T.{ desc = String; range }
+  let bytes_ty ?(range = dummy) () = LLTZ.T.{ desc = Bytes; range }
+  let chain_id_ty ?(range = dummy) () = LLTZ.T.{ desc = Chain_id; range }
+  let timestamp_ty ?(range = dummy) () = LLTZ.T.{ desc = Timestamp; range }
+  let address_ty ?(range = dummy) () = LLTZ.T.{ desc = Address; range }
+  let key_ty ?(range = dummy) () = LLTZ.T.{ desc = Keys; range }
+  let key_hash_ty ?(range = dummy) () = LLTZ.T.{ desc = Key_hash; range }
+  let signature_ty ?(range = dummy) () = LLTZ.T.{ desc = Signature; range }
 
   (* Expressions *)
-  let variable var = LE.{ desc = Variable var; range = dummy  }
-  let let_in ~var ~rhs ~in_ = LE.{ desc = Let_in { let_var = var; rhs; in_ }; range = dummy  }
-  let lambda ~var ~return_type ~body = LE.{ desc = Lambda { lam_var = var; return_type; body }; range = dummy  }
-  let lambda_rec ~var ~mu ~return_type ~body = LE.{ desc = Lambda_rec { lam_var = var; mu_var = mu; return_type; body }; range = dummy  }
-  let app ~abs ~arg = LE.{ desc = App { abs; arg } ; range = dummy }
-  let let_mut_in ~var ~rhs ~in_ = LE.{ desc = Let_mut_in { let_var = var; rhs; in_ } ; range = dummy }
-  let deref var = LE.{ desc = Deref var; range = dummy  }
-  let assign ~var ~value = LE.{ desc = Assign (var, value); range = dummy  }
-  let if_bool ~condition ~then_ ~else_ = LE.{ desc = If_bool { condition; if_true = then_; if_false = else_ }; range = dummy  }
-  let if_none ~subject ~none ~some = LE.{ desc = If_none { subject; if_none = none; if_some = some }; range = dummy  }
-  let if_cons ~subject ~empty ~nonempty = LE.{ desc = If_cons { subject; if_empty = empty; if_nonempty = nonempty }; range = dummy  }
-  let if_left ~subject ~left ~right = LE.{ desc = If_left { subject; if_left = left; if_right = right }; range = dummy  }
-  let while_ ~invariant ~body = LE.{ desc = While { invariant; body }; range = dummy  }
-  let while_left ~invariant ~body = LE.{ desc = While_left { invariant; body }; range = dummy  }
-  let for_ ~index ~init ~invariant ~variant ~body = LE.{ desc = For { index; init; invariant; variant; body }; range = dummy  }
-  let for_each ~indices ~collection ~body = LE.{ desc = For_each { indices; collection; body }; range = dummy  }
-  let map ~collection ~map = LE.{ desc = Map { collection; map } ; range = dummy }
-  let fold_left ~collection ~init ~fold = LE.{ desc = Fold_left { collection; init; fold }; range = dummy  }
-  let fold_right ~collection ~init ~fold = LE.{ desc = Fold_right { collection; init; fold } ; range = dummy }
-  let let_tuple_in ~components ~rhs ~in_ = LE.{ desc = Let_tuple_in { components; rhs; in_ } ; range = dummy }
-  let tuple row = LE.{ desc = Tuple row ; range = dummy }
-  let proj ~tuple ~path = LE.{ desc = Proj (tuple,path ); range = dummy  }
-  let update_tuple ~tuple ~component ~update = LE.{ desc = Update { tuple; component; update }; range = dummy  }
-  let inj ~path ~expr = LE.{ desc = Inj (path,expr); range = dummy  }
-  let match_ ~subject ~cases = LE.{ desc = Match (subject, cases ); range = dummy }
-  let raw_michelson node = LE.{ desc = Raw_michelson node ; range = dummy }
-  let create_contract ~storage ~parameter ~code ~delegate ~initial_balance ~initial_storage = 
-    LE.{ desc = Create_contract { storage; parameter; code; delegate; initial_balance; initial_storage }; range = dummy  }
+  let variable ?(range = dummy) var = create ~range (LLTZ.E.Variable var)
+  let let_in ?(range = dummy) ~var ~rhs ~in_ = create ~range (LLTZ.E.Let_in { let_var = var; rhs; in_ })
+  let lambda ?(range = dummy) ~var ~return_type ~body = create ~range (LLTZ.E.Lambda { lam_var = var; return_type; body })
+  let lambda_rec ?(range = dummy) ~var ~mu ~return_type ~body = create ~range (LLTZ.E.Lambda_rec { lam_var = var; mu_var = mu; return_type; body })
+  let app ?(range = dummy) ~abs ~arg = create ~range (LLTZ.E.App { abs; arg })
+  let let_mut_in ?(range = dummy) ~var ~rhs ~in_ = create ~range (LLTZ.E.Let_mut_in { let_var = var; rhs; in_ })
+  let deref ?(range = dummy) var = create ~range (LLTZ.E.Deref var)
+  let assign ?(range = dummy) ~var ~value = create ~range (LLTZ.E.Assign (var, value))
+  let if_bool ?(range = dummy) ~condition ~then_ ~else_ = create ~range (LLTZ.E.If_bool { condition; if_true = then_; if_false = else_ })
+  let if_none ?(range = dummy) ~subject ~none ~some = create ~range (LLTZ.E.If_none { subject; if_none = none; if_some = some })
+  let if_cons ?(range = dummy) ~subject ~empty ~nonempty = create ~range (LLTZ.E.If_cons { subject; if_empty = empty; if_nonempty = nonempty })
+  let if_left ?(range = dummy) ~subject ~left ~right = create ~range (LLTZ.E.If_left { subject; if_left = left; if_right = right })
+  let while_ ?(range = dummy) ~invariant ~body = create ~range (LLTZ.E.While { invariant; body })
+  let while_left ?(range = dummy) ~invariant ~body = create ~range (LLTZ.E.While_left { invariant; body })
+  let for_ ?(range = dummy) ~index ~init ~invariant ~variant ~body = create ~range (LLTZ.E.For { index; init; invariant; variant; body })
+  let for_each ?(range = dummy) ~indices ~collection ~body = create ~range (LLTZ.E.For_each { indices; collection; body })
+  let map ?(range = dummy) ~collection ~map = create ~range (LLTZ.E.Map { collection; map })
+  let fold_left ?(range = dummy) ~collection ~init ~fold = create ~range (LLTZ.E.Fold_left { collection; init; fold })
+  let fold_right ?(range = dummy) ~collection ~init ~fold = create ~range (LLTZ.E.Fold_right { collection; init; fold })
+  let let_tuple_in ?(range = dummy) ~components ~rhs ~in_ = create ~range (LLTZ.E.Let_tuple_in { components; rhs; in_ })
+  let tuple ?(range = dummy) row = create ~range (LLTZ.E.Tuple row)
+  let proj ?(range = dummy) ~tuple ~path = create ~range (LLTZ.E.Proj (tuple, path))
+  let update_tuple ?(range = dummy) ~tuple ~component ~update = create ~range (LLTZ.E.Update { tuple; component; update })
+  let inj ?(range = dummy) ~path ~expr = create ~range (LLTZ.E.Inj (path, expr))
+  let match_ ?(range = dummy) ~subject ~cases = create ~range (LLTZ.E.Match (subject, cases))
+  let raw_michelson ?(range = dummy) node = create ~range (LLTZ.E.Raw_michelson node)
+  let create_contract ?(range = dummy) ~storage ~parameter ~code ~delegate ~initial_balance ~initial_storage =
+    create ~range (LLTZ.E.Create_contract { storage; parameter; code; delegate; initial_balance; initial_storage })
 
   (* Primitives *)
   (* Arity 0 *)
-  let amount = LE.{ desc = Prim (LP.Amount, []) ; range = dummy }
-  let balance = LE.{ desc = Prim (LP.Balance, []); range = dummy  }
-  let chain_id_prim = LE.{ desc = Prim (LP.Chain_id, []); range = dummy  }
-  let level = LE.{ desc = Prim (LP.Level, []) ; range = dummy }
-  let now = LE.{ desc = Prim (LP.Now, []); range = dummy  }
-  let self ?opt () = LE.{ desc = Prim (LP.Self opt, []); range = dummy  }
-  let self_address = LE.{ desc = Prim (LP.Self_address, []); range = dummy }
-  let sender = LE.{ desc = Prim (LP.Sender, []) ; range = dummy }
-  let source = LE.{ desc = Prim (LP.Source, []); range = dummy  }
-  let total_voting_power = LE.{ desc = Prim (LP.Total_voting_power, []) ; range = dummy }
-  let empty_bigmap ~key ~value = LE.{ desc = Prim (LP.Empty_bigmap (key, value), []); range = dummy  }
-  let empty_map ~key ~value = LE.{ desc = Prim (LP.Empty_map (key, value), []) ; range = dummy }
-  let empty_set ~ty = LE.{ desc = Prim (LP.Empty_set ty, []); range = dummy  }
-  let nil ~ty = LE.{ desc = Prim (LP.Nil ty, []); range = dummy  }
-  let none ~ty = LE.{ desc = Prim (LP.None ty, []) ; range = dummy }
-  let sapling_empty_state ~memo = LE.{ desc = Prim (LP.Sapling_empty_state { memo }, []); range = dummy  }
-  let unit_prim = LE.{ desc = Prim (LP.Unit, []); range = dummy  }
+  let amount ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Amount, []))
+  let balance ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Balance, []))
+  let chain_id_prim ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Chain_id, []))
+  let level ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Level, []))
+  let now ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Now, []))
+  let self ?(range = dummy) ?opt () = create ~range (LLTZ.E.Prim (LLTZ.P.Self opt, []))
+  let self_address ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Self_address, []))
+  let sender ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Sender, []))
+  let source ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Source, []))
+  let total_voting_power ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Total_voting_power, []))
+  let empty_bigmap ?(range = dummy) ~key ~value = create ~range (LLTZ.E.Prim (LLTZ.P.Empty_bigmap (key, value), []))
+  let empty_map ?(range = dummy) ~key ~value = create ~range (LLTZ.E.Prim (LLTZ.P.Empty_map (key, value), []))
+  let empty_set ?(range = dummy) ~ty = create ~range (LLTZ.E.Prim (LLTZ.P.Empty_set ty, []))
+  let nil ?(range = dummy) ~ty = create ~range (LLTZ.E.Prim (LLTZ.P.Nil ty, []))
+  let none ?(range = dummy) ~ty = create ~range (LLTZ.E.Prim (LLTZ.P.None ty, []))
+  let sapling_empty_state ?(range = dummy) ~memo = create ~range (LLTZ.E.Prim (LLTZ.P.Sapling_empty_state { memo }, []))
+  let unit_prim ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Unit, []))
 
   (* Arity 1/2 *)
-  let car pair = LE.{ desc = Prim (LP.Car, [pair]); range = dummy }
-  let cdr pair = LE.{ desc = Prim (LP.Cdr, [pair]); range = dummy }
-  let left ~opt1 ~opt2 ~ty = LE.{ desc = Prim (LP.Left (opt1, opt2, ty), []); range = dummy }
-  let right ~opt1 ~opt2 ~ty = LE.{ desc = Prim (LP.Right (opt1, opt2, ty), []); range = dummy }
-  let some value = LE.{ desc = Prim (LP.Some, [value]); range = dummy }
-  let eq lhs rhs = LE.{ desc = Prim (LP.Eq, [lhs; rhs]); range = dummy }
-  let abs value = LE.{ desc = Prim (LP.Abs, [value]); range = dummy }
-  let neg value = LE.{ desc = Prim (LP.Neg, [value]); range = dummy }
-  let nat_prim value = LE.{ desc = Prim (LP.Nat, [value]); range = dummy }
-  let int_prim value = LE.{ desc = Prim (LP.Int, [value]); range = dummy }
-  let bytes_prim value = LE.{ desc = Prim (LP.Bytes, [value]); range = dummy }
-  let is_nat value = LE.{ desc = Prim (LP.Is_nat, [value]); range = dummy }
-  let neq lhs rhs = LE.{ desc = Prim (LP.Neq, [lhs; rhs]); range = dummy }
-  let le lhs rhs = LE.{ desc = Prim (LP.Le, [lhs; rhs]); range = dummy }
-  let lt lhs rhs = LE.{ desc = Prim (LP.Lt, [lhs; rhs]); range = dummy }
-  let ge lhs rhs = LE.{ desc = Prim (LP.Ge, [lhs; rhs]); range = dummy }
-  let gt lhs rhs = LE.{ desc = Prim (LP.Gt, [lhs; rhs]); range = dummy }
-  let not value = LE.{ desc = Prim (LP.Not, [value]); range = dummy }
-  let size container = LE.{ desc = Prim (LP.Size, [container]); range = dummy }
-  let address contract = LE.{ desc = Prim (LP.Address, [contract]); range = dummy }
-  let implicit_account key_hash = LE.{ desc = Prim (LP.Implicit_account, [key_hash]); range = dummy }
-  let contract opt ~ty = LE.{ desc = Prim (LP.Contract (opt, ty), []); range = dummy }
-  let pack value = LE.{ desc = Prim (LP.Pack, [value]); range = dummy }
-  let unpack ~ty = LE.{ desc = Prim (LP.Unpack ty, []); range = dummy }
-  let hash_key key = LE.{ desc = Prim (LP.Hash_key, [key]); range = dummy }
-  let blake2b bytes = LE.{ desc = Prim (LP.Blake2b, [bytes]); range = dummy }
-  let sha256 bytes = LE.{ desc = Prim (LP.Sha256, [bytes]); range = dummy }
-  let sha512 bytes = LE.{ desc = Prim (LP.Sha512, [bytes]); range = dummy }
-  let keccak bytes = LE.{ desc = Prim (LP.Keccak, [bytes]); range = dummy }
-  let sha3 bytes = LE.{ desc = Prim (LP.Sha3, [bytes]); range = dummy }
-  let set_delegate delegate = LE.{ desc = Prim (LP.Set_delegate, [delegate]); range = dummy }
-  let read_ticket ticket = LE.{ desc = Prim (LP.Read_ticket, [ticket]); range = dummy }
-  let join_tickets ticket1 ticket2 = LE.{ desc = Prim (LP.Join_tickets, [ticket1; ticket2]); range = dummy }
-  let pairing_check pairings = LE.{ desc = Prim (LP.Pairing_check, [pairings]); range = dummy }
-  let voting_power key_hash = LE.{ desc = Prim (LP.Voting_power, [key_hash]); range = dummy }
-  let getn n = LE.{ desc = Prim (LP.Getn n, []); range = dummy }
-  let cast ty = LE.{ desc = Prim (LP.Cast ty, []); range = dummy }
-  let rename opt = LE.{ desc = Prim (LP.Rename opt, []); range = dummy }
-  let emit opt ty = LE.{ desc = Prim (LP.Emit (opt, ty), []); range = dummy }
-  let failwith value = LE.{ desc = Prim (LP.Failwith, [value]); range = dummy }
-  let never value = LE.{ desc = Prim (LP.Never, [value]); range = dummy }
-  let pair first second = LE.{ desc = Prim (LP.Pair (first, second), []); range = dummy }
-  let add lhs rhs = LE.{ desc = Prim (LP.Add, [lhs; rhs]); range = dummy }
-  let mul lhs rhs = LE.{ desc = Prim (LP.Mul, [lhs; rhs]); range = dummy }
-  let sub lhs rhs = LE.{ desc = Prim (LP.Sub, [lhs; rhs]); range = dummy }
-  let sub_mutez lhs rhs = LE.{ desc = Prim (LP.Sub_mutez, [lhs; rhs]); range = dummy }
-  let lsr_ lhs rhs = LE.{ desc = Prim (LP.Lsr, [lhs; rhs]); range = dummy }
-  let lsl_ lhs rhs = LE.{ desc = Prim (LP.Lsl, [lhs; rhs]); range = dummy }
-  let xor lhs rhs = LE.{ desc = Prim (LP.Xor, [lhs; rhs]); range = dummy }
-  let ediv lhs rhs = LE.{ desc = Prim (LP.Ediv, [lhs; rhs]); range = dummy }
-  let and_ lhs rhs = LE.{ desc = Prim (LP.And, [lhs; rhs]); range = dummy }
-  let or_ lhs rhs = LE.{ desc = Prim (LP.Or, [lhs; rhs]); range = dummy }
-  let cons head tail = LE.{ desc = Prim (LP.Cons, [head; tail]); range = dummy }
-  let compare lhs rhs = LE.{ desc = Prim (LP.Compare, [lhs; rhs]); range = dummy }
-  let concat1 str1 str2 = LE.{ desc = Prim (LP.Concat1, [str1; str2]); range = dummy }
-  let concat2 bytes1 bytes2 = LE.{ desc = Prim (LP.Concat2, [bytes1; bytes2]); range = dummy }
-  let get key collection = LE.{ desc = Prim (LP.Get, [key; collection]); range = dummy }
-  let mem key collection = LE.{ desc = Prim (LP.Mem, [key; collection]); range = dummy }
-  let exec value lambda = LE.{ desc = Prim (LP.Exec, [value; lambda;]); range = dummy }
-  let apply value lambda = LE.{ desc = Prim (LP.Apply, [value; lambda;]); range = dummy }
-  let sapling_verify_update transaction state = LE.{ desc = Prim (LP.Sapling_verify_update, [transaction; state]); range = dummy }
-  let ticket content amount = LE.{ desc = Prim (LP.Ticket, [content; amount]); range = dummy }
-  let ticket_deprecated content amount = LE.{ desc = Prim (LP.Ticket_deprecated, [content; amount]); range = dummy }
-  let split_ticket ticket amounts = LE.{ desc = Prim (LP.Split_ticket, [ticket; amounts]); range = dummy }
-  let updaten n value pair = LE.{ desc = Prim (LP.Updaten n, [value; pair]); range = dummy }
-  let view ~name ~return_type = LE.{ desc = Prim (LP.View (name, return_type), []); range = dummy }
+  let car ?(range = dummy) pair = create ~range (LLTZ.E.Prim (LLTZ.P.Car, [pair]))
+  let cdr ?(range = dummy) pair = create ~range (LLTZ.E.Prim (LLTZ.P.Cdr, [pair]))
+  let left ?(range = dummy) ~opt1 ~opt2 ~ty = create ~range (LLTZ.E.Prim (LLTZ.P.Left (opt1, opt2, ty), []))
+  let right ?(range = dummy) ~opt1 ~opt2 ~ty = create ~range (LLTZ.E.Prim (LLTZ.P.Right (opt1, opt2, ty), []))
+  let some ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Some, [value]))
+  let eq ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Eq, [lhs; rhs]))
+  let abs ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Abs, [value]))
+  let neg ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Neg, [value]))
+  let nat_prim ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Nat, [value]))
+  let int_prim ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Int, [value]))
+  let bytes_prim ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Bytes, [value]))
+  let is_nat ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Is_nat, [value]))
+  let neq ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Neq, [lhs; rhs]))
+  let le ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Le, [lhs; rhs]))
+  let lt ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Lt, [lhs; rhs]))
+  let ge ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Ge, [lhs; rhs]))
+  let gt ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Gt, [lhs; rhs]))
+  let not ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Not, [value]))
+  let size ?(range = dummy) container = create ~range (LLTZ.E.Prim (LLTZ.P.Size, [container]))
+  let address ?(range = dummy) contract = create ~range (LLTZ.E.Prim (LLTZ.P.Address, [contract]))
+  let implicit_account ?(range = dummy) key_hash = create ~range (LLTZ.E.Prim (LLTZ.P.Implicit_account, [key_hash]))
+  let contract ?(range = dummy) opt ~ty = create ~range (LLTZ.E.Prim (LLTZ.P.Contract (opt, ty), []))
+  let pack ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Pack, [value]))
+  let unpack ?(range = dummy) ~ty = create ~range (LLTZ.E.Prim (LLTZ.P.Unpack ty, []))
+  let hash_key ?(range = dummy) key = create ~range (LLTZ.E.Prim (LLTZ.P.Hash_key, [key]))
+  let blake2b ?(range = dummy) bytes = create ~range (LLTZ.E.Prim (LLTZ.P.Blake2b, [bytes]))
+  let sha256 ?(range = dummy) bytes = create ~range (LLTZ.E.Prim (LLTZ.P.Sha256, [bytes]))
+  let sha512 ?(range = dummy) bytes = create ~range (LLTZ.E.Prim (LLTZ.P.Sha512, [bytes]))
+  let keccak ?(range = dummy) bytes = create ~range (LLTZ.E.Prim (LLTZ.P.Keccak, [bytes]))
+  let sha3 ?(range = dummy) bytes = create ~range (LLTZ.E.Prim (LLTZ.P.Sha3, [bytes]))
+  let set_delegate ?(range = dummy) delegate = create ~range (LLTZ.E.Prim (LLTZ.P.Set_delegate, [delegate]))
+  let read_ticket ?(range = dummy) ticket = create ~range (LLTZ.E.Prim (LLTZ.P.Read_ticket, [ticket]))
+  let join_tickets ?(range = dummy) ticket1 ticket2 = create ~range (LLTZ.E.Prim (LLTZ.P.Join_tickets, [ticket1; ticket2]))
+  let pairing_check ?(range = dummy) pairings = create ~range (LLTZ.E.Prim (LLTZ.P.Pairing_check, [pairings]))
+  let voting_power ?(range = dummy) key_hash = create ~range (LLTZ.E.Prim (LLTZ.P.Voting_power, [key_hash]))
+  let getn ?(range = dummy) n = create ~range (LLTZ.E.Prim (LLTZ.P.Getn n, []))
+  let cast ?(range = dummy) ty = create ~range (LLTZ.E.Prim (LLTZ.P.Cast ty, []))
+  let rename ?(range = dummy) opt = create ~range (LLTZ.E.Prim (LLTZ.P.Rename opt, []))
+  let emit ?(range = dummy) opt ty = create ~range (LLTZ.E.Prim (LLTZ.P.Emit (opt, ty), []))
+  let failwith ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Failwith, [value]))
+  let never ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Never, [value]))
+  let pair ?(range = dummy) first second = create ~range (LLTZ.E.Prim (LLTZ.P.Pair (first, second), []))
+  let add ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Add, [lhs; rhs]))
+  let mul ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Mul, [lhs; rhs]))
+  let sub ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Sub, [lhs; rhs]))
+  let sub_mutez ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Sub_mutez, [lhs; rhs]))
+  let lsr_ ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Lsr, [lhs; rhs]))
+  let lsl_ ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Lsl, [lhs; rhs]))
+  let xor ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Xor, [lhs; rhs]))
+  let ediv ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Ediv, [lhs; rhs]))
+  let and_ ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.And, [lhs; rhs]))
+  let or_ ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Or, [lhs; rhs]))
+  let cons ?(range = dummy) head tail = create ~range (LLTZ.E.Prim (LLTZ.P.Cons, [head; tail]))
+  let compare ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Compare, [lhs; rhs]))
+  let concat1 ?(range = dummy) str1 str2 = create ~range (LLTZ.E.Prim (LLTZ.P.Concat1, [str1; str2]))
+  let concat2 ?(range = dummy) bytes1 bytes2 = create ~range (LLTZ.E.Prim (LLTZ.P.Concat2, [bytes1; bytes2]))
+  let get ?(range = dummy) key collection = create ~range (LLTZ.E.Prim (LLTZ.P.Get, [key; collection]))
+  let mem ?(range = dummy) key collection = create ~range (LLTZ.E.Prim (LLTZ.P.Mem, [key; collection]))
+  let exec ?(range = dummy) value lambda = create ~range (LLTZ.E.Prim (LLTZ.P.Exec, [value; lambda]))
+  let apply ?(range = dummy) value lambda = create ~range (LLTZ.E.Prim (LLTZ.P.Apply, [value; lambda]))
+  let sapling_verify_update ?(range = dummy) transaction state = create ~range (LLTZ.E.Prim (LLTZ.P.Sapling_verify_update, [transaction; state]))
+  let ticket ?(range = dummy) content amount = create ~range (LLTZ.E.Prim (LLTZ.P.Ticket, [content; amount]))
+  let ticket_deprecated ?(range = dummy) content amount = create ~range (LLTZ.E.Prim (LLTZ.P.Ticket_deprecated, [content; amount]))
+  let split_ticket ?(range = dummy) ticket amounts = create ~range (LLTZ.E.Prim (LLTZ.P.Split_ticket, [ticket; amounts]))
+  let updaten ?(range = dummy) n value pair = create ~range (LLTZ.E.Prim (LLTZ.P.Updaten n, [value; pair]))
+  let view ?(range = dummy) ~name ~return_type = create ~range (LLTZ.E.Prim (LLTZ.P.View (name, return_type), []))
 
   (* Arity 3 *)
-  let slice offset length sequence = LE.{ desc = Prim (LP.Slice, [offset; length; sequence]); range = dummy }
-  let update key value collection = LE.{ desc = Prim (LP.Update, [key; value; collection]); range = dummy }
-  let get_and_update key value collection = LE.{ desc = Prim (LP.Get_and_update, [key; value; collection]); range = dummy }
-  let transfer_tokens param amount contract = LE.{ desc = Prim (LP.Transfer_tokens, [param; amount; contract]); range = dummy }
-  let check_signature key signature message = LE.{ desc = Prim (LP.Check_signature, [key; signature; message]); range = dummy }
-  let open_chest chest_key chest time = LE.{ desc = Prim (LP.Open_chest, [chest_key; chest; time]); range = dummy }
+  let slice ?(range = dummy) offset length sequence = create ~range (LLTZ.E.Prim (LLTZ.P.Slice, [offset; length; sequence]))
+  let update ?(range = dummy) key value collection = create ~range (LLTZ.E.Prim (LLTZ.P.Update, [key; value; collection]))
+  let get_and_update ?(range = dummy) key value collection = create ~range (LLTZ.E.Prim (LLTZ.P.Get_and_update, [key; value; collection]))
+  let transfer_tokens ?(range = dummy) param amount contract = create ~range (LLTZ.E.Prim (LLTZ.P.Transfer_tokens, [param; amount; contract]))
+  let check_signature ?(range = dummy) key signature message = create ~range (LLTZ.E.Prim (LLTZ.P.Check_signature, [key; signature; message]))
+  let open_chest ?(range = dummy) chest_key chest time = create ~range (LLTZ.E.Prim (LLTZ.P.Open_chest, [chest_key; chest; time]))
 
-
-
-  let convert_list (exprs: LE.t list) : LE.t Row.t =
+  let convert_list (exprs: LLTZ.E.t list) : LLTZ.E.t Row.t =
     let converted_row_leaves = List.map (fun ty -> Row.Leaf (None, ty)) exprs in
     Row.Node converted_row_leaves
 end
