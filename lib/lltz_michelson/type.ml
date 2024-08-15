@@ -11,3 +11,13 @@ let tuple types =
   | [ type_ ] -> type_
   | types -> pair types
 ;;
+
+let ors types =
+  (* Right-comb encoding of or-types (not efficient, but cheap) *)
+  let rec loop = function
+    | [] | [ _ ] -> assert false
+    | [ type1; type2 ] -> or_ type1 type2
+    | type_ :: types -> or_ type_ (loop types)
+  in
+  loop types
+;;
