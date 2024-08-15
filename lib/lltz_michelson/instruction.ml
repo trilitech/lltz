@@ -432,33 +432,7 @@ let update_n idx ~length:n =
     prim 2 1 (I.update_n k)
 ;;
 
-(*let lambda ~closure ~parameters ~return_type return stack =
-  let n = List.length closure + List.length parameters + 1 in
-  let closure_slots = List.map closure ~f:(fun (ident, _) -> `Ident ident) in
-  let parameter_slots = List.map parameters ~f:(fun (ident, _) -> `Ident ident) in
-  let return_pair stack =
-    match stack with
-    | [ `Value; `Heap ] -> Config.ok [ `Value ] I.[ swap; pair ]
-    | _ -> raise_s [%message "Instruction.lambda: invalid stack" (stack : Stack.t)]
-  in
-  let lambda_stack = [ `Value ] in
-  let { Config.stack = _; instructions } =
-    seq
-      [ unpair_n n
-      ; Slot.def_all (closure_slots @ (`Heap :: parameter_slots)) ~in_:return
-      ; Slot.collect_all (closure_slots @ parameter_slots)
-      ; return_pair
-      ]
-      lambda_stack
-  in
-  let parameter_type =
-    Type.tuple (List.map closure ~f:snd @ [ Type.heap ] @ List.map parameters ~f:snd)
-  in
-  let return_type = Type.(tuple [ heap; return_type ]) in
-  Config.ok (`Value :: stack) [ I.lambda parameter_type return_type instructions ]
-;;*)
-
-(*No need for heap in lambda*)
+(*  Lambdas used in LLTZ-IR do not use heaps. *)
 let lambda  ~lam_var ~return_type return stack =
   let parameter_slot = (match lam_var with
     | (ident, _) -> (`Ident ident)) in
