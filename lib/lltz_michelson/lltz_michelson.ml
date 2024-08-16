@@ -72,6 +72,7 @@ and convert_constant (const: LLTZ.E.constant) : Michelson.Ast.t =
   | Bls12_381_g1 s -> Michelson.Ast.string s
   | Bls12_381_g2 s -> Michelson.Ast.string s
   | Bls12_381_fr s -> Michelson.Ast.string s
+<<<<<<< HEAD
   | Signature s -> Michelson.Ast.string s
 
   let get_const_type (const: LLTZ.E.constant) : Michelson.Ast.t =
@@ -284,3 +285,6 @@ and compile_assign (var : string) value =
       Instruction.Slot.set (`Ident var)
     ]
   )
+=======
+  | Signature s -> Michelson.Ast.string s
+>>>>>>> a775e12 (feat(lltz_michelson): convert constants)
