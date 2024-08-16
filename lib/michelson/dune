@@ -1,0 +1,9 @@
+(library
+ (name michelson)
+ (inline_tests)
+ (libraries
+  core
+  tezos-micheline
+ )
+ (preprocess
+  (pps ppx_jane)))
