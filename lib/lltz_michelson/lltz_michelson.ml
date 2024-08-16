@@ -51,8 +51,6 @@ let rec convert_type (ty: LLTZ.T.t) : Michelson.Ast.t =
   | Bls12_381_fr -> Michelson.T.bls12_381_fr
   | Chest_key -> Michelson.T.chest_key
   | Chest -> Michelson.T.chest
-<<<<<<< HEAD
-=======
 
 and convert_constant (const: LLTZ.E.constant) : Michelson.Ast.t =
   match const with
@@ -93,94 +91,94 @@ and convert_constant (const: LLTZ.E.constant) : Michelson.Ast.t =
     | Signature _ -> Michelson.T.signature
 
 let convert_primitive (prim: LLTZ.P.t) : Michelson.Ast.t =
-  match prim with
-  | Amount -> Michelson.Ast.Instruction.amount
-  | Balance -> Michelson.Ast.Instruction.balance
-  | Chain_id -> Michelson.Ast.Instruction.chain_id
-  | Level -> Michelson.Ast.Instruction.level
-  | Now -> Michelson.Ast.Instruction.now
-  | Self opt -> (match opt with Some str -> Michelson.Ast.Instruction.self | None -> Michelson.Ast.Instruction.self)
-  | Self_address -> Michelson.Ast.Instruction.self_address
-  | Sender -> Michelson.Ast.Instruction.sender
-  | Source -> Michelson.Ast.Instruction.source
-  | Total_voting_power -> Michelson.Ast.Instruction.total_voting_power
-  | Empty_bigmap (ty1, ty2) -> Michelson.Ast.Instruction.empty_big_map (convert_type ty1) (convert_type ty2)
-  | Empty_map (ty1, ty2) -> Michelson.Ast.Instruction.empty_map (convert_type ty1) (convert_type ty2)
-  | Empty_set cty -> Michelson.Ast.Instruction.empty_set (convert_type cty) 
-  | Nil ty -> Michelson.Ast.Instruction.nil (convert_type ty)
-  | None ty -> Michelson.Ast.Instruction.none (convert_type ty)
-  | Sapling_empty_state { memo } -> Michelson.Ast.Instruction.sapling_empty_state (Michelson.Ast.int memo)
-  | Unit -> Michelson.Ast.Instruction.unit
-  | Car -> Michelson.Ast.Instruction.car
-  | Cdr -> Michelson.Ast.Instruction.cdr
-  | Left (opt1, opt2, ty) -> Michelson.Ast.Instruction.left (convert_type ty)
-  | Right (opt1, opt2, ty) -> Michelson.Ast.Instruction.right (convert_type ty)
-  | Some -> Michelson.Ast.Instruction.some
-  | Eq -> Michelson.Ast.Instruction.eq
-  | Abs -> Michelson.Ast.Instruction.abs
-  | Neg -> Michelson.Ast.Instruction.neg
-  | Nat -> Michelson.Ast.Instruction.int
-  | Int -> Michelson.Ast.Instruction.int
-  | Bytes -> Michelson.Ast.Instruction.pack (* Assuming pack handles bytes conversion *)
-  | Is_nat -> Michelson.Ast.Instruction.is_nat
-  | Neq -> Michelson.Ast.Instruction.neq
-  | Le -> Michelson.Ast.Instruction.le
-  | Lt -> Michelson.Ast.Instruction.lt
-  | Ge -> Michelson.Ast.Instruction.ge
-  | Gt -> Michelson.Ast.Instruction.gt
-  | Not -> Michelson.Ast.Instruction.not
-  | Size -> Michelson.Ast.Instruction.size
-  | Address -> Michelson.Ast.Instruction.address
-  | Implicit_account -> Michelson.Ast.Instruction.implicit_account
-  | Contract (opt, ty) -> Michelson.Ast.Instruction.contract (convert_type ty)
-  | Pack -> Michelson.Ast.Instruction.pack
-  | Unpack ty -> Michelson.Ast.Instruction.unpack (convert_type ty)
-  | Hash_key -> Michelson.Ast.Instruction.hash_key
-  | Blake2b -> Michelson.Ast.Instruction.blake2b
-  | Sha256 -> Michelson.Ast.Instruction.sha256
-  | Sha512 -> Michelson.Ast.Instruction.sha512
-  | Keccak -> Michelson.Ast.Instruction.keccak
-  | Sha3 -> Michelson.Ast.Instruction.sha3
-  | Set_delegate -> Michelson.Ast.Instruction.set_delegate
-  | Read_ticket -> Michelson.Ast.Instruction.read_ticket
-  | Join_tickets -> Michelson.Ast.Instruction.join_tickets
-  | Pairing_check -> Michelson.Ast.Instruction.pairing_check
-  | Voting_power -> Michelson.Ast.Instruction.voting_power
-  | Getn n -> Michelson.Ast.Instruction.get_n n
-  | Cast ty -> Michelson.Ast.Instruction.cast (convert_type ty)
-  | Rename opt -> Michelson.Ast.Instruction.failwith 
-  | Emit (opt, ty_opt) -> Michelson.Ast.Instruction.failwith
-  | Failwith -> Michelson.Ast.Instruction.failwith
-  | Never -> Michelson.Ast.Instruction.never
-  | Pair (opt1, opt2) -> Michelson.Ast.Instruction.pair
-  | Add -> Michelson.Ast.Instruction.add
-  | Mul -> Michelson.Ast.Instruction.mul
-  | Sub -> Michelson.Ast.Instruction.sub
-  | Sub_mutez -> Michelson.Ast.Instruction.sub
-  | Lsr -> Michelson.Ast.Instruction.lsr_
-  | Lsl -> Michelson.Ast.Instruction.lsl_
-  | Xor -> Michelson.Ast.Instruction.xor
-  | Ediv -> Michelson.Ast.Instruction.ediv
-  | And -> Michelson.Ast.Instruction.and_
-  | Or -> Michelson.Ast.Instruction.or_
-  | Cons -> Michelson.Ast.Instruction.cons
-  | Compare -> Michelson.Ast.Instruction.compare
-  | Concat1 -> Michelson.Ast.Instruction.concat
-  | Concat2 -> Michelson.Ast.Instruction.concat
-  | Get -> Michelson.Ast.Instruction.get
-  | Mem -> Michelson.Ast.Instruction.mem
-  | Exec -> Michelson.Ast.Instruction.exec
-  | Apply -> Michelson.Ast.Instruction.apply
-  | Sapling_verify_update -> Michelson.Ast.Instruction.sapling_verify_update
-  | Ticket -> Michelson.Ast.Instruction.ticket
-  | Ticket_deprecated -> Michelson.Ast.Instruction.ticket_deprecated
-  | Split_ticket -> Michelson.Ast.Instruction.split_ticket
-  | Updaten n -> Michelson.Ast.Instruction.update_n n
-  | View (name, ty) -> Michelson.Ast.Instruction.failwith
-  | Slice -> Michelson.Ast.Instruction.slice
-  | Update -> Michelson.Ast.Instruction.update
-  | Get_and_update -> Michelson.Ast.Instruction.get_and_update
-  | Transfer_tokens -> Michelson.Ast.Instruction.transfer_tokens
-  | Check_signature -> Michelson.Ast.Instruction.check_signature
-  | Open_chest -> Michelson.Ast.Instruction.open_chest
->>>>>>> 02023d0 (feat(lltz_michelson): conversion of primitives)
+  let open Michelson.Ast.Instruction in
+    match prim with
+    | Amount -> amount
+    | Balance -> balance
+    | Chain_id -> chain_id
+    | Level -> level
+    | Now -> now
+    | Self opt -> (match opt with Some str -> self | None -> self)
+    | Self_address -> self_address
+    | Sender -> sender
+    | Source -> source
+    | Total_voting_power -> total_voting_power
+    | Empty_bigmap (ty1, ty2) -> empty_big_map (convert_type ty1) (convert_type ty2)
+    | Empty_map (ty1, ty2) -> empty_map (convert_type ty1) (convert_type ty2)
+    | Empty_set cty -> empty_set (convert_type cty) 
+    | Nil ty -> nil (convert_type ty)
+    | None ty -> none (convert_type ty)
+    | Sapling_empty_state { memo } -> sapling_empty_state (Michelson.Ast.int memo)
+    | Unit -> unit
+    | Car -> car
+    | Cdr -> cdr
+    | Left (opt1, opt2, ty) -> left (convert_type ty)
+    | Right (opt1, opt2, ty) -> right (convert_type ty)
+    | Some -> some
+    | Eq -> eq
+    | Abs -> abs
+    | Neg -> neg
+    | Nat -> int
+    | Int -> int
+    | Bytes -> pack (* Assuming pack handles bytes conversion *)
+    | Is_nat -> is_nat
+    | Neq -> neq
+    | Le -> le
+    | Lt -> lt
+    | Ge -> ge
+    | Gt -> gt
+    | Not -> not
+    | Size -> size
+    | Address -> address
+    | Implicit_account -> implicit_account
+    | Contract (opt, ty) -> contract (convert_type ty)
+    | Pack -> pack
+    | Unpack ty -> unpack (convert_type ty)
+    | Hash_key -> hash_key
+    | Blake2b -> blake2b
+    | Sha256 -> sha256
+    | Sha512 -> sha512
+    | Keccak -> keccak
+    | Sha3 -> sha3
+    | Set_delegate -> set_delegate
+    | Read_ticket -> read_ticket
+    | Join_tickets -> join_tickets
+    | Pairing_check -> pairing_check
+    | Voting_power -> voting_power
+    | Getn n -> get_n n
+    | Cast ty -> cast (convert_type ty)
+    | Rename opt -> failwith 
+    | Emit (opt, ty_opt) -> failwith
+    | Failwith -> failwith
+    | Never -> never
+    | Pair (opt1, opt2) -> pair
+    | Add -> add
+    | Mul -> mul
+    | Sub -> sub
+    | Sub_mutez -> sub
+    | Lsr -> lsr_
+    | Lsl -> lsl_
+    | Xor -> xor
+    | Ediv -> ediv
+    | And -> and_
+    | Or -> or_
+    | Cons -> cons
+    | Compare -> compare
+    | Concat1 -> concat
+    | Concat2 -> concat
+    | Get -> get
+    | Mem -> mem
+    | Exec -> exec
+    | Apply -> apply
+    | Sapling_verify_update -> sapling_verify_update
+    | Ticket -> ticket
+    | Ticket_deprecated -> ticket_deprecated
+    | Split_ticket -> split_ticket
+    | Updaten n -> update_n n
+    | View (name, ty) -> failwith
+    | Slice -> slice
+    | Update -> update
+    | Get_and_update -> get_and_update
+    | Transfer_tokens -> transfer_tokens
+    | Check_signature -> check_signature
+    | Open_chest -> open_chest
