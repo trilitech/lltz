@@ -98,7 +98,7 @@ let convert_primitive (prim: LLTZ.P.t) : Michelson.Ast.t =
     | Chain_id -> chain_id
     | Level -> level
     | Now -> now
-    | Self opt -> (match opt with Some str -> self | None -> self)
+    | Self opt -> failwith
     | Self_address -> self_address
     | Sender -> sender
     | Source -> source
