@@ -1,24 +1,20 @@
-include Core
-
 module M = Michelson.Ast 
 module T = M.Type
-
-open T
 
 let tuple types =
   (* Right-comb encoding of tuple-types *)
   match types with
-  | [] -> unit
+  | [] -> T.unit
   | [ type_ ] -> type_
-  | types -> pair types
+  | types -> T.pair types
 ;;
 
 let ors types =
   (* Right-comb encoding of or-types (not efficient, but cheap) *)
   let rec loop = function
     | [] | [ _ ] -> assert false
-    | [ type1; type2 ] -> or_ type1 type2
-    | type_ :: types -> or_ type_ (loop types)
+    | [ type1; type2 ] -> T.or_ type1 type2
+    | type_ :: types -> T.or_ type_ (loop types)
   in
   loop types
 ;;
