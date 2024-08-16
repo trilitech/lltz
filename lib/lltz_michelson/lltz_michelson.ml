@@ -69,3 +69,22 @@ and convert_constant (const: LLTZ.E.constant) : Michelson.Ast.t =
   | Bls12_381_g2 s -> Michelson.Ast.string s
   | Bls12_381_fr s -> Michelson.Ast.string s
   | Signature s -> Michelson.Ast.string s
+
+  let get_const_type (const: LLTZ.E.constant) : Michelson.Ast.t =
+    match const with
+    | Unit -> Michelson.T.unit
+    | Bool _ -> Michelson.T.bool
+    | Nat _ -> Michelson.T.nat
+    | Int _ -> Michelson.T.int
+    | Mutez _ -> Michelson.T.mutez
+    | String _ -> Michelson.T.string
+    | Key _ -> Michelson.T.key
+    | Key_hash _ -> Michelson.T.key_hash
+    | Bytes _ -> Michelson.T.bytes
+    | Chain_id _ -> Michelson.T.chain_id
+    | Address _ -> Michelson.T.address
+    | Timestamp _ -> Michelson.T.timestamp
+    | Bls12_381_g1 _ -> Michelson.T.bls12_381_g1
+    | Bls12_381_g2 _ -> Michelson.T.bls12_381_g2
+    | Bls12_381_fr _ -> Michelson.T.bls12_381_fr
+    | Signature _ -> Michelson.T.signature
