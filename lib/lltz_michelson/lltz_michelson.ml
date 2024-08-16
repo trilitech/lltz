@@ -7,10 +7,7 @@ module LLTZ = struct
   module E = Lltz_ir.Expr
   module T = Lltz_ir.Type
   module R = Lltz_ir.Row
-<<<<<<< HEAD
   module P = Lltz_ir.Primitive
-=======
->>>>>>> d83ad1a (feat(lltz_michelson): compiling types)
 end
 
 module Michelson = struct 
