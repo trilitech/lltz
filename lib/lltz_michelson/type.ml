@@ -6,6 +6,7 @@ module T = M.Type
 open T
 
 let tuple types =
+  (* Right-comb encoding of tuple-types *)
   match types with
   | [] -> unit
   | [ type_ ] -> type_
