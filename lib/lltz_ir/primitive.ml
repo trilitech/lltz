@@ -21,7 +21,7 @@ type t =
   | None of Type.t
   | Sapling_empty_state of { memo : int }
   | Unit
-  (* arity 1 *)
+  (* arity 1/2 *)
   | Car
   | Cdr
   | Left of string option * string option * Type.t
@@ -76,6 +76,7 @@ type t =
   | Or
   | Cons
   | Compare
+  | Concat1
   | Concat2
   | Get
   | Mem

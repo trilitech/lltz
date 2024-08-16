@@ -4,10 +4,10 @@ open Grace
 type micheline = (Range.t, string) Tezos_micheline.Micheline.node
 
 module T = struct
-  type var = Var of string
+  type var = Var of string 
   and mut_var = Mut_var of string
 
-  and constant =
+  and constant = 
     | Unit
     | Bool of bool
     | Nat of (Z.t[@sexp.opaque])
@@ -32,21 +32,21 @@ module T = struct
 
   and desc =
     (* basic lambda calculus w/ primitives + constants *)
-    | Var of var
+    | Variable of var
     | Let_in of
         { let_var : var
         ; rhs : t
         ; in_ : t
         }
     | Lambda of
-        { lam_var : var
-        ; return : Type.t
+        { lam_var : var * Type.t
+        ; return_type : Type.t
         ; body : t
         }
     | Lambda_rec of
-        { lam_var : var
+        { lam_var : var * Type.t 
         ; mu_var : var
-        ; return : Type.t
+        ; return_type : Type.t
         ; body : t
         }
     | App of
@@ -112,12 +112,12 @@ module T = struct
         }
     | Fold_left of
         { collection : t
-        ; init : t
+        ; init : var * t
         ; fold : var * t
         }
     | Fold_right of
         { collection : t
-        ; init : t
+        ; init : var * t
         ; fold : var * t
         }
     (* tuples *)
@@ -142,6 +142,9 @@ module T = struct
         { storage : Type.t
         ; parameter : Type.t
         ; code : t
+        ; delegate : t
+        ; initial_balance : t
+        ; initial_storage : t
         }
   [@@deriving sexp, equal, compare, traverse]
 end
