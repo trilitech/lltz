@@ -50,3 +50,22 @@ let rec convert_type (ty: LLTZ.T.t) : Michelson.Ast.t =
   | Bls12_381_fr -> Michelson.T.bls12_381_fr
   | Chest_key -> Michelson.T.chest_key
   | Chest -> Michelson.T.chest
+
+and convert_constant (const: LLTZ.E.constant) : Michelson.Ast.t =
+  match const with
+  | Unit -> Michelson.Ast.Instruction.unit
+  | Bool b -> if b then Michelson.Ast.true_ else Michelson.Ast.false_
+  | Nat n -> Michelson.Ast.int (Z.to_int n)
+  | Int n -> Michelson.Ast.int (Z.to_int n)
+  | Mutez n -> Michelson.Ast.int (Z.to_int n)
+  | String s -> Michelson.Ast.string s
+  | Key s -> Michelson.Ast.string s
+  | Key_hash s -> Michelson.Ast.string s
+  | Bytes s -> Michelson.Ast.(bytes (Bytes.of_string s))
+  | Chain_id s -> Michelson.Ast.string s
+  | Address s -> Michelson.Ast.string s
+  | Timestamp s -> Michelson.Ast.string s
+  | Bls12_381_g1 s -> Michelson.Ast.string s
+  | Bls12_381_g2 s -> Michelson.Ast.string s
+  | Bls12_381_fr s -> Michelson.Ast.string s
+  | Signature s -> Michelson.Ast.string s
