@@ -709,7 +709,12 @@ module Instruction = struct
   let dup = prim (I Dup)
   let dup_n n = prim ~arguments:[ int n ] (I Dup)
   let ediv = prim (I Ediv)
-  let emit ty = prim ~arguments:[ ty ] (I Emit)
+  let emit opt ty_opt = 
+    match opt, ty_opt with
+    | None, None -> prim (I Emit)
+    | Some s, None -> prim ~arguments:[ string s ] (I Emit)
+    | None, Some ty -> prim ~arguments:[ ty ] (I Emit)
+    | Some s, Some ty -> prim ~arguments:[ string s; ty ] (I Emit)
   let empty_big_map kty vty = prim ~arguments:[ kty; vty ] (I Empty_big_map)
   let empty_map kty vty = prim ~arguments:[ kty; vty ] (I Empty_map)
   let empty_set cty = prim ~arguments:[ cty ] (I Empty_set)
@@ -763,7 +768,10 @@ module Instruction = struct
   let right ty1 = prim ~arguments:[ ty1 ] (I Right)
   let sapling_verify_update = prim (I Sapling_verify_update)
   let sapling_empty_state ms = prim ~arguments:[ ms ] (I Sapling_empty_state)
-  let self = prim (I Self)
+  let self opt = 
+    match opt with
+    | None -> prim (I Self)
+    | Some s -> prim ~arguments:[ string s ] (I Self)
   let self_address = prim (I Self_address)
   let sender = prim (I Sender)
   let set_delegate = prim (I Set_delegate)
@@ -787,6 +795,7 @@ module Instruction = struct
   let unpair_n n = prim ~arguments:[ int n ] (I Unpair)
   let update = prim (I Update)
   let update_n n = prim ~arguments:[ int n ] (I Update)
+  let view name return_ty = prim ~arguments:[ string name; return_ty ] (I View)
   let voting_power = prim (I Voting_power)
   let xor = prim (I Xor)
   let int = prim (I Int)
