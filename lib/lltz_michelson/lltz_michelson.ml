@@ -1,8 +1,16 @@
+<<<<<<< HEAD
 (* 
   lltz_michelson.ml 
   Compiles types, constants, primitives and expressions from LLTZ-IR to Michelson Ast.
 *) 
 
+=======
+(*
+   lltz_michelson.ml
+   Compiles types, constants, primitives and expressions from LLTZ-IR to Michelson Ast.
+*)
+open Core
+>>>>>>> 88eb664 (feat(lltz_michelson): tuples)
 module LLTZ = struct
   module E = Lltz_ir.Expr
   module T = Lltz_ir.Type
@@ -339,3 +347,69 @@ and compile_for index init invariant variant body =
     drop 1 (*drop initial value*)
   ]
 
+(* Compile a tuple expression by compiling each component and pairing them together. *)
+and compile_tuple row = 
+  match row with
+  | LLTZ.R.Node nodes -> 
+    let compiled_nodes = List.map nodes ~f:compile_tuple in
+    Instruction.seq (compiled_nodes @ [ Instruction.pair_n (List.length compiled_nodes) ])
+  | LLTZ.R.Leaf (_, value) -> compile value
+
+(* Compile a projection expression by compiling the tuple and then getting the nth element. *)
+and compile_proj tuple path =
+  let lengths = 
+    match path with
+    | Here list -> 
+      (match tuple.desc with
+      | LLTZ.E.Tuple row -> get_lengths row list
+      | _ -> raise_s [%message "Tuple expected"])
+  in
+  let gets = 
+    match path with
+    | Here list -> 
+      List.mapi list ~f:(fun i num -> get_n num ~length:(List.nth_exn lengths i))
+  in
+  Instruction.trace (
+    Instruction.seq (
+      [ Instruction.trace (compile tuple) ]
+      @ gets
+      @ [ (* Keep the last value, drop the intermediate ones and the tuple *)
+          Instruction.trace (Instruction.dip 1 (Instruction.drop (List.length gets - 1)))
+        ]
+    )
+  )
+
+(* Compile an update expression by compiling the tuple row, getting the nth element, compiling the update value, and combining the values back together into tuple. *)
+and compile_update tuple component update =
+  let lengths = 
+    match component with
+    | Here list -> 
+      (match tuple.desc with
+      | LLTZ.E.Tuple row -> get_lengths row list
+      | _ -> raise_s [%message "Tuple expected"])
+  in
+  let gets = 
+    match component with
+    | Here list -> 
+      List.mapi list ~f:(fun i num -> get_n num ~length:(List.nth_exn lengths i))
+  in
+  let updates = 
+    List.rev (
+      match component with
+      | Here list -> 
+        List.mapi list ~f:(fun i num -> update_n num ~length:(List.nth_exn lengths i))
+    )
+  in
+  Instruction.seq (
+    [ compile tuple ]
+    @ gets
+    @ [ compile update ]
+    @ updates
+  )
+and get_lengths row path_list =
+  match row with
+  | LLTZ.R.Node nodes -> 
+    (match path_list with
+      | hd::tl -> (List.length nodes) :: (get_lengths (List.nth_exn nodes hd) (tl))
+      | [] -> [])
+  | LLTZ.R.Leaf (_, _) -> [1]
