@@ -224,13 +224,13 @@ let rec compile : LLTZ.E.t -> t = fun expr ->
     | For { index = Mut_var var; init; invariant; variant; body } -> 
         compile_for var init invariant variant body
     | For_each { indices; collection; body } -> 
-        assert false
+        compile_for_each indices collection body
     | Map { collection; map = (vars, body) } -> 
-        assert false
+        compile_map collection vars body
     | Fold_left { collection; init = (Var acc, init_body); fold = (Var var, fold_body) } -> 
-        assert false
+        compile_fold_left collection acc init_body var fold_body
     | Fold_right { collection; init = (Var acc, init_body); fold = (Var var, fold_body) } -> 
-        assert false
+        compile_fold_right collection acc init_body var fold_body
     | Let_tuple_in { components; rhs; in_ } -> 
         compile_let_tuple_in components rhs in_
     | Tuple row -> 
@@ -246,7 +246,7 @@ let rec compile : LLTZ.E.t -> t = fun expr ->
     | Raw_michelson node ->
         assert false
     | Create_contract { storage; parameter; code; delegate; initial_balance; initial_storage } -> 
-        assert false
+        compile_create_contract storage parameter code delegate initial_balance initial_storage
   ]
 
 (* Compile a variable by duplicating its value on the stack. *)  
@@ -443,3 +443,71 @@ and compile_lambda_rec var lam_var_type mu return_type body =
 (* Compile an application by compiling a lambda and argument, then applying the EXEC instruction. *)
 and compile_app abs arg =
   trace (Instruction.seq [ trace (compile abs); trace (compile arg); exec ])
+
+(* Compile contract creation expression by compiling the delegate, initial balance, and initial storage, applying CREATE_CONTRACT instruction. *)
+and compile_create_contract storage parameter code delegate initial_balance initial_storage =
+  let storage_ty = convert_type storage in
+  let param_ty = convert_type parameter in
+  let code_instr = compile code in
+  seq
+    [ compile delegate
+    ; compile initial_balance
+    ; compile initial_storage
+    ; create_contract ~storage:storage_ty ~parameter:param_ty ~code:(fun stack ->
+        M.seq (code_instr stack).instructions)
+    ]
+
+(* Compile for-each expression by compiling the collection, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the body. *)
+and compile_for_each indices collection body =
+  let coll_instr = compile collection in
+  let indices_idents = List.map indices ~f:(fun (Var var) -> `Ident var) in
+  seq
+    [ coll_instr
+    ; iter
+        (seq
+           [ unpair_n (List.length indices)
+           ; Slot.let_all indices_idents ~in_:(compile body)
+           ])
+    ]
+
+(* Compile map expression by compiling the collection, then applying the MAP instruction that maps over the collection and binds the values to the variables in the function body. *)
+and compile_map collection vars body =
+  let coll_instr = compile collection in
+  let new_env = List.map vars ~f:(fun (Var var) -> `Ident var) in
+  seq
+    [ coll_instr
+    ; map_
+        (seq
+           [ unpair_n (List.length vars)
+           ; Slot.let_all new_env ~in_:(compile body)
+           ])
+    ]
+
+(* Compile fold-left expression by compiling the collection, initial value, and body, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the function body. *)
+and compile_fold_left collection acc init_body var fold_body =
+  let coll_instr = compile collection in
+  let init_instr = compile init_body in
+  seq
+    [ init_instr
+    ; coll_instr
+    ; iter
+        (seq
+           [ Slot.let_all [ `Ident var; `Ident acc ] ~in_:(compile fold_body)
+           ; drop 1
+           ])
+    ]
+
+(* Compile fold-right expression by compiling the collection, initial value, and body, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the function body. *)
+and compile_fold_right collection acc init_body var fold_body =
+  let coll_instr = compile collection in
+  let init_instr = compile init_body in
+  seq
+    [ init_instr
+    ; coll_instr
+    ; (*TODO: reverse the collection - once rest of the code is validated, it is easily done with dsl*)
+      iter
+        (seq
+           [ Slot.let_all [ `Ident var; `Ident acc ] ~in_:(compile fold_body)
+           ; drop 1
+           ])
+    ]   
