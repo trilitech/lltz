@@ -17,13 +17,30 @@ module Michelson = struct
   module T = Michelson.Ast.Type
 end
 
+<<<<<<< HEAD
 
 open Instruction
+=======
+module Instruction = Instruction
+module Type = Type
+>>>>>>> 2935737 (feat(lltz_michelson): sum types draft)
 
-let rec convert_type (ty : LLTZ.T.t) : Michelson.Ast.t =
+let rec compile_row_types row =
+  match row with
+  | LLTZ.R.Node nodes -> Type.tuple (List.map nodes ~f:compile_row_types)
+  | LLTZ.R.Leaf (_, value) -> convert_type value
+
+and compile_row_types_for_or row =
+  match row with
+  | LLTZ.R.Node nodes ->
+    let converted_types = (List.map nodes ~f:compile_row_types) in
+    Type.ors converted_types
+  | LLTZ.R.Leaf (_, value) -> convert_type value
+
+and convert_type (ty : LLTZ.T.t) : Michelson.Ast.t =
   match ty.desc with
-  | Tuple row -> Michelson.T.unit (* TODO: ~M.Type.pair (List.map row ~f:convert_type)*)
-  | Or row -> Michelson.T.unit (*TODO: ~M.Type.or_ (List.map row ~f:convert_type)*)
+  | Tuple row -> compile_row_types row
+  | Or row -> compile_row_types_for_or row
   | Option ty -> Michelson.T.option (convert_type ty)
   | List ty -> Michelson.T.list (convert_type ty)
   | Set ty -> Michelson.T.set (convert_type ty)
@@ -511,3 +528,17 @@ and compile_fold_right collection acc init_body var fold_body =
            ; drop 1
            ])
     ]   
+
+and compile_inj context expr = 
+  (match context with
+  | LLTZ.R.Context.Hole ty -> 
+    let mid_ty = convert_type ty in
+    seq [ compile expr; ]
+  | LLTZ.R.Context.Node (left, mid ,right) ->  
+    let right_ty = Type.ors (List.map ~f:compile_row_types_for_or left) in
+    let mid_ty = Type.ors (List.map ~f:compile_row_types_for_or mid) in
+    let mid_ty = convert_type val in
+    let context_ty = convert_type val in
+    let expr_instr = compile expr in
+    seq [ compile expr; inj context_ty ]
+  )

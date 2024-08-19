@@ -134,8 +134,8 @@ module T = struct
         ; update : t
         }
     (* sums *)
-    | Inj of Row.Path.t * t
-    | Match of t * t Row.t
+    | Inj of Type.t Row.Context.t * t
+    | Match of t * (var * t) Row.t
     (* tezos specific *)
     | Raw_michelson of (micheline[@sexp.opaque] [@equal.ignore] [@compare.ignore])
     | Create_contract of
@@ -151,6 +151,7 @@ end
 
 include T
 
+(*
 module Traverse = struct
   class map =
     let zero = Traverse_builtins.map_zero in
@@ -222,3 +223,5 @@ module Traverse = struct
       method micheline = zero
     end
 end
+
+*)
