@@ -530,15 +530,36 @@ and compile_fold_right collection acc init_body var fold_body =
     ]   
 
 and compile_inj context expr = 
+  (*crete or type*)
+  (*middle type*)
   (match context with
   | LLTZ.R.Context.Hole ty -> 
     let mid_ty = convert_type ty in
     seq [ compile expr; ]
-  | LLTZ.R.Context.Node (left, mid ,right) ->  
-    let right_ty = Type.ors (List.map ~f:compile_row_types_for_or left) in
-    let mid_ty = Type.ors (List.map ~f:compile_row_types_for_or mid) in
-    let mid_ty = convert_type val in
-    let context_ty = convert_type val in
-    let expr_instr = compile expr in
-    seq [ compile expr; inj context_ty ]
+  | LLTZ.R.Context.Node (left_val, mid ,right_val) ->  
+    let right_ty = Type.ors (List.map ~f:compile_row_types_for_or right_val) in
+    let mid_ty = Type.ors (List.map ~f:compile_row_types_for_or [mid]) in
+    (*go(fold) through all elements in left (<- direction) and righ-comb iteratively merge them
+  into a larger or type, record each intermediate merge*)
+    let right_instrs_types = (List.fold_right left_val
+    ~f:(fun x (hd::tl) -> 
+       Type.ors ([compile_row_types_for_or x; hd])::(hd::tl)
+    )  ~init:([Type.ors ([mid_ty; right_ty])])) in
+    seq ([
+      compile expr;
+      (* Left *)
+      left mid_ty;
+      ]
+      (* Rights - traverses all right_instrs_types in reverse order except last and makes right*)
+      @ (
+        if List.length right_instrs_types = 0 then []
+        else
+          List.map (List.rev (List.tl_exn right_instrs_types))
+          ~f:(fun ty -> right ty)
+      )
+      @
+      (* Number of levels*)
+      [
+        push (Michelson.T.int) (Michelson.Ast.int (List.length right_instrs_types));
+     ])
   )
