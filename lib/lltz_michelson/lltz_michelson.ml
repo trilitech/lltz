@@ -10,6 +10,7 @@ module LLTZ = struct
   module T = Lltz_ir.Type
   module R = Lltz_ir.Row
   module P = Lltz_ir.Primitive
+  module Dsl = Lltz_ir.Dsl
 end
 
 module Michelson = struct
@@ -563,3 +564,11 @@ and compile_inj context expr =
         push (Michelson.T.int) (Michelson.Ast.int (List.length right_instrs_types));
      ])
   )
+and compile_row_of_lambdas row = 
+  match row with
+  | LLTZ.R.Node nodes ->
+    let compiled_nodes = List.map nodes ~f:compile_row_of_lambdas in
+    Instruction.seq (compiled_nodes @ [ Instruction.pair_n (List.length compiled_nodes) ])
+  | LLTZ.R.Leaf (_, ((var, var_type), return_type, body)) -> 
+    compile (LLTZ.Dsl.T.lambda ~var:(var, var_type) ~return_type ~body)
+

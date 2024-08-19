@@ -135,7 +135,7 @@ module T = struct
         }
     (* sums *)
     | Inj of Type.t Row.Context.t * t
-    | Match of t * (var * t) Row.t
+    | Match of t * ((var * Type.t) * Type.t * t) Row.t
     (* tezos specific *)
     | Raw_michelson of (micheline[@sexp.opaque] [@equal.ignore] [@compare.ignore])
     | Create_contract of
