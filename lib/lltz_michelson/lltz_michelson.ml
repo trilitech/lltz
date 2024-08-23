@@ -3,6 +3,7 @@
    Compiles types, constants, primitives and expressions from LLTZ-IR to Michelson Ast.
 *)
 
+open Core
 module LLTZ = struct
   module E = Lltz_ir.Expr
   module T = Lltz_ir.Type
@@ -14,6 +15,7 @@ module Michelson = struct
   module Ast = Michelson.Ast
   module T = Michelson.Ast.Type
 end
+
 
 open Instruction
 
@@ -146,10 +148,10 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
     | Join_tickets -> join_tickets
     | Pairing_check -> pairing_check
     | Voting_power -> voting_power
-    | Getn n -> get_n n
+    | Get_n n -> get_n n
     | Cast ty -> cast (convert_type ty)
     | Rename opt -> failwith (* TODO: Check why the instruction does not exist. *)
-    | Emit (opt, ty_opt) -> emit opt (Option.map convert_type ty_opt)
+    | Emit (opt, ty_opt) -> emit opt (Option.map ~f:convert_type ty_opt)
     | Failwith -> failwith
     | Never -> never
     | Pair (opt1, opt2) -> pair (* TODO: resolve tag options*)
@@ -175,7 +177,7 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
     | Ticket -> ticket
     | Ticket_deprecated -> ticket_deprecated
     | Split_ticket -> split_ticket
-    | Updaten n -> update_n n
+    | Update_n n -> update_n n
     | View (name, ty) -> view name (convert_type ty)
     | Slice -> slice
     | Update -> update
@@ -184,8 +186,8 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
     | Check_signature -> check_signature
     | Open_chest -> open_chest
 
-let rec compile : LLTZ.E.t -> Instruction.t = fun expr ->
-  Instruction.seq [
+let rec compile : LLTZ.E.t -> t = fun expr ->
+  seq [
     match expr.desc with
     | Variable (Var name) -> compile_variable name
     | Let_in { let_var = Var var; rhs; in_ } ->
@@ -229,13 +231,13 @@ let rec compile : LLTZ.E.t -> Instruction.t = fun expr ->
     | Fold_right { collection; init = (Var acc, init_body); fold = (Var var, fold_body) } -> 
         assert false
     | Let_tuple_in { components; rhs; in_ } -> 
-        assert false
-    | Tuple row ->
-        assert false
+        compile_let_tuple_in components rhs in_
+    | Tuple row -> 
+        compile_tuple row
     | Proj (tuple, path) ->
-        assert false
+        compile_proj tuple path
     | Update { tuple; component; update } ->
-        assert false
+        compile_update tuple component update
     | Inj (path, expr) ->
         assert false
     | Match (subject, cases) ->
@@ -265,7 +267,7 @@ and compile_const constant =
 
 (* Compile a primitive by compiling its arguments, then applying the primitive to the arguments. *)
 and compile_prim primitive args =
-  let args_instrs = List.map compile args in
+  let args_instrs = List.map ~f:compile args in
   seq (
     args_instrs @ [ prim (List.length args) 1 (convert_primitive primitive) ]
   )
@@ -339,3 +341,88 @@ and compile_for index init invariant variant body =
     drop 1 (*drop initial value*)
   ]
 
+(* Compile a tuple expression by compiling each component and pairing them together. *)
+and compile_tuple row = 
+  match row with
+  | LLTZ.R.Node nodes -> 
+    let compiled_nodes = List.map ~f:compile_tuple nodes in
+    seq (compiled_nodes @ [ pair_n (List.length compiled_nodes) ])
+  | LLTZ.R.Leaf (_, value) -> compile value
+
+(* Compile a projection expression by compiling the tuple and then getting the nth element. *)
+and compile_proj tuple path =
+  let _, gets, tuple_expanded_instr = expand_tuple tuple path in
+  trace (
+    seq (
+      [ tuple_expanded_instr ]
+      @ [ (* Keep the last value, drop the intermediate ones and the tuple *)
+          trace (dip 1 (drop (List.length gets - 1)))
+        ]
+    )
+  )
+
+(* Compile an update expression by compiling the tuple row, getting the nth element, compiling the update value, and combining the values back together into tuple. *)
+and compile_update tuple component update =
+  let lengths, gets, tuple_expanded_instr = expand_tuple tuple component in
+  let updates = 
+    List.rev (
+      match component with
+      | LLTZ.R.Path.Here list -> 
+        List.mapi list ~f:(fun i num -> 
+          match List.nth lengths i with
+          | Some length -> update_n num ~length
+          | None -> raise_s [%message "compile_update: index out of bounds in updates" (i : int) (lengths : int list)])
+    )
+  in
+  seq (
+    [ compile tuple ]
+    @ gets
+    @ [ compile update ]
+    @ updates
+  )
+
+and get_lengths_inner row path_list =
+  match row with
+  | LLTZ.R.Node nodes -> 
+    (match path_list with
+      | hd::tl -> 
+        (match List.nth nodes hd with
+        | Some node -> (List.length nodes) :: (get_lengths_inner node tl)
+        | None -> raise_s [%message "get_lengths: index out of bounds" (hd : int) (nodes : LLTZ.E.t LLTZ.R.t list)])
+      | [] -> [])
+  | LLTZ.R.Leaf (_, _) -> [1]
+
+(* Get the number of children for each node on the path *)
+and get_tuple_lengths tuple path =
+  match LLTZ.E.(tuple.desc), path with
+    | LLTZ.E.Tuple row, LLTZ.R.Path.Here list  -> get_lengths_inner row list
+    | _ -> raise_s [%message "Tuple expected"]
+
+(* Expand a tuple expression to a sequence of instructions that get the nth element *)
+and expand_tuple tuple path =
+  let lengths = get_tuple_lengths tuple path in
+  let gets = 
+    let LLTZ.R.Path.Here list = path in
+      List.mapi list ~f:(fun i num -> 
+        match List.nth lengths i with
+        | Some length -> get_n num ~length
+        | None -> raise_s [%message "Index out of bounds" (i : int) (lengths : int list)])
+  in
+  (
+    lengths,
+    gets,
+    seq (
+      [ compile tuple ]
+      @ gets
+    )
+  )
+
+(* Compile let-tuple-in expression by compiling the right-hand side with the tuple, then binding the components to the variables in the inner expression. *)
+and compile_let_tuple_in components rhs in_ =
+  let rhs_instr = compile rhs in
+  let new_env = List.map components ~f:(fun (Var var) -> `Ident var) in
+  seq
+    [ rhs_instr
+    ; unpair_n (List.length components)
+    ; trace (Slot.let_all new_env ~in_:(compile in_))
+    ]

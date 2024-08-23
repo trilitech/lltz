@@ -57,7 +57,7 @@ type t =
   | Join_tickets
   | Pairing_check
   | Voting_power
-  | Getn of int
+  | Get_n of int
   | Cast of Type.t
   | Rename of string option
   | Emit of string option * Type.t option
@@ -86,7 +86,7 @@ type t =
   | Ticket
   | Ticket_deprecated
   | Split_ticket
-  | Updaten of int
+  | Update_n of int
   | View of string (* view name *) * Type.t (* return type *)
   (* arity 3 *)
   | Slice
