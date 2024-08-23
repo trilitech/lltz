@@ -139,7 +139,7 @@ let read_ticket ?(range = dummy) ticket = create ~range (LLTZ.E.Prim (LLTZ.P.Rea
 let join_tickets ?(range = dummy) (ticket1, ticket2) = create ~range (LLTZ.E.Prim (LLTZ.P.Join_tickets, [ticket1; ticket2]))
 let pairing_check ?(range = dummy) pairings = create ~range (LLTZ.E.Prim (LLTZ.P.Pairing_check, [pairings]))
 let voting_power ?(range = dummy) key_hash = create ~range (LLTZ.E.Prim (LLTZ.P.Voting_power, [key_hash]))
-let getn ?(range = dummy) (n,value) = create ~range (LLTZ.E.Prim (LLTZ.P.Getn n, [value]))
+let getn ?(range = dummy) (n,value) = create ~range (LLTZ.E.Prim (LLTZ.P.Get_n n, [value]))
 let cast ?(range = dummy) (ty,value) = create ~range (LLTZ.E.Prim (LLTZ.P.Cast ty, [value]))
 let rename = assert false
 let emit ?(range = dummy) (opt, ty, value) = create ~range (LLTZ.E.Prim (LLTZ.P.Emit (opt, ty), [value]))
@@ -168,7 +168,7 @@ let sapling_verify_update ?(range = dummy) (transaction, state) = create ~range 
 let ticket ?(range = dummy) (content, amount) = create ~range (LLTZ.E.Prim (LLTZ.P.Ticket, [content; amount]))
 let ticket_deprecated ?(range = dummy) (content, amount) = create ~range (LLTZ.E.Prim (LLTZ.P.Ticket_deprecated, [content; amount]))
 let split_ticket ?(range = dummy) (ticket, amounts) = create ~range (LLTZ.E.Prim (LLTZ.P.Split_ticket, [ticket; amounts]))
-let updaten ?(range = dummy) (n, value, pair) = create ~range (LLTZ.E.Prim (LLTZ.P.Updaten n, [value; pair]))
+let updaten ?(range = dummy) (n, value, pair) = create ~range (LLTZ.E.Prim (LLTZ.P.Update_n n, [value; pair]))
 let view ?(range = dummy) (name, return_type, d, address) = create ~range (LLTZ.E.Prim (LLTZ.P.View (name, return_type), [d; address]))
 
 (* Arity 3 *)

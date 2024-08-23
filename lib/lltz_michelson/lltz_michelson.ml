@@ -148,7 +148,7 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
     | Join_tickets -> join_tickets
     | Pairing_check -> pairing_check
     | Voting_power -> voting_power
-    | Getn n -> get_n n
+    | Get_n n -> get_n n
     | Cast ty -> cast (convert_type ty)
     | Rename opt -> failwith (* TODO: Check why the instruction does not exist. *)
     | Emit (opt, ty_opt) -> emit opt (Option.map ~f:convert_type ty_opt)
@@ -177,7 +177,7 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
     | Ticket -> ticket
     | Ticket_deprecated -> ticket_deprecated
     | Split_ticket -> split_ticket
-    | Updaten n -> update_n n
+    | Update_n n -> update_n n
     | View (name, ty) -> view name (convert_type ty)
     | Slice -> slice
     | Update -> update
