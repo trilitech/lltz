@@ -4,6 +4,7 @@
 *)
 
 open Core
+
 module LLTZ = struct
   module E = Lltz_ir.Expr
   module T = Lltz_ir.Type
@@ -193,11 +194,11 @@ let rec compile : LLTZ.E.t -> t = fun expr ->
     | Let_in { let_var = Var var; rhs; in_ } ->
         compile_let_in var rhs in_
     | Lambda { lam_var = (Var var, lam_var_type); return_type; body } -> 
-        assert false
+        compile_lambda var lam_var_type return_type body
     | Lambda_rec { lam_var = (Var var, lam_var_type); mu_var = Var mu; return_type; body } -> 
-        assert false
+        compile_lambda_rec var lam_var_type mu return_type body
     | App { abs; arg } ->
-        assert false
+        compile_app abs arg
     | Const constant -> 
         compile_const constant
     | Prim (primitive, args) ->
@@ -426,3 +427,19 @@ and compile_let_tuple_in components rhs in_ =
     ; unpair_n (List.length components)
     ; trace (Slot.let_all new_env ~in_:(compile in_))
     ]
+
+(* Compile lambda expression by compiling the body and creating a lambda instruction. *)
+and compile_lambda var lam_var_type return_type body =
+  let lam_var = var, convert_type lam_var_type in
+  let return_type = convert_type return_type in
+  Instruction.seq [ Instruction.lambda ~lam_var ~return_type (compile body) ]
+
+(* Compile lambda-rec expression by compiling the body and creating a lambda-rec instruction. *)
+and compile_lambda_rec var lam_var_type mu return_type body =
+  let lam_var = var, convert_type lam_var_type in
+  let return_type = convert_type return_type in
+  Instruction.seq [ Instruction.lambda_rec ~lam_var ~mu ~return_type (compile body) ]
+
+(* Compile an application by compiling a lambda and argument, then applying the EXEC instruction. *)
+and compile_app abs arg =
+  trace (Instruction.seq [ trace (compile abs); trace (compile arg); exec ])
