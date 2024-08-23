@@ -1,7 +1,7 @@
-(* 
-  lltz_michelson.ml 
-  Compiles types, constants, primitives and expressions from LLTZ-IR to Michelson Ast.
-*) 
+(*
+   lltz_michelson.ml
+   Compiles types, constants, primitives and expressions from LLTZ-IR to Michelson Ast.
+*)
 
 module LLTZ = struct
   module E = Lltz_ir.Expr
@@ -10,14 +10,14 @@ module LLTZ = struct
   module P = Lltz_ir.Primitive
 end
 
-module Michelson = struct 
+module Michelson = struct
   module Ast = Michelson.Ast
   module T = Michelson.Ast.Type
 end
 
-module Instruction = Instruction
+open Instruction
 
-let rec convert_type (ty: LLTZ.T.t) : Michelson.Ast.t =
+let rec convert_type (ty : LLTZ.T.t) : Michelson.Ast.t =
   match ty.desc with
   | Tuple row -> Michelson.T.unit (* TODO: ~M.Type.pair (List.map row ~f:convert_type)*)
   | Or row -> Michelson.T.unit (*TODO: ~M.Type.or_ (List.map row ~f:convert_type)*)
@@ -43,8 +43,9 @@ let rec convert_type (ty: LLTZ.T.t) : Michelson.Ast.t =
   | Key_hash -> Michelson.T.key_hash
   | Signature -> Michelson.T.signature
   | Operation -> Michelson.T.operation
-  | Sapling_state {memo} -> Michelson.T.sampling_state (Michelson.Ast.int (memo))
-  | Sapling_transaction {memo} -> Michelson.T.sapling_transaction (Michelson.Ast.int memo)
+  | Sapling_state { memo } -> Michelson.T.sampling_state (Michelson.Ast.int memo)
+  | Sapling_transaction { memo } ->
+    Michelson.T.sapling_transaction (Michelson.Ast.int memo)
   | Never -> Michelson.T.never
   | Bls12_381_g1 -> Michelson.T.bls12_381_g1
   | Bls12_381_g2 -> Michelson.T.bls12_381_g2
@@ -52,7 +53,7 @@ let rec convert_type (ty: LLTZ.T.t) : Michelson.Ast.t =
   | Chest_key -> Michelson.T.chest_key
   | Chest -> Michelson.T.chest
 
-and convert_constant (const: LLTZ.E.constant) : Michelson.Ast.t =
+and convert_constant (const : LLTZ.E.constant) : Michelson.Ast.t =
   match const with
   | Unit -> Michelson.Ast.Instruction.unit
   | Bool b -> if b then Michelson.Ast.true_ else Michelson.Ast.false_
@@ -71,26 +72,26 @@ and convert_constant (const: LLTZ.E.constant) : Michelson.Ast.t =
   | Bls12_381_fr s -> Michelson.Ast.string s
   | Signature s -> Michelson.Ast.string s
 
-  let get_const_type (const: LLTZ.E.constant) : Michelson.Ast.t =
-    match const with
-    | Unit -> Michelson.T.unit
-    | Bool _ -> Michelson.T.bool
-    | Nat _ -> Michelson.T.nat
-    | Int _ -> Michelson.T.int
-    | Mutez _ -> Michelson.T.mutez
-    | String _ -> Michelson.T.string
-    | Key _ -> Michelson.T.key
-    | Key_hash _ -> Michelson.T.key_hash
-    | Bytes _ -> Michelson.T.bytes
-    | Chain_id _ -> Michelson.T.chain_id
-    | Address _ -> Michelson.T.address
-    | Timestamp _ -> Michelson.T.timestamp
-    | Bls12_381_g1 _ -> Michelson.T.bls12_381_g1
-    | Bls12_381_g2 _ -> Michelson.T.bls12_381_g2
-    | Bls12_381_fr _ -> Michelson.T.bls12_381_fr
-    | Signature _ -> Michelson.T.signature
+let get_const_type (const : LLTZ.E.constant) : Michelson.Ast.t =
+  match const with
+  | Unit -> Michelson.T.unit
+  | Bool _ -> Michelson.T.bool
+  | Nat _ -> Michelson.T.nat
+  | Int _ -> Michelson.T.int
+  | Mutez _ -> Michelson.T.mutez
+  | String _ -> Michelson.T.string
+  | Key _ -> Michelson.T.key
+  | Key_hash _ -> Michelson.T.key_hash
+  | Bytes _ -> Michelson.T.bytes
+  | Chain_id _ -> Michelson.T.chain_id
+  | Address _ -> Michelson.T.address
+  | Timestamp _ -> Michelson.T.timestamp
+  | Bls12_381_g1 _ -> Michelson.T.bls12_381_g1
+  | Bls12_381_g2 _ -> Michelson.T.bls12_381_g2
+  | Bls12_381_fr _ -> Michelson.T.bls12_381_fr
+  | Signature _ -> Michelson.T.signature
 
-let convert_primitive (prim: LLTZ.P.t) : Michelson.Ast.t =
+let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   let open Michelson.Ast.Instruction in
     match prim with
     | Amount -> amount
@@ -206,19 +207,19 @@ let rec compile : LLTZ.E.t -> Instruction.t = fun expr ->
     | Assign (Mut_var var, value) ->
         compile_assign var value
     | If_bool { condition; if_true; if_false } ->
-        assert false
+        compile_if_bool condition if_true if_false
     | If_none { subject; if_none; if_some = (Var var, some) } ->
-        assert false
+        compile_if_none subject if_none (var, some)
     | If_cons { subject; if_empty; if_nonempty = (Var hd, Var tl, nonempty) } ->
-        assert false
+        compile_if_cons subject if_empty (hd, tl, nonempty)
     | If_left { subject; if_left = (Var left, l); if_right = (Var right, r) } ->
-        assert false
+        compile_if_left subject (left, l) (right, r)
     | While { invariant; body } ->
-        assert false
+        compile_while invariant body
     | While_left { invariant; body } ->
-        assert false
+        compile_while_left invariant body
     | For { index = Mut_var var; init; invariant; variant; body } -> 
-        assert false
+        compile_for var init invariant variant body
     | For_each { indices; collection; body } -> 
         assert false
     | Map { collection; map = (vars, body) } -> 
@@ -247,37 +248,94 @@ let rec compile : LLTZ.E.t -> Instruction.t = fun expr ->
 
 (* Compile a variable by duplicating its value on the stack. *)  
 and compile_variable (name : string) =
-  Instruction.Slot.dup (`Ident name)
+  Slot.dup (`Ident name)
 
 (* Compile a let-in expression by compiling the right-hand side, then binding the result to the variable in the inner expression. *)
 and compile_let_in (var : string) (rhs : LLTZ.E.t) (in_ : LLTZ.E.t) =
-  Instruction.seq [
+  seq [
     compile rhs;
-    Instruction.Slot.let_ (`Ident var) ~in_:(compile in_)
+    Slot.let_ (`Ident var) ~in_:(compile in_)
   ]
 
 (* Compile a constant by pushing its value onto the stack. *)
 and compile_const constant =
-  Instruction.seq [
-    Instruction.push (get_const_type constant) (convert_constant constant)
+  seq [
+    push (get_const_type constant) (convert_constant constant)
   ]
 
 (* Compile a primitive by compiling its arguments, then applying the primitive to the arguments. *)
 and compile_prim primitive args =
   let args_instrs = List.map compile args in
-  Instruction.seq (
-    args_instrs @ [ Instruction.prim (List.length args) 1 (convert_primitive primitive) ]
+  seq (
+    args_instrs @ [ prim (List.length args) 1 (convert_primitive primitive) ]
   )
 
 (* Compile a dereference by duplicating the value of the mutable variable on the stack. *)
 and compile_deref (var : string) =
-  Instruction.Slot.dup (`Ident var)
+  Slot.dup (`Ident var)
 
 (* Compile an assignment by compiling the value to be assigned, then assigning it to the slot corresponding to the mutable variable. *)
 and compile_assign (var : string) value =
-  Instruction.trace (
-    Instruction.seq [
-      Instruction.trace (compile value);
-      Instruction.Slot.set (`Ident var)
+  trace (
+    seq [
+      trace (compile value);
+      Slot.set (`Ident var)
     ]
   )
+
+(* Compile an if-bool expression by compiling the condition, then applying the if-bool instruction to the condition and the true and false branches. *)
+and compile_if_bool condition if_true if_false =
+  seq [
+    compile condition;
+    if_ ~then_:(compile if_true) ~else_:(compile if_false)
+  ]
+
+(* Compile an if-none expression by compiling the subject, then applying the if-none instruction to the subject and the none and some branches. *)
+and compile_if_none subject if_none_clause (var, some_clause) =
+  seq [
+    compile subject;
+    if_none ~none:(compile if_none_clause) ~some:(Slot.let_ (`Ident var) ~in_:(compile some_clause))
+  ]
+
+(* Compile an if-cons expression by compiling the subject, then applying the if-cons instruction to the subject and the empty and nonempty branches. *)
+and compile_if_cons subject if_empty (hd, tl, nonempty) =
+  trace (
+    seq [
+      compile subject;
+      if_cons ~empty:(compile if_empty) ~nonempty:(Slot.let_all [ `Ident hd; `Ident tl ] ~in_:(compile nonempty))
+    ]
+  )
+
+(* Compile an if-left expression by compiling the subject, then applying the if-left instruction to the subject and the left and right branches. *)
+and compile_if_left subject (left, l) (right, r) =
+  seq [
+    compile subject;
+    if_left ~left:(Slot.let_ (`Ident left) ~in_:(compile l)) ~right:(Slot.let_ (`Ident right) ~in_:(compile r))
+  ]
+
+(* Compile a while expression by compiling the invariant, then applying the loop instruction to the body and invariant. *)
+and compile_while invariant body =
+  seq [
+    compile invariant;
+    loop (seq [ compile body; compile invariant ])
+  ]
+
+(* Compile a while-left expression by compiling the invariant, then applying the loop-left instruction to the body and invariant. *)
+and compile_while_left invariant body =
+  seq [
+    compile invariant;
+    loop_left (seq [ compile body; compile invariant ])
+  ]
+
+(* Compile a for expression by compiling the initial value, invariant, variant, and body, 
+   then applying the loop to the sequence of body, variant, and invariant. *)
+and compile_for index init invariant variant body =
+  let init_instr = compile init in
+  let inv_instr = compile invariant in
+  seq [
+    init_instr;
+    inv_instr;
+    loop (seq [ Slot.let_ (`Ident index) ~in_:(compile body); compile variant; inv_instr ]);
+    drop 1 (*drop initial value*)
+  ]
+
