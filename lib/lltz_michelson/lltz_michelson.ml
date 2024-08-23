@@ -182,3 +182,102 @@ let convert_primitive (prim: LLTZ.P.t) : Michelson.Ast.t =
     | Transfer_tokens -> transfer_tokens
     | Check_signature -> check_signature
     | Open_chest -> open_chest
+
+let rec compile : LLTZ.E.t -> Instruction.t = fun expr ->
+  Instruction.seq [
+    match expr.desc with
+    | Variable (Var name) -> compile_variable name
+    | Let_in { let_var = Var var; rhs; in_ } ->
+        compile_let_in var rhs in_
+    | Lambda { lam_var = (Var var, lam_var_type); return_type; body } -> 
+        assert false
+    | Lambda_rec { lam_var = (Var var, lam_var_type); mu_var = Var mu; return_type; body } -> 
+        assert false
+    | App { abs; arg } ->
+        assert false
+    | Const constant -> 
+        compile_const constant
+    | Prim (primitive, args) ->
+        compile_prim primitive args
+    | Let_mut_in { let_var = Mut_var var; rhs; in_ } ->
+        assert false
+    | Deref (Mut_var var) ->
+        compile_deref var
+    | Assign (Mut_var var, value) ->
+        compile_assign var value
+    | If_bool { condition; if_true; if_false } ->
+        assert false
+    | If_none { subject; if_none; if_some = (Var var, some) } ->
+        assert false
+    | If_cons { subject; if_empty; if_nonempty = (Var hd, Var tl, nonempty) } ->
+        assert false
+    | If_left { subject; if_left = (Var left, l); if_right = (Var right, r) } ->
+        assert false
+    | While { invariant; body } ->
+        assert false
+    | While_left { invariant; body } ->
+        assert false
+    | For { index = Mut_var var; init; invariant; variant; body } -> 
+        assert false
+    | For_each { indices; collection; body } -> 
+        assert false
+    | Map { collection; map = (vars, body) } -> 
+        assert false
+    | Fold_left { collection; init = (Var acc, init_body); fold = (Var var, fold_body) } -> 
+        assert false
+    | Fold_right { collection; init = (Var acc, init_body); fold = (Var var, fold_body) } -> 
+        assert false
+    | Let_tuple_in { components; rhs; in_ } -> 
+        assert false
+    | Tuple row ->
+        assert false
+    | Proj (tuple, path) ->
+        assert false
+    | Update { tuple; component; update } ->
+        assert false
+    | Inj (path, expr) ->
+        assert false
+    | Match (subject, cases) ->
+        assert false
+    | Raw_michelson node ->
+        assert false
+    | Create_contract { storage; parameter; code; delegate; initial_balance; initial_storage } -> 
+        assert false
+  ]
+
+(* Compile a variable by duplicating its value on the stack. *)  
+and compile_variable (name : string) =
+  Instruction.Slot.dup (`Ident name)
+
+(* Compile a let-in expression by compiling the right-hand side, then binding the result to the variable in the inner expression. *)
+and compile_let_in (var : string) (rhs : LLTZ.E.t) (in_ : LLTZ.E.t) =
+  Instruction.seq [
+    compile rhs;
+    Instruction.Slot.let_ (`Ident var) ~in_:(compile in_)
+  ]
+
+(* Compile a constant by pushing its value onto the stack. *)
+and compile_const constant =
+  Instruction.seq [
+    Instruction.push (get_const_type constant) (convert_constant constant)
+  ]
+
+(* Compile a primitive by compiling its arguments, then applying the primitive to the arguments. *)
+and compile_prim primitive args =
+  let args_instrs = List.map compile args in
+  Instruction.seq (
+    args_instrs @ [ Instruction.prim (List.length args) 1 (convert_primitive primitive) ]
+  )
+
+(* Compile a dereference by duplicating the value of the mutable variable on the stack. *)
+and compile_deref (var : string) =
+  Instruction.Slot.dup (`Ident var)
+
+(* Compile an assignment by compiling the value to be assigned, then assigning it to the slot corresponding to the mutable variable. *)
+and compile_assign (var : string) value =
+  Instruction.trace (
+    Instruction.seq [
+      Instruction.trace (compile value);
+      Instruction.Slot.set (`Ident var)
+    ]
+  )
