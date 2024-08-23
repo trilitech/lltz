@@ -369,6 +369,15 @@ and compile_proj tuple path =
     | Here list -> 
       List.mapi list ~f:(fun i num -> get_n num ~length:(List.nth_exn lengths i))
   in
+  let gets = 
+    match path with
+    | Here list -> 
+      List.mapi list ~f:(fun i num -> 
+        try
+          get_n num ~length:(List.nth_exn lengths i)
+        with
+        | _ -> raise_s [%message "compile_proj: index out of bounds" (i : int) (lengths : int list)])
+  in
   Instruction.trace (
     Instruction.seq (
       [ Instruction.trace (compile tuple) ]
@@ -391,13 +400,21 @@ and compile_update tuple component update =
   let gets = 
     match component with
     | Here list -> 
-      List.mapi list ~f:(fun i num -> get_n num ~length:(List.nth_exn lengths i))
+      List.mapi list ~f:(fun i num -> 
+        try
+          get_n num ~length:(List.nth_exn lengths i)
+        with
+        | _ -> raise_s [%message "compile_update: index out of bounds in gets" (i : int) (lengths : int list)])
   in
   let updates = 
     List.rev (
       match component with
       | Here list -> 
-        List.mapi list ~f:(fun i num -> update_n num ~length:(List.nth_exn lengths i))
+        List.mapi list ~f:(fun i num -> 
+          try
+            update_n num ~length:(List.nth_exn lengths i)
+          with
+          | _ -> raise_s [%message "compile_update: index out of bounds in updates" (i : int) (lengths : int list)])
     )
   in
   Instruction.seq (
@@ -410,6 +427,10 @@ and get_lengths row path_list =
   match row with
   | LLTZ.R.Node nodes -> 
     (match path_list with
-      | hd::tl -> (List.length nodes) :: (get_lengths (List.nth_exn nodes hd) (tl))
+      | hd::tl -> 
+        try
+          (List.length nodes) :: (get_lengths (List.nth_exn nodes hd) tl)
+        with
+        | _ -> raise_s [%message "get_lengths: index out of bounds" (hd : int) (nodes : LLTZ.R.t list)])
       | [] -> [])
   | LLTZ.R.Leaf (_, _) -> [1]
