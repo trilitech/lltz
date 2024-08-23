@@ -94,14 +94,16 @@ let swap stack =
 (* https://tezos.gitlab.io/michelson-reference/#instr-DROP *)
 let drop n stack =
   (* drop's n elements *)
-  if List.length stack < n
-  then
+  if List.length stack < n then
     raise_s [%message "Instruction.drop: invalid stack" (stack : SlotStack.t) (n : int)]
-  else (
-    match n with
-    | 0 -> Config.ok stack [] (* noop *)
-    | 1 -> Config.ok (List.tl_exn stack) [ I.drop ] (* drop just one element *)
-    | n -> Config.ok (List.drop stack n) [ I.drop_n n ])
+  else
+    let dropped_stack = List.drop stack n in
+    let instructions = match n with
+      | 0 -> [] (* noop *)
+      | 1 -> [ I.drop ] (* drop just one element *)
+      | _ -> [ I.drop_n n ] (* drop n elements *)
+    in
+    Config.ok dropped_stack instructions
 
 let remove n stack =
   (* removes element at index n *)
@@ -160,23 +162,19 @@ let loop_left (in_ : t) stack =
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-ITER *)
 let iter (in_ : t) stack =
-  let stack =
-    match stack with
-    | `Value :: stack -> stack
-    | _ -> raise_s [%message "Instruction.iter" (stack : SlotStack.t)]
-  in
-  let instrs = Config.instructions @@ in_ (`Value :: stack) in
-  Config.ok stack [ I.iter instrs ]
+  match stack with
+  | `Value :: _ -> 
+    let instrs = Config.instructions @@ in_ stack in
+    Config.ok stack [ I.iter instrs ]
+  | _ -> raise_s [%message "Instruction.iter" (stack : SlotStack.t)]
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-MAP *)
 let map_ in_ stack =
-  let stack =
-    match stack with
-    | `Value :: stack -> stack
-    | _ -> raise_s [%message "Instruction.map" (stack : SlotStack.t)]
-  in
-  let instrs = Config.instructions @@ in_ (`Value :: stack) in
-  Config.ok stack [ I.map instrs ]
+  match stack with
+  | `Value :: _ ->
+    let instrs = Config.instructions @@ in_ stack in
+    Config.ok stack [ I.map instrs ]
+  | _ -> raise_s [%message "Instruction.map" (stack : SlotStack.t)]
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-IF *)
 let if_ ~then_ ~else_ stack =
@@ -190,13 +188,11 @@ let if_ ~then_ ~else_ stack =
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-IF_LEFT *)
 let if_left ~left ~right stack =
-  let stack =
-    match stack with
-    | `Value :: _ -> stack
-    | _ -> raise_s [%message "Instruction.if_left" (stack : SlotStack.t)]
-  in
-  Config.merge (left stack) (right stack) ~f:(fun instrs1 instrs2 ->
-    [ I.if_left ~then_:instrs1 ~else_:instrs2 ])
+  match stack with
+  | `Value :: _ -> 
+    Config.merge (left stack) (right stack) ~f:(fun instrs1 instrs2 ->
+      [ I.if_left ~then_:instrs1 ~else_:instrs2 ])
+  | _ -> raise_s [%message "Instruction.if_left" (stack : SlotStack.t)]
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-IF_CONS *)
 let if_cons ~empty ~nonempty stack =
@@ -212,45 +208,28 @@ let if_cons ~empty ~nonempty stack =
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-IF_NONE *)
 let if_none ~none ~some stack =
-  let stack =
-    match stack with
-    | `Value :: stack -> stack
-    | _ -> raise_s [%message "Instruction.if_none" (stack : SlotStack.t)]
-  in
-  Config.merge
-    (none stack)
-    (some (`Value :: stack))
-    ~f:(fun instrs1 instrs2 -> [ I.if_none ~then_:instrs1 ~else_:instrs2 ])
+  match stack with
+  | `Value :: stack -> 
+    Config.merge
+      (none stack)
+      (some (`Value :: stack))
+      ~f:(fun instrs1 instrs2 -> [ I.if_none ~then_:instrs1 ~else_:instrs2 ])
+  | _ -> raise_s [%message "Instruction.if_none" (stack : SlotStack.t)]
 
 module Slot = struct
   let def (slot : [< Slot.definable ]) ~in_ stack =
-    let stack =
-      match stack with
-      | slot' :: stack ->
-        if not (Slot.is_assignable slot' ~to_:slot)
-        then raise_s [%message "Instruction.Slot.def: slot not assignable"];
-        (slot :> Slot.t) :: stack
-      | [] ->
-        raise_s
-          [%message
-            "Instruction.Slot.bind: invalid stack"
-              (stack : SlotStack.t)
-              (slot : [< Slot.definable ])]
-    in
-    in_ stack
+    match stack with
+    | slot' :: stack when Slot.is_assignable slot' ~to_:slot -> 
+      in_ ((slot :> Slot.t) :: stack)
+    | [] -> 
+      raise_s [%message "Instruction.Slot.bind: invalid stack" (stack : SlotStack.t) (slot : [< Slot.definable ])]
+    | _ -> 
+      raise_s [%message "Instruction.Slot.def: slot not assignable"]
 
   (* remove slot from stack, for example after it is used by let*)
   let collect slot stack =
-    try
-      let found_slot = SlotStack.find_exn stack slot in
-      remove found_slot stack
-    with
-    | _ ->
-      raise_s
-        [%message
-          "Instruction.collect: slot not found"
-            (slot : [< Slot.definable ])
-            (stack : SlotStack.t)]
+    let found_slot = SlotStack.find_exn stack slot in
+    remove found_slot stack
 
   let let_ slot ~in_ = seq [ def slot ~in_; collect slot ] (* bind and remove after used*)
 
@@ -420,14 +399,12 @@ let failwith stack =
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-CREATE_CONTRACT *)
 let create_contract ~storage ~parameter ~code stack =
-  let stack =
-    match stack with
-    | `Value :: `Value :: `Value :: stack -> `Value :: stack
-    | _ ->
-      raise_s
-        [%message "Instruction.create_contract: invalid stack" (stack : SlotStack.t)]
-  in
-  Config.ok stack [ I.create_contract storage parameter (code stack) ]
+  match stack with
+  | `Value :: `Value :: `Value :: stack -> 
+    Config.ok stack [ I.create_contract storage parameter (code (`Value :: stack)) ]
+  | _ ->
+    raise_s
+      [%message "Instruction.create_contract: invalid stack" (stack : SlotStack.t)]
 
 let is_nat = prim 1 1 I.is_nat (* https://tezos.gitlab.io/michelson-reference/#instr-ISNAT *)
 let unit = prim 0 1 I.unit (* https://tezos.gitlab.io/michelson-reference/#instr-UNIT *)
