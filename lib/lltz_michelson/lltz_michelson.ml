@@ -98,7 +98,7 @@ let convert_primitive (prim: LLTZ.P.t) : Michelson.Ast.t =
     | Chain_id -> chain_id
     | Level -> level
     | Now -> now
-    | Self opt -> failwith
+    | Self opt -> self opt
     | Self_address -> self_address
     | Sender -> sender
     | Source -> source
@@ -112,8 +112,8 @@ let convert_primitive (prim: LLTZ.P.t) : Michelson.Ast.t =
     | Unit -> unit
     | Car -> car
     | Cdr -> cdr
-    | Left (opt1, opt2, ty) -> left (convert_type ty)
-    | Right (opt1, opt2, ty) -> right (convert_type ty)
+    | Left (opt1, opt2, ty) -> left (convert_type ty) (* TODO: resolve tag options *)
+    | Right (opt1, opt2, ty) -> right (convert_type ty) (* TODO: resolve tag options *)
     | Some -> some
     | Eq -> eq
     | Abs -> abs
@@ -131,7 +131,7 @@ let convert_primitive (prim: LLTZ.P.t) : Michelson.Ast.t =
     | Size -> size
     | Address -> address
     | Implicit_account -> implicit_account
-    | Contract (opt, ty) -> contract (convert_type ty)
+    | Contract (opt, ty) -> contract (convert_type ty) (* TODO: resolve tag option*)
     | Pack -> pack
     | Unpack ty -> unpack (convert_type ty)
     | Hash_key -> hash_key
@@ -147,11 +147,11 @@ let convert_primitive (prim: LLTZ.P.t) : Michelson.Ast.t =
     | Voting_power -> voting_power
     | Getn n -> get_n n
     | Cast ty -> cast (convert_type ty)
-    | Rename opt -> failwith 
-    | Emit (opt, ty_opt) -> failwith
+    | Rename opt -> failwith (* TODO: Check why the instruction does not exist. *)
+    | Emit (opt, ty_opt) -> emit opt (Option.map convert_type ty_opt)
     | Failwith -> failwith
     | Never -> never
-    | Pair (opt1, opt2) -> pair
+    | Pair (opt1, opt2) -> pair (* TODO: resolve tag options*)
     | Add -> add
     | Mul -> mul
     | Sub -> sub
@@ -175,7 +175,7 @@ let convert_primitive (prim: LLTZ.P.t) : Michelson.Ast.t =
     | Ticket_deprecated -> ticket_deprecated
     | Split_ticket -> split_ticket
     | Updaten n -> update_n n
-    | View (name, ty) -> failwith
+    | View (name, ty) -> view name (convert_type ty)
     | Slice -> slice
     | Update -> update
     | Get_and_update -> get_and_update
