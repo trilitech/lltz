@@ -3,6 +3,11 @@
    Compiles types, constants, primitives and expressions from LLTZ-IR to Michelson Ast.
 *)
 
+module Stack = Stack
+module Type = Type
+module Instruction = Instruction
+module Slot = Slot
+
 open Core
 
 module LLTZ = struct
@@ -522,6 +527,14 @@ and compile_inj context expr =
         | [] -> []
       )
 
+and compile_row_of_lambdas row =
+  match row with
+  | LLTZ.R.Node nodes ->
+    let compiled_nodes = List.map nodes ~f:compile_row_of_lambdas in
+    Instruction.seq (compiled_nodes @ [ Instruction.pair_n (List.length compiled_nodes) ])
+  | LLTZ.R.Leaf (_, ((var, var_type), return_type, body)) ->
+    compile (LLTZ.Dsl.lambda (var, var_type) ~return_type ~body)
+
 and compile_match subject cases =
   (* Subject is a result of Inj *)
   let subject_instr = compile subject in
@@ -539,4 +552,4 @@ and compile_matching cases =
          ]
      | [] -> seq [])
   | LLTZ.R.Leaf (_, ((var, var_type), return_type, body)) ->
-    seq [ compile (LLTZ.Dsl.lambda ((var, var_type), return_type, body)); exec ]
+    seq [ compile (LLTZ.Dsl.lambda (var, var_type) ~return_type ~body); exec ]
