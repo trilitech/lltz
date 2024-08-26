@@ -3,6 +3,11 @@
    Compiles types, constants, primitives and expressions from LLTZ-IR to Michelson Ast.
 *)
 
+module Stack = Stack
+module Type = Type
+module Instruction = Instruction
+module Slot = Slot
+
 open Core
 
 module LLTZ = struct
@@ -539,4 +544,4 @@ and compile_matching cases =
          ]
      | [] -> seq [])
   | LLTZ.R.Leaf (_, ((var, var_type), return_type, body)) ->
-    seq [ compile (LLTZ.Dsl.lambda ((var, var_type), return_type, body)); exec ]
+    seq [ compile (LLTZ.Dsl.lambda (var, var_type) ~return_type ~body); exec ]
