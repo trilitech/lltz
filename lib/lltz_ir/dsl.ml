@@ -141,7 +141,7 @@ let pairing_check ?(range = dummy) pairings = create ~range (LLTZ.E.Prim (LLTZ.P
 let voting_power ?(range = dummy) key_hash = create ~range (LLTZ.E.Prim (LLTZ.P.Voting_power, [key_hash]))
 let getn ?(range = dummy) n value = create ~range (LLTZ.E.Prim (LLTZ.P.Get_n n, [value]))
 let cast ?(range = dummy) ty value = create ~range (LLTZ.E.Prim (LLTZ.P.Cast ty, [value]))
-let rename = assert false
+(*let rename = assert false*)
 let emit ?(range = dummy) (opt, ty) value = create ~range (LLTZ.E.Prim (LLTZ.P.Emit (opt, ty), [value]))
 let failwith ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Failwith, [value]))
 let never ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Never, [value]))

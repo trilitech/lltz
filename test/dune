@@ -1,0 +1,8 @@
+(library
+ (name test_dsl)
+ (libraries core lltz_michelson fmt)
+ (modules test_dsl)
+ (inline_tests)
+ (preprocess (pps ppx_jane))
+ (flags (:standard -verbose -ccopt --verbose))
+)

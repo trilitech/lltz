@@ -62,6 +62,7 @@
         );
       in {
         packages.default = opamPackages.lltz;
+        packages.zarith = opamPackages.zarith;
 
         devShells.default = pkgs.mkShell {
           name = "lltz-shell";
