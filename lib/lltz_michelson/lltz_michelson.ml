@@ -20,11 +20,13 @@ end
 
 open Instruction
 
+(* Creates corresponding tuple type from a row of types *)
 let rec compile_row_types row =
   match row with
   | LLTZ.R.Node nodes -> Type.tuple (List.map nodes ~f:compile_row_types)
   | LLTZ.R.Leaf (_, value) -> convert_type value
 
+(* Creates corresponding or type from a row of types *)
 and compile_row_types_for_or row =
   match row with
   | LLTZ.R.Node nodes ->
@@ -86,7 +88,6 @@ and convert_constant (const : LLTZ.E.constant) : Michelson.Ast.t =
   | Bls12_381_g2 s -> Michelson.Ast.string s
   | Bls12_381_fr s -> Michelson.Ast.string s
   | Signature s -> Michelson.Ast.string s
-;;
 
 let get_const_type (const : LLTZ.E.constant) : Michelson.Ast.t =
   match const with
@@ -106,7 +107,6 @@ let get_const_type (const : LLTZ.E.constant) : Michelson.Ast.t =
   | Bls12_381_g2 _ -> Michelson.T.bls12_381_g2
   | Bls12_381_fr _ -> Michelson.T.bls12_381_fr
   | Signature _ -> Michelson.T.signature
-;;
 
 let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   let open Michelson.Ast.Instruction in
@@ -200,7 +200,6 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Transfer_tokens -> transfer_tokens
   | Check_signature -> check_signature
   | Open_chest -> open_chest
-;;
 
 let rec compile : LLTZ.E.t -> t =
   fun expr ->
@@ -495,8 +494,7 @@ and compile_fold_right collection acc init_body var fold_body =
     ]
 
 and compile_inj context expr =
-  (*crete or type*)
-  (*middle type*)
+  (* Wraps expr into or-type of shape RIGHT(RIGHT(...RIGHT(LEFT(expr)))) *)
   match context with
   | LLTZ.R.Context.Hole ty ->
     let mid_ty = convert_type ty in
@@ -504,8 +502,8 @@ and compile_inj context expr =
   | LLTZ.R.Context.Node (left_val, mid, right_val) ->
     let right_ty = Type.ors (List.map ~f:compile_row_types_for_or right_val) in
     let mid_ty = Type.ors (List.map ~f:compile_row_types_for_or [ mid ]) in
-    (*go(fold) through all elements in left (<- direction) and righ-comb iteratively merge them
-      into a larger or type, record each intermediate merge*)
+    (* Go(fold) through all elements in left part of the context (<- direction) and iteratively merge them
+      into a larger right-comb or type, record each intermediate merge *)
     let right_instrs_types =
       List.fold_right
         left_val
@@ -516,32 +514,22 @@ and compile_inj context expr =
         ~init:[ Type.ors [ mid_ty; right_ty ] ]
     in
     seq
-      ([ compile expr; (* Left *) left mid_ty ]
-       (* Rights - traverses all right_instrs_types in reverse order except last and makes right*)
+      ([ compile expr; left mid_ty ]
+       (* Rights - traverses all right_instrs_types in reverse order except last and makes right instructions*)
        @
-       if List.length right_instrs_types = 0
-       then []
-       else
-         List.map (List.rev (List.tl_exn right_instrs_types)) ~f:(fun ty -> right ty)
+       match right_instrs_types with
+        | hd::tl -> List.map (List.rev tl) ~f:(fun ty -> right ty)
+        | [] -> []
       )
 
-and compile_row_of_lambdas row =
-  match row with
-  | LLTZ.R.Node nodes ->
-    let compiled_nodes = List.map nodes ~f:compile_row_of_lambdas in
-    Instruction.seq (compiled_nodes @ [ Instruction.pair_n (List.length compiled_nodes) ])
-  | LLTZ.R.Leaf (_, ((var, var_type), return_type, body)) ->
-    compile (LLTZ.Dsl.lambda ((var, var_type), return_type, body))
-
 and compile_match subject cases =
-  (* compile cases (tuple of lambdas) *)
-  let cases_instr = compile_row_of_lambdas cases in
-  (* subject is a result of Inj *)
+  (* Subject is a result of Inj *)
   let subject_instr = compile subject in
   (* Compile subject, then unwrap it and apply corresponding lambda *)
   seq ([ subject_instr ] @ [ compile_matching cases ])
 
 and compile_matching cases =
+  (* Recursively create a decision tree that finds the corresponding lambda*)
   match cases with
   | LLTZ.R.Node nodes ->
     (match nodes with
