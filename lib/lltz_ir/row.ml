@@ -63,7 +63,7 @@ let rec pp ppa ppf t =
 module Context = struct
   type 'a t =
     | Hole of 'a
-    | Node of 'a t list * 'a t * 'a t list
+    | Node of 'a T.t list * 'a T.t * 'a T.t list
   [@@deriving sexp, equal, compare]
 end
 
