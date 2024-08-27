@@ -58,7 +58,6 @@ let rec pp ppa ppf t =
       ts
   | Leaf (label, x) ->
     Format.fprintf ppf "Leaf (%a, %a)" Format.(pp_print_option pp_label) label ppa x
-;;
 
 module Context = struct
   type 'a t =
@@ -105,3 +104,14 @@ module Traverse_builtins = struct
           t, acc
     end
 end
+
+let rec find_leaf row =
+  match row with
+  | Leaf (_, x) -> Some x
+  | Node rows ->
+    (match rows with
+     | [] -> None
+     | hd :: tl ->
+       (match find_leaf hd with
+        | Some x -> Some x
+        | None -> find_leaf (Node tl)))

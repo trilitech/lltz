@@ -272,6 +272,7 @@ and compile_const constant =
   seq [ push (get_const_type constant) (convert_constant constant) ]
 
 (* Compile a primitive by compiling its arguments, then applying the primitive to the arguments. *)
+(* TODO: READ_TICKET, *)
 and compile_prim primitive args =
   let args_instrs = List.map ~f:compile args in
   seq (args_instrs @ [ prim (List.length args) 1 (convert_primitive primitive) ])
@@ -451,6 +452,7 @@ and compile_create_contract
     ; compile initial_storage
     ; create_contract ~storage:storage_ty ~parameter:param_ty ~code:(fun stack ->
         M.seq (code_instr stack).instructions)
+    ; pair
     ]
 
 (* Compile for-each expression by compiling the collection, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the body. *)

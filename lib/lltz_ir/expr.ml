@@ -1,7 +1,7 @@
 open Import
 open Grace
 
-type micheline = (Range.t, string) Tezos_micheline.Micheline.node
+type micheline = (unit, Range.t) Tezos_micheline.Micheline.node
 
 module T = struct
   type var = Var of string 
@@ -28,7 +28,21 @@ module T = struct
   and t =
     { desc : desc
     ; range : Range.t
+    ; type_ : Type.t
     }
+  
+  and binder = var * Type.t
+
+  and lambda = {
+    lam_var: binder; 
+    body: t
+  }
+  
+  and lambda2 = {
+    lam_var1: binder;
+    lam_var2: binder;
+    body: t
+  }
 
   and desc =
     (* basic lambda calculus w/ primitives + constants *)
@@ -38,16 +52,10 @@ module T = struct
         ; rhs : t
         ; in_ : t
         }
-    | Lambda of
-        { lam_var : var * Type.t
-        ; return_type : Type.t
-        ; body : t
-        }
+    | Lambda of lambda
     | Lambda_rec of
-        { lam_var : var * Type.t 
-        ; mu_var : var
-        ; return_type : Type.t
-        ; body : t
+        { mu_var : binder 
+        ; lambda : lambda
         }
     | App of
         { abs : t
@@ -72,53 +80,52 @@ module T = struct
     | If_none of
         { subject : t
         ; if_none : t
-        ; if_some : var * t
+        ; if_some : lambda
         }
     | If_cons of
         { subject : t
         ; if_empty : t
-        ; if_nonempty : var * var * t
+        ; if_nonempty : lambda2
         }
     | If_left of
         { subject : t
-        ; if_left : var * t
-        ; if_right : var * t
+        ; if_left : lambda
+        ; if_right : lambda
         }
     (* low-level control flow (iterative) *)
     | While of
-        { invariant : t
+        { cond : t
         ; body : t
         }
     | While_left of
-        { invariant : t
-        ; body : t
+        { cond : t
+        ; body : lambda
         }
     | For of
         { index : mut_var
         ; init : t
-        ; invariant : t
-        ; variant : t
+        ; cond : t
+        ; update : t
         ; body : t
         }
     | For_each of
-        { indices : var list
-        ; collection : t
-        ; body : t
+        { collection : t
+          ; body : lambda
         }
     (* high-level control flow (iterative) *)
     | Map of
         { collection : t
-        ; map : var list * t
+        ; map : lambda
         }
     | Fold_left of
         { collection : t
-        ; init : var * t
-        ; fold : var * t
+        ; init : t
+        ; fold : lambda
         }
     | Fold_right of
         { collection : t
-        ; init : var * t
-        ; fold : var * t
+        ; init : t
+        ; fold : lambda
         }
     (* tuples *)
     | Let_tuple_in of
@@ -135,13 +142,14 @@ module T = struct
         }
     (* sums *)
     | Inj of Type.t Row.Context.t * t
-    | Match of t * ((var * Type.t) * Type.t * t) Row.t
+    | Match of t * (binder * lambda) Row.t
     (* tezos specific *)
-    | Raw_michelson of (micheline[@sexp.opaque] [@equal.ignore] [@compare.ignore])
+    | Raw_michelson of { michelson: (micheline[@sexp.opaque] [@equal.ignore] [@compare.ignore]); args: t list }
+    | Global_constant of  { hash: string }
     | Create_contract of
         { storage : Type.t
         ; parameter : Type.t
-        ; code : t
+        ; code : lambda
         ; delegate : t
         ; initial_balance : t
         ; initial_storage : t
