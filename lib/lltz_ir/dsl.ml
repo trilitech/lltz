@@ -88,7 +88,9 @@ let signature_ty ?(range = dummy) () = LLTZ.T.{ desc = Signature; range }
 (* Expressions *)
 let variable ?(range = dummy) var var_ty = create ~range (LLTZ.E.Variable var) var_ty
 let let_in ?(range = dummy) var ~rhs ~in_ = create ~range (LLTZ.E.Let_in { let_var = var; rhs; in_ }) in_.type_
+let ( let* ) rhs in_ = let xname = Name.create () in let_in (Var xname) ~rhs ~in_ 
 let lambda ?(range = dummy) (var,var_ty) ~body = create ~range (LLTZ.E.Lambda { lam_var = (var,var_ty); body }) (mk_type (LLTZ.T.Function (var_ty, body.type_)))
+
 let lambda_rec ?(range = dummy) (mu_var) (var, var_ty) ~(body:LLTZ.E.t) = create ~range (Lambda_rec { mu_var = (mu_var, mk_type (LLTZ.T.Function (var_ty, body.type_)) ~range); lambda = { lam_var = (var, var_ty); body = body } }) (mk_type (LLTZ.T.Function (var_ty, body.type_)))
 let app ?(range = dummy) (abs:LLTZ.E.t) arg = 
   let ret_ty =
@@ -123,13 +125,13 @@ let match_ ?(range = dummy) subject ~cases = create ~range (LLTZ.E.Match (subjec
   match LLTZ.R.find_leaf cases with
     | Some leaf -> (
       match leaf with
-      | (_, lambda) -> lambda.body.type_
+      | {lam_var = _; body} -> body.type_
     )
-  | None -> raise_s [%message "Expected a leaf with lambda" (cases : (LLTZ.E.binder * LLTZ.E.lambda) LLTZ.R.t)]
+  | None -> raise_s [%message "Expected a leaf with lambda" (cases : LLTZ.E.lambda LLTZ.R.t)]
   )
 let raw_michelson ?(range = dummy) michelson args = create ~range (LLTZ.E.Raw_michelson {michelson; args}) (mk_type LLTZ.T.Unit ~range) (*TODO: check*)
-let create_contract ?(range = dummy) () ~storage ~parameter ~code ~delegate ~initial_balance ~initial_storage =
-  create ~range (LLTZ.E.Create_contract { storage; parameter; code; delegate; initial_balance; initial_storage }) (mk_type ~range (LLTZ.T.Tuple (Row.Node [Row.Leaf (None, mk_type ~range LLTZ.T.Address); Row.Leaf (None,mk_type ~range LLTZ.T.Operation)])))
+let create_contract ?(range = dummy) () ~storage ~code ~delegate ~initial_balance ~initial_storage =
+  create ~range (LLTZ.E.Create_contract { storage; code; delegate; initial_balance; initial_storage }) (mk_type ~range (LLTZ.T.Tuple (Row.Node [Row.Leaf (None, mk_type ~range LLTZ.T.Address); Row.Leaf (None,mk_type ~range LLTZ.T.Operation)])))
 
 (* Primitives *)
 (* Arity 0 *)
@@ -339,21 +341,41 @@ let apply ?(range = dummy) value lambda = create ~range (LLTZ.E.Prim (LLTZ.P.App
       ]
   ); range = _ }, ty3) -> (mk_type ~range (LLTZ.T.Function (ty2,ty3)))
   | _ -> raise_s [%message "Expected function type" (lambda.type_ : LLTZ.T.t)]) (*TODO needs compilation change*)
-let sapling_verify_update ?(range = dummy) transaction state = create ~range (LLTZ.E.Prim (LLTZ.P.Sapling_verify_update, [transaction; state]))
-let ticket ?(range = dummy) content amount = create ~range (LLTZ.E.Prim (LLTZ.P.Ticket, [content; amount]))
-let ticket_deprecated ?(range = dummy) content amount = create ~range (LLTZ.E.Prim (LLTZ.P.Ticket_deprecated, [content; amount]))
-let split_ticket ?(range = dummy) ticket amounts = create ~range (LLTZ.E.Prim (LLTZ.P.Split_ticket, [ticket; amounts]))
-let updaten ?(range = dummy) n value pair = create ~range (LLTZ.E.Prim (LLTZ.P.Update_n n, [value; pair]))
-let view ?(range = dummy) name ~return_type ~d ~address = create ~range (LLTZ.E.Prim (LLTZ.P.View (name, return_type), [d; address]))
+let sapling_verify_update ?(range = dummy) transaction state = create ~range (LLTZ.E.Prim (LLTZ.P.Sapling_verify_update, [transaction; state])) (*TODO CHECK compilation*)
+  (match (transaction.type_.desc, state.type_.desc) with
+  | (LLTZ.T.Sapling_transaction _, LLTZ.T.Sapling_state ms2) ->
+      mk_type ~range (LLTZ.T.Option (
+        mk_type ~range (LLTZ.T.Tuple (LLTZ.R.Node [
+          LLTZ.R.Leaf (None, mk_type ~range LLTZ.T.Bytes);
+          LLTZ.R.Leaf (None, mk_type ~range LLTZ.T.Int);
+          LLTZ.R.Leaf (None, mk_type ~range (LLTZ.T.Sapling_state ms2))
+        ]
+      ))
+    )
+  )
+  | _ -> raise_s [%message "Expected matching sapling_transaction and sapling_state types" 
+                      (transaction.type_ : LLTZ.T.t) 
+                      (state.type_ : LLTZ.T.t)]
+)
+let ticket ?(range = dummy) content amount = create ~range (LLTZ.E.Prim (LLTZ.P.Ticket, [content; amount])) (mk_type ~range (LLTZ.T.Option (mk_type ~range (LLTZ.T.Ticket content.type_))))
+let ticket_deprecated ?(range = dummy) content amount = create ~range (LLTZ.E.Prim (LLTZ.P.Ticket_deprecated, [content; amount])) (mk_type ~range (LLTZ.T.Option (mk_type ~range (LLTZ.T.Ticket content.type_))))
+let split_ticket ?(range = dummy) ticket amounts = create ~range (LLTZ.E.Prim (LLTZ.P.Split_ticket, [ticket; amounts])) 
+  (mk_type ~range 
+        (LLTZ.T.Option (mk_type ~range (LLTZ.T.Tuple (LLTZ.R.Node [
+          LLTZ.R.Leaf (None, mk_type ~range (LLTZ.T.Ticket ticket.type_));
+          LLTZ.R.Leaf (None, mk_type ~range (LLTZ.T.Ticket ticket.type_))
+        ])))))
+let updaten ?(range = dummy) n value pair = create ~range (LLTZ.E.Prim (LLTZ.P.Update_n n, [value; pair])) (*TODO*)
+let view ?(range = dummy) name ~return_type ~d ~address = create ~range (LLTZ.E.Prim (LLTZ.P.View (name, return_type), [d; address])) (mk_type ~range (LLTZ.T.Option return_type))
 
 (* Arity 3 *)
-let slice ?(range = dummy) offset ~length ~seq = create ~range (LLTZ.E.Prim (LLTZ.P.Slice, [offset; length; seq]))
-let update ?(range = dummy) key value ~of_ = create ~range (LLTZ.E.Prim (LLTZ.P.Update, [key; value; of_]))
-let get_and_update ?(range = dummy) key value ~of_ = create ~range (LLTZ.E.Prim (LLTZ.P.Get_and_update, [key; value; of_]))
-let transfer_tokens ?(range = dummy) param ~amount ~contract = create ~range (LLTZ.E.Prim (LLTZ.P.Transfer_tokens, [param; amount; contract]))
-let check_signature ?(range = dummy) key ~signature ~message = create ~range (LLTZ.E.Prim (LLTZ.P.Check_signature, [key; signature; message]))
-let open_chest ?(range = dummy) chest_key ~chest ~time = create ~range (LLTZ.E.Prim (LLTZ.P.Open_chest, [chest_key; chest; time]))
+let slice ?(range = dummy) offset ~length ~seq = create ~range (LLTZ.E.Prim (LLTZ.P.Slice, [offset; length; seq])) (mk_type ~range (LLTZ.T.Option seq.type_))
+let update ?(range = dummy) key value ~of_ = create ~range (LLTZ.E.Prim (LLTZ.P.Update, [key; value; of_])) of_.type_
+let get_and_update ?(range = dummy) key value ~of_ = create ~range (LLTZ.E.Prim (LLTZ.P.Get_and_update, [key; value; of_])) (mk_type ~range (LLTZ.T.Tuple (LLTZ.R.Node [LLTZ.R.Leaf (None, mk_type ~range (LLTZ.T.Option value.type_)); LLTZ.R.Leaf (None, of_.type_)]))) (*TODO pair compilation*)
+let transfer_tokens ?(range = dummy) param ~amount ~contract = create ~range (LLTZ.E.Prim (LLTZ.P.Transfer_tokens, [param; amount; contract])) (mk_type ~range LLTZ.T.Operation)
+let check_signature ?(range = dummy) key ~signature ~message = create ~range (LLTZ.E.Prim (LLTZ.P.Check_signature, [key; signature; message])) (mk_type ~range LLTZ.T.Bool)
+let open_chest ?(range = dummy) chest_key ~chest ~time = create ~range (LLTZ.E.Prim (LLTZ.P.Open_chest, [chest_key; chest; time])) (mk_type ~range (LLTZ.T.Option (mk_type ~range LLTZ.T.Bytes)))
 
 let convert_list (exprs: LLTZ.E.t list) : LLTZ.E.t Row.t =
-  let converted_row_leaves = List.map (fun ty -> Row.Leaf (None, ty)) exprs in
+  let converted_row_leaves = List.map ~f:(fun expr -> Row.Leaf (None, expr)) exprs in
   Row.Node converted_row_leaves

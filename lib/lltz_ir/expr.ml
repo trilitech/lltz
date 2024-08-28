@@ -142,13 +142,12 @@ module T = struct
         }
     (* sums *)
     | Inj of Type.t Row.Context.t * t
-    | Match of t * (binder * lambda) Row.t
+    | Match of t * lambda Row.t
     (* tezos specific *)
     | Raw_michelson of { michelson: (micheline[@sexp.opaque] [@equal.ignore] [@compare.ignore]); args: t list }
     | Global_constant of  { hash: string }
     | Create_contract of
         { storage : Type.t
-        ; parameter : Type.t
         ; code : lambda
         ; delegate : t
         ; initial_balance : t
