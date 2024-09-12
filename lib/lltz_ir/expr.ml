@@ -1,7 +1,7 @@
 open Import
 open Grace
 
-type micheline = (unit, Range.t) Tezos_micheline.Micheline.node
+type micheline = (Range.t, string) Tezos_micheline.Micheline.node
 
 module T = struct
   type var = Var of string 

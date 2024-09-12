@@ -1,8 +1,0 @@
-(library
-  (name lltz_michelson)
-  (libraries michelson lltz_ir fmt)
-  (modules config instruction lltz_michelson ident slot stack type)
-  (inline_tests)
-  (preprocess
-  (pps ppx_jane))
-  (flags (:standard -w -26-27)))
