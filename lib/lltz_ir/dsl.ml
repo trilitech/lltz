@@ -85,6 +85,23 @@ let key_ty ?(range = dummy) () = LLTZ.T.{ desc = Keys; range }
 let key_hash_ty ?(range = dummy) () = LLTZ.T.{ desc = Key_hash; range }
 let signature_ty ?(range = dummy) () = LLTZ.T.{ desc = Signature; range }
 
+let tuple_ty ?(range = dummy) row = LLTZ.T.{ desc = Tuple row; range }
+let or_ty ?(range = dummy) row = LLTZ.T.{ desc = Or row; range }
+let option_ty ?(range = dummy) ty = LLTZ.T.{ desc = Option ty; range }
+let list_ty ?(range = dummy) ty = LLTZ.T.{ desc = List ty; range }
+let set_ty ?(range = dummy) ty = LLTZ.T.{ desc = Set ty; range }
+let contract_ty ?(range = dummy) ty = LLTZ.T.{ desc = Contract ty; range }
+let ticket_ty ?(range = dummy) ty = LLTZ.T.{ desc = Ticket ty; range }
+let function_ty ?(range = dummy) arg ret = LLTZ.T.{ desc = Function (arg, ret); range }
+let map_ty ?(range = dummy) key value = LLTZ.T.{ desc = Map (key, value); range }
+let big_map_ty ?(range = dummy) key value = LLTZ.T.{ desc = Big_map (key, value); range }
+
+let mk_row row = LLTZ.R.Node row
+
+let mk_tuple_ty ?(range = dummy) list = tuple_ty ~range (mk_row (List.map ~f:(fun x -> LLTZ.R.Leaf (None, x)) list))
+
+(* Primitives *)
+
 (* Expressions *)
 let variable ?(range = dummy) var var_ty = create ~range (LLTZ.E.Variable var) var_ty
 let let_in ?(range = dummy) var ~rhs ~in_ = create ~range (LLTZ.E.Let_in { let_var = var; rhs; in_ }) in_.type_
@@ -101,16 +118,26 @@ let app ?(range = dummy) (abs:LLTZ.E.t) arg =
   create ~range (LLTZ.E.App { abs; arg }) ret_ty
 let let_mut_in ?(range = dummy) var ~rhs ~in_ = create ~range (LLTZ.E.Let_mut_in { let_var = var; rhs; in_ }) in_.type_
 let deref ?(range = dummy) var var_ty = create ~range (LLTZ.E.Deref var) var_ty
-let assign ?(range = dummy) var value = create ~range (LLTZ.E.Assign (var, value)) (mk_type LLTZ.T.Unit ~range) (*TODO: check*)
+let assign ?(range = dummy) var value = create ~range (LLTZ.E.Assign (var, value)) (unit_ty ())
 let if_bool ?(range = dummy) condition ~then_ ~else_ = create ~range (LLTZ.E.If_bool { condition; if_true = then_; if_false = else_ }) then_.type_
 let if_none ?(range = dummy) subject ~none ~some = create ~range (LLTZ.E.If_none { subject; if_none = none; if_some = some }) none.type_
 let if_cons ?(range = dummy) subject ~empty ~nonempty = create ~range (LLTZ.E.If_cons { subject; if_empty = empty; if_nonempty = nonempty }) empty.type_
 let if_left ?(range = dummy) subject ~left ~right = create ~range (LLTZ.E.If_left { subject; if_left = left; if_right = right }) left.body.type_
-let while_ ?(range = dummy) cond ~body = create ~range (LLTZ.E.While { cond; body }) body.type_ (*TODO: check*)
-let while_left ?(range = dummy) cond ~body = create ~range (LLTZ.E.While_left { cond; body }) body.body.type_
+let while_ ?(range = dummy) cond ~body = create ~range (LLTZ.E.While { cond; body }) (unit_ty ())
+let while_left ?(range = dummy) cond ~body = create ~range (LLTZ.E.While_left { cond; body }) (
+  match body.body.type_.desc with
+  | LLTZ.T.Or (LLTZ.R.Node [LLTZ.R.Leaf (_, left_ty); LLTZ.R.Leaf (_, right_ty)]) -> right_ty
+  | _ -> raise_s [%message "Expected or type" (body.body.type_ : LLTZ.T.t)]
+)
 let for_ ?(range = dummy) index ~init ~cond ~update ~body = create ~range (LLTZ.E.For { index; init; cond; update; body }) body.type_
-let for_each ?(range = dummy) collection ~body = create ~range (LLTZ.E.For_each { collection; body }) body.body.type_ (*TODO: check*)
-let map ?(range = dummy) collection ~map = create ~range (LLTZ.E.Map { collection; map }) map.body.type_ (*TODO: check*)
+let for_each ?(range = dummy) collection ~body = create ~range (LLTZ.E.For_each { collection; body }) (unit_ty ())
+let map ?(range = dummy) collection ~map = create ~range (LLTZ.E.Map { collection; map }) (
+  match collection.type_.desc with
+    | LLTZ.T.List ty1 -> mk_type (LLTZ.T.List map.body.type_) ~range
+    | LLTZ.T.Option ty1 -> mk_type (LLTZ.T.Option map.body.type_) ~range
+    | LLTZ.T.Map (kty, ty1) -> mk_type (LLTZ.T.Map (kty, map.body.type_)) ~range
+    | _ -> raise_s [%message "Expected list, option, or map type" (collection.type_ : LLTZ.T.t)]
+)
 let fold_left ?(range = dummy) collection ~init ~fold = create ~range (LLTZ.E.Fold_left { collection; init; fold }) fold.body.type_
 let fold_right ?(range = dummy) collection ~init ~fold = create ~range (LLTZ.E.Fold_right { collection; init; fold }) fold.body.type_
 let let_tuple_in ?(range = dummy) components ~rhs ~in_ = create ~range (LLTZ.E.Let_tuple_in { components; rhs; in_ }) in_.type_
@@ -129,7 +156,7 @@ let match_ ?(range = dummy) subject ~cases = create ~range (LLTZ.E.Match (subjec
     )
   | None -> raise_s [%message "Expected a leaf with lambda" (cases : LLTZ.E.lambda LLTZ.R.t)]
   )
-let raw_michelson ?(range = dummy) michelson args = create ~range (LLTZ.E.Raw_michelson {michelson; args}) (mk_type LLTZ.T.Unit ~range) (*TODO: check*)
+let raw_michelson ?(range = dummy) michelson args return_ty = create ~range (LLTZ.E.Raw_michelson {michelson; args}) return_ty
 let create_contract ?(range = dummy) () ~storage ~code ~delegate ~initial_balance ~initial_storage =
   create ~range (LLTZ.E.Create_contract { storage; code; delegate; initial_balance; initial_storage }) (mk_type ~range (LLTZ.T.Tuple (Row.Node [Row.Leaf (None, mk_type ~range LLTZ.T.Address); Row.Leaf (None,mk_type ~range LLTZ.T.Operation)])))
 
@@ -140,7 +167,7 @@ let balance ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Balance, []
 let chain_id_prim ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Chain_id, [])) (mk_type ~range LLTZ.T.Chain_id)
 let level ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Level, [])) (mk_type ~range LLTZ.T.Nat)
 let now ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Now, [])) (mk_type ~range LLTZ.T.Timestamp)
-let self ?(range = dummy) opt = create ~range (LLTZ.E.Prim (LLTZ.P.Self opt, [])) (*TODO check*)
+let self ?(range = dummy) str_opt contract_ty = create ~range (LLTZ.E.Prim (LLTZ.P.Self str_opt, [])) contract_ty
 let self_address ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Self_address, [])) (mk_type ~range LLTZ.T.Address)
 let sender ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Sender, [])) (mk_type ~range LLTZ.T.Address)
 let source ?(range = dummy) () = create ~range (LLTZ.E.Prim (LLTZ.P.Source, [])) (mk_type ~range LLTZ.T.Address)
@@ -165,7 +192,6 @@ let cdr ?(range = dummy) pair = create ~range (LLTZ.E.Prim (LLTZ.P.Cdr, [pair]))
 let left ?(range = dummy) (opt1, opt2, ty) value = create ~range (LLTZ.E.Prim (LLTZ.P.Left (opt1, opt2, ty), [value])) (mk_type ~range (LLTZ.T.Or (LLTZ.R.Node [LLTZ.R.Leaf (convert_option opt1, value.type_); LLTZ.R.Leaf (convert_option opt2, ty)])))
 let right ?(range = dummy) (opt1, opt2, ty) value = create ~range (LLTZ.E.Prim (LLTZ.P.Right (opt1, opt2, ty), [value])) (mk_type ~range (LLTZ.T.Or (LLTZ.R.Node [LLTZ.R.Leaf (convert_option opt1, ty); LLTZ.R.Leaf (convert_option opt2, value.type_)])))
 let some ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Some, [value])) (mk_type ~range (LLTZ.T.Option value.type_))
-let eq ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Eq, [lhs; rhs])) (mk_type ~range LLTZ.T.Bool)
 let abs ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Abs, [value])) (mk_type ~range LLTZ.T.Nat)
 let neg ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Neg, [value])) (mk_type ~range 
   (match value.type_.desc with
@@ -181,11 +207,16 @@ let nat_prim ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Nat, [v
 let int_prim ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Int, [value])) (mk_type ~range LLTZ.T.Int)
 let bytes_prim ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Bytes, [value])) (mk_type ~range LLTZ.T.Bytes)
 let is_nat ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Is_nat, [value])) (mk_type ~range (LLTZ.T.Option (mk_type ~range LLTZ.T.Nat)))
-let neq ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Neq, [lhs; rhs])) (mk_type ~range LLTZ.T.Bool)
-let le ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Le, [lhs; rhs])) (mk_type ~range LLTZ.T.Bool)
-let lt ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Lt, [lhs; rhs])) (mk_type ~range LLTZ.T.Bool)
-let ge ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Ge, [lhs; rhs])) (mk_type ~range LLTZ.T.Bool)
-let gt ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Gt, [lhs; rhs])) (mk_type ~range LLTZ.T.Bool)
+
+(* comparisons modified to have arity 2 *)
+let compare_ ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Compare, [lhs; rhs])) (mk_type ~range LLTZ.T.Int)
+let eq ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Eq, [compare_ ~range lhs rhs])) (mk_type ~range LLTZ.T.Bool)
+let neq ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Neq, [compare_ ~range lhs rhs])) (mk_type ~range LLTZ.T.Bool)
+let le ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Le, [compare_ ~range lhs rhs])) (mk_type ~range LLTZ.T.Bool)
+let lt ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Lt, [compare_ ~range lhs rhs])) (mk_type ~range LLTZ.T.Bool)
+let ge ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Ge, [compare_ ~range lhs rhs])) (mk_type ~range LLTZ.T.Bool)
+let gt ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Gt, [compare_ ~range lhs rhs])) (mk_type ~range LLTZ.T.Bool)
+
 let not ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Not, [value])) (mk_type ~range 
   (match value.type_.desc with
   | LLTZ.T.Bool -> LLTZ.T.Bool
@@ -233,12 +264,12 @@ let join_tickets ?(range = dummy) ticket1 ticket2 = create ~range (LLTZ.E.Prim (
   )
 let pairing_check ?(range = dummy) pairings = create ~range (LLTZ.E.Prim (LLTZ.P.Pairing_check, [pairings])) (mk_type ~range LLTZ.T.Bool)
 let voting_power ?(range = dummy) key_hash = create ~range (LLTZ.E.Prim (LLTZ.P.Voting_power, [key_hash])) (mk_type ~range LLTZ.T.Nat)
-let getn ?(range = dummy) n value = create ~range (LLTZ.E.Prim (LLTZ.P.Get_n n, [value])) (*TODO*)
+let getn ?(range = dummy) n value = create ~range (LLTZ.E.Prim (LLTZ.P.Get_n n, [value])) (assert false) (*TODO*)
 let cast ?(range = dummy) ty value = create ~range (LLTZ.E.Prim (LLTZ.P.Cast ty, [value])) ty
-let rename = assert false
+(*let rename = assert false*)
 let emit ?(range = dummy) (opt, ty) value = create ~range (LLTZ.E.Prim (LLTZ.P.Emit (opt, ty), [value]))  (mk_type ~range LLTZ.T.Operation)
-let failwith ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Failwith, [value])) (mk_type ~range LLTZ.T.Unit) (*TODO*)
-let never ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Never, [value])) (mk_type ~range LLTZ.T.Unit) (*TODO*)
+let failwith ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Failwith, [value])) (mk_type ~range LLTZ.T.Unit) (*output type useless*)
+let never ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Never, [value])) (mk_type ~range LLTZ.T.Unit) (*output type useless*)
 let pair ?(range = dummy) (opt1, opt2) first second = create ~range (LLTZ.E.Prim (LLTZ.P.Pair (opt1, opt2), [first; second])) (mk_type ~range (LLTZ.T.Tuple (LLTZ.R.Node [LLTZ.R.Leaf (convert_option opt1, first.type_); LLTZ.R.Leaf (convert_option opt2, second.type_)])))
 let add ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Add, [lhs; rhs])) 
   (mk_type ~range 
@@ -279,20 +310,32 @@ let mul ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Mul, [lhs;
                         (rhs.type_ : LLTZ.T.t)]
     )
   )
-let sub ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Sub, [lhs; rhs]))
-  (mk_type ~range 
-    (match (lhs.type_.desc, rhs.type_.desc) with
-    | (LLTZ.T.Nat, LLTZ.T.Nat) -> LLTZ.T.Int
-    | (LLTZ.T.Nat, LLTZ.T.Int) -> LLTZ.T.Int
-    | (LLTZ.T.Int, LLTZ.T.Nat) -> LLTZ.T.Int
-    | (LLTZ.T.Int, LLTZ.T.Int) -> LLTZ.T.Int
-    | (LLTZ.T.Timestamp, LLTZ.T.Int) -> LLTZ.T.Timestamp
-    | (LLTZ.T.Timestamp, LLTZ.T.Timestamp) -> LLTZ.T.Int
-    | _ -> raise_s [%message "Expected matching types for SUB operation" 
-                        (lhs.type_ : LLTZ.T.t) 
-                        (rhs.type_ : LLTZ.T.t)]
-    )
+
+let sub ?(range = dummy) (lhs:Expr.t) (rhs:Expr.t) = 
+  match (lhs.type_.desc, rhs.type_.desc) with
+  | (LLTZ.T.Mutez, LLTZ.T.Mutez) -> (
+      (*if_none*) (create ~range (LLTZ.E.Prim (LLTZ.P.Sub_mutez, [lhs; rhs])) (mk_type ~range (LLTZ.T.Option (mk_type ~range LLTZ.T.Mutez))))
+       (* ~some:(
+        let var_name = Name.create () in  
+        {lam_var=(Var var_name, mutez_ty ~range ()); body = variable ~range (Var var_name) (mutez_ty ~range ())})
+        ~none:(failwith ~range (string ~range "SUB_MUTEZ underflow"))*)
   )
+  | _ -> 
+      create ~range (LLTZ.E.Prim (LLTZ.P.Sub, [lhs; rhs]))
+        (mk_type ~range 
+          (match (lhs.type_.desc, rhs.type_.desc) with
+          | (LLTZ.T.Nat, LLTZ.T.Nat) -> LLTZ.T.Int
+          | (LLTZ.T.Nat, LLTZ.T.Int) -> LLTZ.T.Int
+          | (LLTZ.T.Int, LLTZ.T.Nat) -> LLTZ.T.Int
+          | (LLTZ.T.Int, LLTZ.T.Int) -> LLTZ.T.Int
+          | (LLTZ.T.Timestamp, LLTZ.T.Int) -> LLTZ.T.Timestamp
+          | (LLTZ.T.Timestamp, LLTZ.T.Timestamp) -> LLTZ.T.Int
+          | _ -> raise_s [%message "Expected matching types for SUB operation" 
+                          (lhs.type_ : LLTZ.T.t) 
+                          (rhs.type_ : LLTZ.T.t)]
+          )
+        )
+
 let sub_mutez ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Sub_mutez, [lhs; rhs])) (mk_type ~range (LLTZ.T.Option (mk_type ~range LLTZ.T.Mutez)))
 let lsr_ ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Lsr, [lhs; rhs])) lhs.type_
 let lsl_ ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Lsl, [lhs; rhs])) lhs.type_
@@ -311,12 +354,28 @@ let ediv ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Ediv, [lh
                           (rhs.type_ : LLTZ.T.t)]
       )
     )
+
+let div_ ?(range = dummy) (lhs:Expr.t) (rhs:Expr.t) =
+  (if_none ~range (ediv ~range lhs rhs) ~some:(
+  let var_ty = tuple_ty ~range (Row.Node [Row.Leaf (None, lhs.type_); Row.Leaf(None, rhs.type_)]) in
+  let var_name = Name.create () in
+  {lam_var=(Var var_name, var_ty ); 
+  body = car (variable ~range (Var var_name) (var_ty ))})
+  ~none:(failwith ~range (string ~range "DIV by 0")))
+
+let mod_ ?(range = dummy) (lhs:Expr.t) (rhs:Expr.t) =
+    (if_none ~range (ediv ~range lhs rhs) ~some:(
+    let var_ty = tuple_ty ~range (Row.Node [Row.Leaf (None, lhs.type_); Row.Leaf(None, rhs.type_)]) in
+    let var_name = Name.create () in
+    {lam_var=(Var var_name, var_ty ); 
+    body = cdr (variable ~range (Var var_name) (var_ty ))})
+    ~none:(failwith ~range (string ~range "MOD by 0")))
+
 let and_ ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.And, [lhs; rhs])) rhs.type_
 let or_ ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Or, [lhs; rhs])) lhs.type_
 let cons ?(range = dummy) head tail = create ~range (LLTZ.E.Prim (LLTZ.P.Cons, [head; tail])) tail.type_
-let compare ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Compare, [lhs; rhs])) (mk_type ~range LLTZ.T.Int)
-let concat1 ?(range = dummy) str1 str2 = create ~range (LLTZ.E.Prim (LLTZ.P.Concat1, [str1; str2])) (mk_type ~range LLTZ.T.String)
-let concat2 ?(range = dummy) bytes1 bytes2 = create ~range (LLTZ.E.Prim (LLTZ.P.Concat2, [bytes1; bytes2])) (mk_type ~range LLTZ.T.Bytes)  (*TODO*)
+let concat1 ?(range = dummy) val1 str2 = create ~range (LLTZ.E.Prim (LLTZ.P.Concat1, [val1; str2])) (mk_type ~range LLTZ.T.String)
+let concat2 ?(range = dummy) val1 bytes2 = create ~range (LLTZ.E.Prim (LLTZ.P.Concat2, [val1; bytes2])) (mk_type ~range LLTZ.T.Bytes)
 let get ?(range = dummy) key collection = create ~range (LLTZ.E.Prim (LLTZ.P.Get, [key; collection]))
   (mk_type ~range 
     (match collection.type_.desc with
@@ -332,7 +391,7 @@ let exec ?(range = dummy) value lambda = create ~range (LLTZ.E.Prim (LLTZ.P.Exec
   match lambda.type_.desc with 
   |LLTZ.T.Function (_, ret_ty) -> ret_ty 
   | _ -> raise_s [%message "Expected function type" (lambda.type_ : LLTZ.T.t)])
-let apply ?(range = dummy) value lambda = create ~range (LLTZ.E.Prim (LLTZ.P.Apply, [value; lambda]))
+let apply ?(range = dummy) value lambda= create ~range (LLTZ.E.Prim (LLTZ.P.Apply, [value; lambda]))
   (match lambda.type_.desc with 
   | LLTZ.T.Function ({ desc = LLTZ.T.Tuple (
       LLTZ.R.Node [
@@ -340,8 +399,8 @@ let apply ?(range = dummy) value lambda = create ~range (LLTZ.E.Prim (LLTZ.P.App
         LLTZ.R.Leaf (None, ty2)
       ]
   ); range = _ }, ty3) -> (mk_type ~range (LLTZ.T.Function (ty2,ty3)))
-  | _ -> raise_s [%message "Expected function type" (lambda.type_ : LLTZ.T.t)]) (*TODO needs compilation change*)
-let sapling_verify_update ?(range = dummy) transaction state = create ~range (LLTZ.E.Prim (LLTZ.P.Sapling_verify_update, [transaction; state])) (*TODO CHECK compilation*)
+  | _ -> raise_s [%message "Expected function type" (lambda.type_ : LLTZ.T.t)])
+let sapling_verify_update ?(range = dummy) transaction state = create ~range (LLTZ.E.Prim (LLTZ.P.Sapling_verify_update, [transaction; state]))
   (match (transaction.type_.desc, state.type_.desc) with
   | (LLTZ.T.Sapling_transaction _, LLTZ.T.Sapling_state ms2) ->
       mk_type ~range (LLTZ.T.Option (
@@ -365,13 +424,13 @@ let split_ticket ?(range = dummy) ticket amounts = create ~range (LLTZ.E.Prim (L
           LLTZ.R.Leaf (None, mk_type ~range (LLTZ.T.Ticket ticket.type_));
           LLTZ.R.Leaf (None, mk_type ~range (LLTZ.T.Ticket ticket.type_))
         ])))))
-let updaten ?(range = dummy) n value pair = create ~range (LLTZ.E.Prim (LLTZ.P.Update_n n, [value; pair])) (*TODO*)
+let updaten ?(range = dummy) n value pair = create ~range (LLTZ.E.Prim (LLTZ.P.Update_n n, [value; pair])) (assert false) (*TODO*)
 let view ?(range = dummy) name ~return_type ~d ~address = create ~range (LLTZ.E.Prim (LLTZ.P.View (name, return_type), [d; address])) (mk_type ~range (LLTZ.T.Option return_type))
 
 (* Arity 3 *)
 let slice ?(range = dummy) offset ~length ~seq = create ~range (LLTZ.E.Prim (LLTZ.P.Slice, [offset; length; seq])) (mk_type ~range (LLTZ.T.Option seq.type_))
 let update ?(range = dummy) key value ~of_ = create ~range (LLTZ.E.Prim (LLTZ.P.Update, [key; value; of_])) of_.type_
-let get_and_update ?(range = dummy) key value ~of_ = create ~range (LLTZ.E.Prim (LLTZ.P.Get_and_update, [key; value; of_])) (mk_type ~range (LLTZ.T.Tuple (LLTZ.R.Node [LLTZ.R.Leaf (None, mk_type ~range (LLTZ.T.Option value.type_)); LLTZ.R.Leaf (None, of_.type_)]))) (*TODO pair compilation*)
+let get_and_update ?(range = dummy) key value ~of_ = create ~range (LLTZ.E.Prim (LLTZ.P.Get_and_update, [key; value; of_])) (mk_type ~range (LLTZ.T.Tuple (LLTZ.R.Node [LLTZ.R.Leaf (None, value.type_); LLTZ.R.Leaf (None, of_.type_)])))
 let transfer_tokens ?(range = dummy) param ~amount ~contract = create ~range (LLTZ.E.Prim (LLTZ.P.Transfer_tokens, [param; amount; contract])) (mk_type ~range LLTZ.T.Operation)
 let check_signature ?(range = dummy) key ~signature ~message = create ~range (LLTZ.E.Prim (LLTZ.P.Check_signature, [key; signature; message])) (mk_type ~range LLTZ.T.Bool)
 let open_chest ?(range = dummy) chest_key ~chest ~time = create ~range (LLTZ.E.Prim (LLTZ.P.Open_chest, [chest_key; chest; time])) (mk_type ~range (LLTZ.T.Option (mk_type ~range LLTZ.T.Bytes)))
@@ -379,3 +438,6 @@ let open_chest ?(range = dummy) chest_key ~chest ~time = create ~range (LLTZ.E.P
 let convert_list (exprs: LLTZ.E.t list) : LLTZ.E.t Row.t =
   let converted_row_leaves = List.map ~f:(fun expr -> Row.Leaf (None, expr)) exprs in
   Row.Node converted_row_leaves
+
+let gen_name () = Name.create ()
+let annon_function var_name var_ty ~body : LLTZ.E.lambda = { lam_var = (Var (var_name), var_ty); body }
