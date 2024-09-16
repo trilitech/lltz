@@ -290,8 +290,24 @@ and compile_const constant =
 
 (* Compile a primitive by compiling its arguments, then applying the primitive to the arguments. *)
 and compile_prim primitive args =
-  let args_instrs = List.map ~f:compile args in
-  trace ~flag:((Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))) (seq (List.rev_append (args_instrs)  [ prim (List.length args) 1 (convert_primitive primitive) ]))
+  trace ~flag:((Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))) (
+  match primitive with
+  | LLTZ.P.Concat2 -> 
+    (match args with
+    | [arg1; arg2] -> seq [ 
+      (* Concat2 not used so that arity is clear in optimisations *)
+      nil (convert_type (arg2.type_));
+      compile arg2; 
+      cons;
+      compile arg1;
+      cons;
+      prim 1 1 (convert_primitive primitive)  (* just one input arg *)
+    ]
+    | _ -> raise_s [%message "Concat2 expects 2 arguments" (args : LLTZ.E.t list)])
+  | _ -> 
+    let args_instrs = List.map ~f:compile args in
+    (seq (List.rev(args_instrs) @ [ prim (List.length args) 1 (convert_primitive primitive) ]))
+  )
 
 (* Compile a dereference by duplicating the value of the mutable variable on the stack. *)
 and compile_deref (var : string) = trace ~flag:(String.append "mut_var " var)  (Slot.dup (`Ident var))
@@ -626,11 +642,12 @@ and compile_raw_michelson michelson args =
 let compile_to_micheline expr stack=
   let compiled = compile expr in
   let micheline = Michelson.Ast.seq (compiled stack).instructions in
-  micheline
+  let optimised_micheline = Michelson_optimisations.Rewriter.optimise_micheline micheline in
+  optimised_micheline
 
 let compile_contract_to_micheline input_var input_ty expr stack=
   let compiled = compile_contract input_var input_ty expr in
   let micheline = Michelson.Ast.seq (compiled stack).instructions in
-  micheline
+  Michelson_optimisations.Rewriter.optimise_micheline micheline
 
 

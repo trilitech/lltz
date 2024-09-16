@@ -1,0 +1,10 @@
+(library
+  (name utils)
+  (public_name lltz.michelson.optimisations.utils)
+  (private_modules
+    logging
+    pair
+  )
+  (flags (:standard -w -9@27-30@32-40@8 -safe-string))
+  (preprocess (pps ppx_deriving.eq ppx_deriving.ord ppx_deriving.show ppx_deriving.map ppx_deriving.fold ppx_sexp_conv))
+  (libraries zarith digestif.ocaml yojson fmt hex base num unix sexplib cmdliner fmt.tty fmt.cli logs logs.cli logs.fmt))
