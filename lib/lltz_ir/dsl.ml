@@ -194,13 +194,15 @@ let right ?(range = dummy) (opt1, opt2, ty) value = create ~range (LLTZ.E.Prim (
 let some ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Some, [value])) (mk_type ~range (LLTZ.T.Option value.type_))
 let abs ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Abs, [value])) (mk_type ~range LLTZ.T.Nat)
 let neg ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Neg, [value])) (mk_type ~range 
-  (match value.type_.desc with
-  | LLTZ.T.Int
-  | LLTZ.T.Nat -> LLTZ.T.Int 
-  | LLTZ.T.Bls12_381_g1
-  | LLTZ.T.Bls12_381_g2
-  | LLTZ.T.Bls12_381_fr -> value.type_.desc  (* Return the same type *)
-  | _ -> raise_s [%message "Expected int,nat or BLS12-381 field/group element type" (value.type_ : LLTZ.T.t)]
+  (
+  let open LLTZ.T in  
+  match value.type_.desc with
+  | Int
+  | Nat -> Int 
+  | Bls12_381_g1
+  | Bls12_381_g2
+  | Bls12_381_fr -> value.type_.desc  (* Return the same type *)
+  | _ -> raise_s [%message "Expected int,nat or BLS12-381 field/group element type" (value.type_ : t)]
   )
 )
 let nat_prim ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Nat, [value])) (mk_type ~range LLTZ.T.Nat)
@@ -218,12 +220,14 @@ let ge ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Ge, [compar
 let gt ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Gt, [compare_ ~range lhs rhs])) (mk_type ~range LLTZ.T.Bool)
 
 let not ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Not, [value])) (mk_type ~range 
-  (match value.type_.desc with
-  | LLTZ.T.Bool -> LLTZ.T.Bool
-  | LLTZ.T.Nat -> LLTZ.T.Int
-  | LLTZ.T.Int -> LLTZ.T.Int
-  | LLTZ.T.Bytes -> LLTZ.T.Bytes
-  | _ -> raise_s [%message "Expected bool, nat, int, or bytes type" (value.type_ : LLTZ.T.t)]
+  (
+  let open LLTZ.T in  
+  match value.type_.desc with
+  | Bool -> Bool
+  | Nat -> Int
+  | Int -> Int
+  | Bytes -> Bytes
+  | _ -> raise_s [%message "Expected bool, nat, int, or bytes type" (value.type_ : t)]
   )
 )
 let size ?(range = dummy) container = create ~range (LLTZ.E.Prim (LLTZ.P.Size, [container])) (mk_type ~range LLTZ.T.Nat)
@@ -272,67 +276,69 @@ let failwith ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Failwit
 let never ?(range = dummy) value = create ~range (LLTZ.E.Prim (LLTZ.P.Never, [value])) (mk_type ~range LLTZ.T.Unit) (*output type useless*)
 let pair ?(range = dummy) (opt1, opt2) first second = create ~range (LLTZ.E.Prim (LLTZ.P.Pair (opt1, opt2), [first; second])) (mk_type ~range (LLTZ.T.Tuple (LLTZ.R.Node [LLTZ.R.Leaf (convert_option opt1, first.type_); LLTZ.R.Leaf (convert_option opt2, second.type_)])))
 let add ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Add, [lhs; rhs])) 
-  (mk_type ~range 
+  (
+    let open LLTZ.T in
+    mk_type ~range 
     (match (lhs.type_.desc, rhs.type_.desc) with
-    | (LLTZ.T.Nat, LLTZ.T.Nat) -> LLTZ.T.Nat
-    | (LLTZ.T.Nat, LLTZ.T.Int) -> LLTZ.T.Int
-    | (LLTZ.T.Int, LLTZ.T.Nat) -> LLTZ.T.Int
-    | (LLTZ.T.Int, LLTZ.T.Int) -> LLTZ.T.Int
-    | (LLTZ.T.Timestamp, LLTZ.T.Int) -> LLTZ.T.Timestamp
-    | (LLTZ.T.Int, LLTZ.T.Timestamp) -> LLTZ.T.Timestamp
-    | (LLTZ.T.Mutez, LLTZ.T.Mutez) -> LLTZ.T.Mutez
-    | (LLTZ.T.Bls12_381_g1, LLTZ.T.Bls12_381_g1) -> LLTZ.T.Bls12_381_g1
-    | (LLTZ.T.Bls12_381_g2, LLTZ.T.Bls12_381_g2) -> LLTZ.T.Bls12_381_g2
-    | (LLTZ.T.Bls12_381_fr, LLTZ.T.Bls12_381_fr) -> LLTZ.T.Bls12_381_fr
+    | (Nat, Nat) -> Nat
+    | (Nat, Int) -> Int
+    | (Int, Nat) -> Int
+    | (Int, Int) -> Int
+    | (Timestamp, Int) -> Timestamp
+    | (Int, Timestamp) -> Timestamp
+    | (Mutez, Mutez) -> Mutez
+    | (Bls12_381_g1, Bls12_381_g1) -> Bls12_381_g1
+    | (Bls12_381_g2, Bls12_381_g2) -> Bls12_381_g2
+    | (Bls12_381_fr, Bls12_381_fr) -> Bls12_381_fr
     | _ -> raise_s [%message "Expected matching types for ADD operation" 
-                        (lhs.type_ : LLTZ.T.t) 
-                        (rhs.type_ : LLTZ.T.t)]
+                        (lhs.type_ : t) 
+                        (rhs.type_ : t)]
     )
   )
 let mul ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Mul, [lhs; rhs]))
-  (mk_type ~range 
+  (
+    let open LLTZ.T in
+    mk_type ~range 
     (match (lhs.type_.desc, rhs.type_.desc) with
-    | (LLTZ.T.Nat, LLTZ.T.Nat) -> LLTZ.T.Nat
-    | (LLTZ.T.Nat, LLTZ.T.Int) -> LLTZ.T.Int
-    | (LLTZ.T.Int, LLTZ.T.Nat) -> LLTZ.T.Int
-    | (LLTZ.T.Int, LLTZ.T.Int) -> LLTZ.T.Int
-    | (LLTZ.T.Mutez, LLTZ.T.Nat) -> LLTZ.T.Mutez
-    | (LLTZ.T.Nat, LLTZ.T.Mutez) -> LLTZ.T.Mutez
-    | (LLTZ.T.Bls12_381_g1, LLTZ.T.Bls12_381_fr) -> LLTZ.T.Bls12_381_g1
-    | (LLTZ.T.Bls12_381_g2, LLTZ.T.Bls12_381_fr) -> LLTZ.T.Bls12_381_g2
-    | (LLTZ.T.Bls12_381_fr, LLTZ.T.Bls12_381_fr) -> LLTZ.T.Bls12_381_fr
-    | (LLTZ.T.Nat, LLTZ.T.Bls12_381_fr) -> LLTZ.T.Bls12_381_fr
-    | (LLTZ.T.Int, LLTZ.T.Bls12_381_fr) -> LLTZ.T.Bls12_381_fr
-    | (LLTZ.T.Bls12_381_fr, LLTZ.T.Nat) -> LLTZ.T.Bls12_381_fr
-    | (LLTZ.T.Bls12_381_fr, LLTZ.T.Int) -> LLTZ.T.Bls12_381_fr
+    | (Nat, Nat) -> Nat
+    | (Nat, Int) -> Int
+    | (Int, Nat) -> Int
+    | (Int, Int) -> Int
+    | (Mutez, Nat) -> Mutez
+    | (Nat, Mutez) -> Mutez
+    | (Bls12_381_g1, Bls12_381_fr) -> Bls12_381_g1
+    | (Bls12_381_g2, Bls12_381_fr) -> Bls12_381_g2
+    | (Bls12_381_fr, Bls12_381_fr) -> Bls12_381_fr
+    | (Nat, Bls12_381_fr) -> Bls12_381_fr
+    | (Int, Bls12_381_fr) -> Bls12_381_fr
+    | (Bls12_381_fr, Nat) -> Bls12_381_fr
+    | (Bls12_381_fr, Int) -> Bls12_381_fr
     | _ -> raise_s [%message "Expected matching types for MUL operation" 
-                        (lhs.type_ : LLTZ.T.t) 
-                        (rhs.type_ : LLTZ.T.t)]
+                        (lhs.type_ : t) 
+                        (rhs.type_ : t)]
     )
   )
 
 let sub ?(range = dummy) (lhs:Expr.t) (rhs:Expr.t) = 
   match (lhs.type_.desc, rhs.type_.desc) with
   | (LLTZ.T.Mutez, LLTZ.T.Mutez) -> (
-      (*if_none*) (create ~range (LLTZ.E.Prim (LLTZ.P.Sub_mutez, [lhs; rhs])) (mk_type ~range (LLTZ.T.Option (mk_type ~range LLTZ.T.Mutez))))
-       (* ~some:(
-        let var_name = Name.create () in  
-        {lam_var=(Var var_name, mutez_ty ~range ()); body = variable ~range (Var var_name) (mutez_ty ~range ())})
-        ~none:(failwith ~range (string ~range "SUB_MUTEZ underflow"))*)
+      (create ~range (LLTZ.E.Prim (LLTZ.P.Sub_mutez, [lhs; rhs])) (mk_type ~range (LLTZ.T.Option (mk_type ~range LLTZ.T.Mutez))))
   )
   | _ -> 
       create ~range (LLTZ.E.Prim (LLTZ.P.Sub, [lhs; rhs]))
-        (mk_type ~range 
+        (
+        let open LLTZ.T in  
+        mk_type ~range 
           (match (lhs.type_.desc, rhs.type_.desc) with
-          | (LLTZ.T.Nat, LLTZ.T.Nat) -> LLTZ.T.Int
-          | (LLTZ.T.Nat, LLTZ.T.Int) -> LLTZ.T.Int
-          | (LLTZ.T.Int, LLTZ.T.Nat) -> LLTZ.T.Int
-          | (LLTZ.T.Int, LLTZ.T.Int) -> LLTZ.T.Int
-          | (LLTZ.T.Timestamp, LLTZ.T.Int) -> LLTZ.T.Timestamp
-          | (LLTZ.T.Timestamp, LLTZ.T.Timestamp) -> LLTZ.T.Int
+          | (Nat, Nat) -> Int
+          | (Nat, Int) -> Int
+          | (Int, Nat) -> Int
+          | (Int, Int) -> Int
+          | (Timestamp, Int) -> Timestamp
+          | (Timestamp, Timestamp) -> Int
           | _ -> raise_s [%message "Expected matching types for SUB operation" 
-                          (lhs.type_ : LLTZ.T.t) 
-                          (rhs.type_ : LLTZ.T.t)]
+                          (lhs.type_ : t) 
+                          (rhs.type_ : t)]
           )
         )
 
@@ -341,17 +347,20 @@ let lsr_ ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Lsr, [lhs
 let lsl_ ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Lsl, [lhs; rhs])) lhs.type_
 let xor ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Xor, [lhs; rhs])) lhs.type_
 let ediv ?(range = dummy) lhs rhs = create ~range (LLTZ.E.Prim (LLTZ.P.Ediv, [lhs; rhs])) 
-    (mk_type ~range 
-      (match (lhs.type_.desc, rhs.type_.desc) with
-      | (LLTZ.T.Nat, LLTZ.T.Nat) -> LLTZ.T.Option (mk_type ~range (LLTZ.T.Tuple (LLTZ.R.Node [LLTZ.R.Leaf (None,mk_type ~range LLTZ.T.Nat);LLTZ.R.Leaf (None,mk_type ~range LLTZ.T.Nat)])))
-      | (LLTZ.T.Nat, LLTZ.T.Int) 
-      | (LLTZ.T.Int, LLTZ.T.Nat) 
-      | (LLTZ.T.Int, LLTZ.T.Int) -> LLTZ.T.Option (mk_type ~range (LLTZ.T.Tuple (LLTZ.R.Node [LLTZ.R.Leaf (None,mk_type ~range LLTZ.T.Int);LLTZ.R.Leaf (None,mk_type ~range LLTZ.T.Nat)])))
-      | (LLTZ.T.Mutez, LLTZ.T.Nat) -> LLTZ.T.Option (mk_type ~range (LLTZ.T.Tuple (LLTZ.R.Node [LLTZ.R.Leaf (None, mk_type ~range LLTZ.T.Mutez);LLTZ.R.Leaf (None, mk_type ~range LLTZ.T.Mutez)])))
-      | (LLTZ.T.Mutez, LLTZ.T.Mutez) -> LLTZ.T.Option (mk_type ~range (LLTZ.T.Tuple (LLTZ.R.Node [LLTZ.R.Leaf (None, mk_type ~range LLTZ.T.Nat);LLTZ.R.Leaf (None, mk_type ~range LLTZ.T.Mutez)])))
+    (
+      let open LLTZ.T in
+      mk_type ~range 
+      (  
+      match (lhs.type_.desc, rhs.type_.desc) with
+      | (Nat, Nat) -> Option (mk_type ~range (Tuple (LLTZ.R.Node [LLTZ.R.Leaf (None,mk_type ~range Nat);LLTZ.R.Leaf (None,mk_type ~range Nat)])))
+      | (Nat, Int) 
+      | (Int, Nat) 
+      | (Int, Int) -> Option (mk_type ~range (Tuple (LLTZ.R.Node [LLTZ.R.Leaf (None,mk_type ~range Int);LLTZ.R.Leaf (None,mk_type ~range Nat)])))
+      | (Mutez, Nat) -> Option (mk_type ~range (Tuple (LLTZ.R.Node [LLTZ.R.Leaf (None, mk_type ~range Mutez);LLTZ.R.Leaf (None, mk_type ~range Mutez)])))
+      | (Mutez, Mutez) -> Option (mk_type ~range (Tuple (LLTZ.R.Node [LLTZ.R.Leaf (None, mk_type ~range Nat);LLTZ.R.Leaf (None, mk_type ~range Mutez)])))
       | _ -> raise_s [%message "Expected matching types for EDIV operation" 
-                          (lhs.type_ : LLTZ.T.t) 
-                          (rhs.type_ : LLTZ.T.t)]
+                          (lhs.type_ : t) 
+                          (rhs.type_ : t)]
       )
     )
 
@@ -401,13 +410,15 @@ let apply ?(range = dummy) value lambda= create ~range (LLTZ.E.Prim (LLTZ.P.Appl
   ); range = _ }, ty3) -> (mk_type ~range (LLTZ.T.Function (ty2,ty3)))
   | _ -> raise_s [%message "Expected function type" (lambda.type_ : LLTZ.T.t)])
 let sapling_verify_update ?(range = dummy) transaction state = create ~range (LLTZ.E.Prim (LLTZ.P.Sapling_verify_update, [transaction; state]))
-  (match (transaction.type_.desc, state.type_.desc) with
-  | (LLTZ.T.Sapling_transaction _, LLTZ.T.Sapling_state ms2) ->
-      mk_type ~range (LLTZ.T.Option (
-        mk_type ~range (LLTZ.T.Tuple (LLTZ.R.Node [
-          LLTZ.R.Leaf (None, mk_type ~range LLTZ.T.Bytes);
-          LLTZ.R.Leaf (None, mk_type ~range LLTZ.T.Int);
-          LLTZ.R.Leaf (None, mk_type ~range (LLTZ.T.Sapling_state ms2))
+  (
+  let open LLTZ.T in  
+  match (transaction.type_.desc, state.type_.desc) with
+  | (Sapling_transaction _, Sapling_state ms2) ->
+      mk_type ~range (Option (
+        mk_type ~range (Tuple (LLTZ.R.Node [
+          LLTZ.R.Leaf (None, mk_type ~range Bytes);
+          LLTZ.R.Leaf (None, mk_type ~range Int);
+          LLTZ.R.Leaf (None, mk_type ~range (Sapling_state ms2))
         ]
       ))
     )

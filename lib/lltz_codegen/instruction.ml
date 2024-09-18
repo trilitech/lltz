@@ -364,43 +364,45 @@ let update_n idx ~length:n =
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-LAMBDA *)
 (*  Lambdas used in LLTZ-IR do not use heaps. *)
-let lambda ~closure ~lam_var ~return_type return stack =
-  let n = (List.length closure) + 1 in
-  let closure_slots = List.map closure ~f:(fun (ident, _) -> `Ident ident) in
+let lambda ~environment ~lam_var ~return_type return stack =
+  let n = (List.length environment) + 1 in
+  let environment_slots = List.map environment ~f:(fun (ident, _) -> `Ident ident) in
   let parameter_slot = `Ident (fst lam_var) in
 
   let lambda_stack = [ `Value ] in
   let { Config.stack = _; instructions } =
+    let defined_slots = environment_slots @ [parameter_slot] in
     seq
       [ unpair_n n
-      ; Slot.def_all (closure_slots @ [parameter_slot]) ~in_:return
-      ; Slot.collect_all (closure_slots @ [parameter_slot])
+      ; Slot.def_all (defined_slots) ~in_:return
+      ; Slot.collect_all (defined_slots)
       ]
       lambda_stack
   in
   let parameter_type =
-    Type.tuple (List.map closure ~f:snd @ [snd lam_var])
+    Type.tuple (List.map environment ~f:snd @ [snd lam_var])
   in
   Config.ok (`Value :: stack) [ I.lambda parameter_type return_type instructions ]
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-LAMBDA_REC *)
-let lambda_rec ~closure ~lam_var ~mu ~return_type return stack =
-  let n = (List.length closure) + 1 in
-  let closure_slots = List.map closure ~f:(fun (ident, _) -> `Ident ident) in
+let lambda_rec ~environment ~lam_var ~mu ~return_type return stack =
+  let n = (List.length environment) + 1 in
+  let environment_slots = List.map environment ~f:(fun (ident, _) -> `Ident ident) in
   let parameter_slot = `Ident (fst lam_var) in
 
   let lambda_stack = [ `Value; `Value ] in
   let { Config.stack = _; instructions } =
+    let defined_slots = environment_slots @ [parameter_slot] @ [`Ident mu] in
     seq
       [ 
         unpair_n n
-      ; Slot.def_all (closure_slots @ [parameter_slot] @ [`Ident mu ]) ~in_:return
-      ; Slot.collect_all (closure_slots @ [parameter_slot] @ [`Ident mu ])
+      ; Slot.def_all (defined_slots) ~in_:return
+      ; Slot.collect_all (defined_slots)
       ]
       lambda_stack
   in
   let parameter_type =
-    Type.tuple (List.map closure ~f:snd @ [snd lam_var])
+    Type.tuple (List.map environment ~f:snd @ [snd lam_var])
   in
   Config.ok (`Value :: stack) [ I.lambda_rec parameter_type return_type instructions ]
 

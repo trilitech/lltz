@@ -226,7 +226,7 @@ let rec compile : LLTZ.E.t -> t =
        | Prim (primitive, args) -> compile_prim primitive args
        | Let_mut_in { let_var = Mut_var var; rhs; in_ } -> compile_mut_let_in var rhs in_
        | Deref (Mut_var var) -> compile_deref var
-       | Assign (Mut_var var, value) -> trace ~flag:(String.append "assign" (Sexp.to_string_hum (LLTZ.T.sexp_of_t expr.type_))) (compile_assign var value)
+       | Assign (Mut_var var, value) -> compile_assign var value
        | If_bool { condition; if_true; if_false } ->
          compile_if_bool condition if_true if_false
        | If_none { subject; if_none; if_some = {lam_var = Var var, var_type; body = some} } ->
@@ -240,19 +240,19 @@ let rec compile : LLTZ.E.t -> t =
        | For { index = Mut_var var; init; cond; update; body } ->
          compile_for var init cond update body
        | For_each { collection; body = {lam_var = Var var, var_ty; body = lambda_body} } ->
-         trace ~flag:"for_each " (compile_for_each collection var lambda_body)
+         compile_for_each collection var lambda_body
        | Map { collection; map = {lam_var = Var var, var_ty; body=lam_body} } -> compile_map collection var lam_body
        | Fold_left { collection; init = init_body; fold = {lam_var = Var var, var_ty; body = fold_body} } ->
          compile_fold_left collection init_body var fold_body
        | Fold_right { collection; init = init_body; fold = {lam_var = Var var, var_ty; body = fold_body} }
          -> compile_fold_right collection init_body var fold_body
        | Let_tuple_in { components; rhs; in_ } -> compile_let_tuple_in components rhs in_
-       | Tuple row -> trace ~flag:"tuple" (compile_tuple row)
-       | Proj (tuple, path) ->trace ~flag:"proj" (compile_proj tuple path)
-       | Update { tuple; component; update } -> trace ~flag:"update" (compile_update tuple component update)
-       | Inj (path, expr) -> trace ~flag:"inj" (compile_inj path expr)
-       | Match (subject, cases) -> trace ~flag:"match" (compile_match subject cases)
-       | Raw_michelson {michelson; args} -> trace ~flag:(String.append "raw_michelson" (Sexp.to_string_hum (LLTZ.T.sexp_of_t expr.type_))) (compile_raw_michelson michelson args)
+       | Tuple row -> compile_tuple row
+       | Proj (tuple, path) ->compile_proj tuple path
+       | Update { tuple; component; update } -> compile_update tuple component update
+       | Inj (path, expr) -> compile_inj path expr
+       | Match (subject, cases) -> compile_match subject cases
+       | Raw_michelson {michelson; args} ->  compile_raw_michelson michelson args
        | Create_contract
            { storage; code = {lam_var = Var param_var, param_ty ;body =code_body}; delegate; initial_balance; initial_storage } ->
          compile_create_contract
@@ -291,14 +291,14 @@ and compile_const constant =
 (* Compile a primitive by compiling its arguments, then applying the primitive to the arguments. *)
 and compile_prim primitive args =
   let args_instrs = List.map ~f:compile args in
-  trace ~flag:((Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))) (seq (List.rev(args_instrs) @ [ prim (List.length args) 1 (convert_primitive primitive) ]))
+  trace ~flag:((Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))) (seq (List.rev_append (args_instrs)  [ prim (List.length args) 1 (convert_primitive primitive) ]))
 
 (* Compile a dereference by duplicating the value of the mutable variable on the stack. *)
 and compile_deref (var : string) = trace ~flag:(String.append "mut_var " var)  (Slot.dup (`Ident var))
 
 (* Compile an assignment by compiling the value to be assigned, then assigning it to the slot corresponding to the mutable variable. *)
 and compile_assign (var : string) value =
-  seq [ trace (compile value); Slot.set (`Ident var); unit]
+  trace ~flag:"assign" (seq [ trace (compile value); Slot.set (`Ident var); unit])
 
 (* Compile an if-bool expression by compiling the condition, then applying the if-bool instruction to the condition and the true and false branches. *)
 and compile_if_bool condition if_true if_false =
@@ -358,16 +358,16 @@ and compile_for index init invariant variant body =
 
 (* Compile a tuple expression by compiling each component and pairing them together. *)
 and compile_tuple row =
-  match row with
+  trace ~flag:"tuple" (match row with
   | LLTZ.R.Node nodes ->
     let compiled_nodes = List.map ~f:compile_tuple nodes in
-    seq ((List.rev (compiled_nodes)) @ [ pair_n (List.length compiled_nodes) ])
-  | LLTZ.R.Leaf (_, value) -> compile value
+    seq ((List.rev_append (compiled_nodes))  [ pair_n (List.length compiled_nodes) ])
+  | LLTZ.R.Leaf (_, value) -> compile value)
 
 (* Compile a projection expression by compiling the tuple and then getting the nth element. *)
 and compile_proj tuple path =
   let _, gets, tuple_expanded_instr = expand_tuple tuple path in
-  trace
+  trace ~flag:"proj" 
     (seq
        ([ trace ~flag:"proj expansion" tuple_expanded_instr ]
         @ [ (* Keep the last value, drop the intermediate ones and the tuple *)
@@ -391,7 +391,7 @@ and compile_update tuple component update =
                    (i : int)
                    (lengths : int list)]))
   in
-  seq ([ compile tuple ] @ [trace ~flag:"gets" (seq(gets))] @  [drop 1; compile update ] @ [trace ~flag:"updates" (seq(updates))])
+  trace ~flag:"update" (seq ([ compile tuple ] @ [trace ~flag:"gets" (seq(gets))] @  [drop 1; compile update ] @ [trace ~flag:"updates" (seq(updates))]))
 
 and get_lengths_inner row path_list =
   match row with
@@ -446,14 +446,14 @@ and compile_lambda expr =
   let lam_var = var, convert_type lam_var_type in
   let return_type = convert_type body.type_ in
 
-  let closure =
+  let environment =
     LLTZ.Free_vars.free_vars_with_types expr
     |> Map.map ~f:convert_type
     |> Map.to_alist
   in
   seq
-    ([ lambda ~closure ~lam_var ~return_type (compile body) ]
-    @ List.map closure ~f:(fun (ident, _) -> seq [ Slot.dup (`Ident ident); apply ])
+    ([ lambda ~environment ~lam_var ~return_type (compile body) ]
+    @ List.map environment ~f:(fun (ident, _) -> seq [ Slot.dup (`Ident ident); apply ])
     )
 
 (* Compile lambda-rec expression by compiling the body and creating a lambda-rec instruction. *)
@@ -463,14 +463,14 @@ and compile_lambda_rec expr =
   let lam_var = var, convert_type lam_var_type in
   let return_type = convert_type body.type_ in
 
-  let closure =
+  let environment =
     LLTZ.Free_vars.free_vars_with_types expr
     |> Map.map ~f:convert_type
     |> Map.to_alist
   in
   seq
-    ([ lambda_rec ~closure ~lam_var ~mu ~return_type (compile body) ]
-    @ List.map closure ~f:(fun (ident, _) -> seq [ Slot.dup (`Ident ident); apply ])
+    ([ lambda_rec ~environment ~lam_var ~mu ~return_type (compile body) ]
+    @ List.map environment ~f:(fun (ident, _) -> seq [ Slot.dup (`Ident ident); apply ])
     )
 
 (* Compile an application by compiling a lambda and argument, then applying the EXEC instruction. *)
@@ -502,7 +502,7 @@ and compile_create_contract
 (* Compile for-each expression by compiling the collection, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the body. *)
 and compile_for_each collection var body =
   let coll_instr = compile collection in
-  seq
+  trace ~flag:"for_each " (seq
     [ coll_instr
     ; iter
         (seq
@@ -510,7 +510,7 @@ and compile_for_each collection var body =
            Slot.let_ (`Ident var) ~in_:(seq [ compile body; drop 1 ]);
            ])
     ; unit
-    ]
+    ])
 
 (* Compile map expression by compiling the collection, then applying the MAP instruction that maps over the collection and binds the values to the variables in the function body. *)
 and compile_map collection var lam_body =
@@ -579,7 +579,7 @@ and compile_inj context expr =
           | [] -> raise_s [%message "Empty list"])
         ~init:[ Type.ors [ mid_ty; right_ty ] ]
     in
-    seq
+    trace ~flag:"inj" (seq
       ([ compile expr; (* Left *) left mid_ty ]
        (* Rights - traverses all right_instrs_types in reverse order except last and makes right*)
        @
@@ -587,7 +587,7 @@ and compile_inj context expr =
        then []
        else
          List.map (List.rev (List.tl_exn right_instrs_types)) ~f:(fun ty -> right ty)
-      )
+      ))
 
 and compile_row_of_lambdas row =
   match row with
@@ -603,7 +603,7 @@ and compile_match subject cases =
   (* subject is a result of Inj *)
   let subject_instr = compile subject in
   (* Compile subject, then unwrap it and apply corresponding lambda *)
-  seq ([ subject_instr ] @ [ compile_matching cases ])
+  trace ~flag:"match" (seq ([ subject_instr ] @ [ compile_matching cases ]))
 
 and compile_matching cases =
   match cases with
@@ -620,7 +620,7 @@ and compile_matching cases =
 and compile_raw_michelson michelson args =
   let michelson = Micheline.map_node (fun _ -> ()) (fun prim -> Michelson.Ast.Prim.of_string prim) michelson in
   let args_instrs = List.map ~f:compile args in
-  seq ((List.rev (args_instrs)) @ [ raw_michelson [michelson] args ])
+  trace ~flag:"raw_michelson" (seq (List.rev_append (args_instrs) [ raw_michelson [michelson] args ]))
 
 let compile_to_micheline expr stack=
   let compiled = compile expr in
