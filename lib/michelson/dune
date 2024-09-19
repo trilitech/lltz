@@ -1,9 +1,10 @@
 (library
  (name michelson)
+ (public_name lltz.michelson)
  (inline_tests)
  (libraries
   core
-  tezos-micheline
+  octez-libs.micheline
  )
  (preprocess
   (pps ppx_jane)))

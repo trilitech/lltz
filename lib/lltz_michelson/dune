@@ -1,7 +1,0 @@
-(library
-  (name lltz_michelson)
-  (libraries michelson lltz_ir fmt)
-  (inline_tests)
-  (preprocess
-  (pps ppx_jane))
-  (flags (:standard -w -26-27)))

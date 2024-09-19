@@ -163,8 +163,8 @@ let loop_left (in_ : t) stack =
 (* https://tezos.gitlab.io/michelson-reference/#instr-ITER *)
 let iter (in_ : t) stack =
   match stack with
-  | `Value :: _ -> 
-    let instrs = Config.instructions @@ in_ stack in
+  | `Value :: stack -> 
+    let instrs = Config.instructions @@ in_ (`Value :: stack) in
     Config.ok stack [ I.iter instrs ]
   | _ -> raise_s [%message "Instruction.iter" (stack : SlotStack.t)]
 
@@ -202,8 +202,8 @@ let if_cons ~empty ~nonempty stack =
     | _ -> raise_s [%message "Instruction.if_cons" (stack : SlotStack.t)]
   in
   Config.merge
-    (empty stack)
     (nonempty (`Value :: `Value :: stack))
+    (empty stack)
     ~f:(fun instrs1 instrs2 -> [ I.if_cons ~then_:instrs1 ~else_:instrs2 ])
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-IF_NONE *)
@@ -224,7 +224,7 @@ module Slot = struct
     | [] -> 
       raise_s [%message "Instruction.Slot.bind: invalid stack" (stack : SlotStack.t) (slot : [< Slot.definable ])]
     | _ -> 
-      raise_s [%message "Instruction.Slot.def: slot not assignable"]
+      raise_s [%message "Instruction.Slot.def: slot not assignable" (stack : SlotStack.t) (slot : [< Slot.definable ])]
 
   (* remove slot from stack, for example after it is used by let*)
   let collect slot stack =
@@ -289,6 +289,10 @@ module Slot = struct
             "Instruction.Slot.set: invalid stack"
               (stack : SlotStack.t)
               (slot : [< Slot.definable ])])
+  
+  let mock_value stack =
+    Config.ok (`Value :: stack) []
+
 end
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-DIP *)
@@ -360,28 +364,48 @@ let update_n idx ~length:n =
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-LAMBDA *)
 (*  Lambdas used in LLTZ-IR do not use heaps. *)
-let lambda ~lam_var ~return_type return stack =
+(* The environment specifies free variables that are used in the lambda.
+   The environment variables need to be pushed on the stack before calling the lambda. *)
+let lambda ~environment ~lam_var ~return_type return stack =
+  let n = (List.length environment) + 1 in
+  let environment_slots = List.map environment ~f:(fun (ident, _) -> `Ident ident) in
   let parameter_slot = `Ident (fst lam_var) in
-  let parameter_type = snd lam_var in
+
   let lambda_stack = [ `Value ] in
   let { Config.stack = _; instructions } =
-    seq [ Slot.let_ parameter_slot ~in_:return ] lambda_stack
+    let defined_slots = environment_slots @ [parameter_slot] in
+    seq
+      [ unpair_n n
+      ; Slot.def_all (defined_slots) ~in_:return
+      ; Slot.collect_all (defined_slots)
+      ]
+      lambda_stack
+  in
+  let parameter_type =
+    Type.tuple (List.map environment ~f:snd @ [snd lam_var])
   in
   Config.ok (`Value :: stack) [ I.lambda parameter_type return_type instructions ]
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-LAMBDA_REC *)
-let lambda_rec ~lam_var ~mu ~return_type return stack =
-  let parameter_slot =
-    match lam_var with
-    | ident, _ -> `Ident ident
-  in
-  let parameter_type =
-    match lam_var with
-    | _, param_type -> param_type
-  in
+(* Recursive version of lambda, mu is the name of the recursive variable *)
+let lambda_rec ~environment ~lam_var ~mu ~return_type return stack =
+  let n = (List.length environment) + 1 in
+  let environment_slots = List.map environment ~f:(fun (ident, _) -> `Ident ident) in
+  let parameter_slot = `Ident (fst lam_var) in
+
   let lambda_stack = [ `Value; `Value ] in
   let { Config.stack = _; instructions } =
-    seq [ Slot.let_all [ parameter_slot; `Ident mu ] ~in_:return ] lambda_stack
+    let defined_slots = environment_slots @ [parameter_slot] @ [`Ident mu] in
+    seq
+      [ 
+        unpair_n n
+      ; Slot.def_all (defined_slots) ~in_:return
+      ; Slot.collect_all (defined_slots)
+      ]
+      lambda_stack
+  in
+  let parameter_type =
+    Type.tuple (List.map environment ~f:snd @ [snd lam_var])
   in
   Config.ok (`Value :: stack) [ I.lambda_rec parameter_type return_type instructions ]
 
@@ -443,8 +467,23 @@ let le = prim 1 1 I.le (* https://tezos.gitlab.io/michelson-reference/#instr-LE 
 let gt = prim 1 1 I.gt (* https://tezos.gitlab.io/michelson-reference/#instr-GT *)
 let ge = prim 1 1 I.ge (* https://tezos.gitlab.io/michelson-reference/#instr-GE *)
 let int = prim 1 1 I.int (* https://tezos.gitlab.io/michelson-reference/#instr-INT *)
+let nil type_ = prim 0 1 (I.nil type_) (* https://tezos.gitlab.io/michelson-reference/#instr-NIL *)
+let cons = prim 2 1 I.cons (* https://tezos.gitlab.io/michelson-reference/#instr-CONS *)
 let debug = ref true
 let next_trace_point = ref (-1)
+
+(* Directly using michelson specified via micheline. Can take arbitrary number of args and return a single value. *)
+let raw_michelson michelson args stack =
+  let n = List.length args in
+  if List.length stack < n then
+    raise_s [%message "Instruction.raw_michelson: invalid stack" (stack : SlotStack.t) (n : int)]
+  else
+    let top_elements = List.take stack n in
+    if List.for_all top_elements ~f:(function `Value -> true | _ -> false) then
+      let new_stack = `Value :: (List.drop stack n) in
+      Config.ok new_stack michelson
+    else
+      raise_s [%message "Instruction.raw_michelson: invalid stack" (stack : SlotStack.t) (n : int)]
 
 let set_debug next in_ =
   let curr = !debug in
@@ -462,15 +501,15 @@ let print_s sexp stack =
   if !debug then print_s sexp;
   Config.ok stack []
 
-let trace t =
+let trace ?(flag = "") t =
   let trace_point =
     incr next_trace_point;
     !next_trace_point
   in
   seq
     [ (fun stack ->
-        print_s [%message "Stack before" (trace_point : int) (stack : SlotStack.t)] stack)
+        print_s [%message (stack : SlotStack.t) (String.concat [(Int.to_string trace_point); "=before "; flag;])] stack)
     ; t
     ; (fun stack ->
-        print_s [%message "Stack after" (trace_point : int) (stack : SlotStack.t)] stack)
+        print_s [%message (stack : SlotStack.t) (String.concat [(Int.to_string trace_point); "=after "; flag;])] stack)
     ]

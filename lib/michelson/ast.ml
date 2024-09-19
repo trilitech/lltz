@@ -675,6 +675,7 @@ module Type = struct
   let unit = prim (T Unit)
 
   let chest = prim (T Chest)
+  let tx_rollup_l2_address = prim (T Tx_rollup_l2_address)
 
   let chest_key = prim (T Chest_key)
 end
@@ -784,6 +785,7 @@ module Instruction = struct
   let source = prim (I Source)
   let split_ticket = prim (I Split_ticket)
   let sub = prim (I Sub)
+  let sub_mutez = prim (I Sub_mutez)
   let swap = prim (I Swap)
   let ticket = prim (I Ticket)
   let ticket_deprecated = prim (I Ticket_deprecated)

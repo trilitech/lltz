@@ -56,6 +56,13 @@
                 logs = prev.logs.overrideAttrs (old: {
                   buildInputs = (old.buildInputs or []) ++ [prev.fmt];
                 });
+
+                # zarith = prev.zarith.overrideAttrs (old: {
+                #  buildInputs = (old.buildInputs or []) ++ [pkgs.gmp];
+                # });
+
+                conf-gmp = final.lib.overrideNativeDepends prev.conf-gmp [pkgs.gmp];
+                conf-pkg-config = final.lib.overrideNativeDepends prev.conf-pkg-config [pkg-config];
               }
             )
           ]
@@ -68,7 +75,7 @@
 
           inputsFrom = [opamPackages.lltz];
 
-          buildInputs = with pkgs; [alejandra] ++ (with opamPackages; [utop ocamlformat ocamlformat-rpc ocaml-lsp-server]);
+          buildInputs = with pkgs; [alejandra gmp pkg-config] ++ (with opamPackages; [utop ocamlformat ocamlformat-rpc ocaml-lsp-server]);
         };
       });
 }

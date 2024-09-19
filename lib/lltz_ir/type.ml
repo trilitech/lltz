@@ -43,6 +43,7 @@ module T = struct
     | Bls12_381_fr
     | Chest_key
     | Chest
+    | Tx_rollup_l2_address
   [@@deriving sexp, equal, compare, traverse]
 end
 

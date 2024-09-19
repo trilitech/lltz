@@ -9,6 +9,13 @@ let tuple types =
   | types -> T.pair types
 ;;
 
+let rec tuple_left types =
+  (* Left-comb encoding of tuple-types *)
+  match types with
+  | [] -> T.unit
+  | [ type_ ] -> type_
+  | a::b::types -> tuple_left ((T.pair [a;b])::types)
+
 let ors types =
   (* Right-comb encoding of or-types (not efficient, but cheap) *)
   let rec loop = function
