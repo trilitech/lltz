@@ -1,12 +1,46 @@
 (* Copyright 2022-2023 Morum LLC, 2019-2022 Smart Chain Arena LLC *)
-
-open Utils
-open Control
+open Utils.Control
+module Bigint = Utils.Bigint
+module Option = Utils.Option
+module List = Utils.List
+module Misc = Utils.Misc
 include Michelson_base.Type
 include Michelson_base.Primitive
 include Michelson_base.Protocol
 include Michelson_base.Typing
 open Printf
+
+(*List operations*)
+let rec map_some f = function
+  | [] -> []
+  | x :: xs -> (
+      match f x with
+      | None -> map_some f xs
+      | Some y -> y :: map_some f xs)
+
+let somes xs = map_some (fun x -> x) xs
+
+let rec drop i = function
+  | _ :: xs when i > 0 -> drop (i - 1) xs
+  | xs -> xs
+
+let rec take i = function
+| x :: xs when i > 0 -> x :: take (i - 1) xs
+| _ -> []
+
+let split_at_opt =
+  let rec split_at acc i = function
+    | xs when i = 0 -> Some (List.rev acc, xs)
+    | x :: xs when i > 0 -> split_at (x :: acc) (i - 1) xs
+    | _ -> None
+  in
+  fun i l -> split_at [] i l
+
+let split_at ?(err = "split_at") i l =
+  match split_at_opt i l with
+  | Some l -> l
+  | None -> failwith err
+(*End of list operations*)
 
 let full_types_and_tags = false
 
@@ -326,7 +360,7 @@ let s_expression_of_mtype ?full ?human =
         | None -> None
         | Some s -> Some (Atom (pref ^ s))
       in
-      List.somes [get ":" annot_type; get "@" annot_variable]
+      somes [get ":" annot_type; get "@" annot_variable]
     in
     let mk = function
       | [] -> assert false
@@ -521,7 +555,7 @@ let mk_spec_basic name ?commutative ~arities:(a_in, a_out) rule =
         let tinstr =
           map_instr_f (fun _ -> assert false) (fun _ -> assert false) instr
         in
-        let stack = Ok (Stack_ok (xs @ List.drop a_in stack)) in
+        let stack = Ok (Stack_ok (xs @ drop a_in stack)) in
         Some (tinstr, stack)
   in
   mk_spec name ?commutative ~arities:(a_in, a_out) rule
@@ -739,18 +773,18 @@ let mi_dipn =
   let rule ~tparameter:_ stack = function
     | MIdipn (n, body) when n <= List.length stack -> (
         assert (n >= 0);
-        let body = body (Ok (Stack_ok (List.drop n stack))) in
+        let body = body (Ok (Stack_ok (drop n stack))) in
         let tinstr = MIdipn (n, body) in
         match body.stack_out with
         | Ok (Stack_ok stack') ->
-            Some (tinstr, Ok (Stack_ok (List.take n stack @ stack')))
+            Some (tinstr, Ok (Stack_ok (take n stack @ stack')))
         | _ -> Some (tinstr, Error "DIP: body error"))
     | _ -> assert false
   in
   mk_spec "DIPn" rule
 
 let is_hot =
-  let open Ternary in
+  let open Utils.Ternary in
   let is_hot ?annot_type:_ ?annot_variable:_ mt =
     match mt with
     | MT1 (Ticket, _) -> Yes
@@ -774,7 +808,7 @@ let mi_dup i =
 
 let mi_dig n =
   let rule ~tparameter:_ stack =
-    match List.split_at_opt n stack with
+    match split_at_opt n stack with
     | None -> Error (sprintf "DIG %i: stack too short" n)
     | Some (hi, lo) -> (
         match lo with
@@ -789,7 +823,7 @@ let mi_dug n =
         if n > List.length tail
         then Error (sprintf "DUG %i: stack too short" n)
         else
-          let hi, lo = List.split_at n tail in
+          let hi, lo = split_at n tail in
           Ok (Stack_ok (hi @ (x :: lo)))
     | [] -> Error "DUG: empty stack"
   in
@@ -813,10 +847,11 @@ let mi_dropn n =
 let unpair_size = List.fold_left (fun acc x -> acc + if x then 1 else 0) 0
 
 let unpair_arg xs =
+  let open Sexplib.Std in
+  let open Stdlib.String in
   if List.for_all id xs
   then string_of_int (List.length xs)
-  else List.show String.pp (List.map string_of_bool xs)
-
+  else List.show (fun ppf -> Format.fprintf ppf "%s") (List.map string_of_bool xs)
 let mi_unpair fields =
   assert (List.length fields >= 2);
   let rec aux acc fields stack =

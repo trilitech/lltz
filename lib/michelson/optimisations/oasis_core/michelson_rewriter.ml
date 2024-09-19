@@ -2,31 +2,49 @@
 
 (** Michelson-to-michelson code simplification. *)
 
-open Utils
-open Control
+module Control = Utils.Control
+module Bigint = Utils.Bigint
 open Michelson
+
+
+(*List operations*)
+let replicate i x = List.init i (fun _ -> x)
+
+let rec is_prefix eq xs ys =
+  match (xs, ys) with
+  | [], _ -> true
+  | x :: xs, y :: ys -> eq x y && is_prefix eq xs ys
+  | _ -> false
+
+let is_suffix eq xs ys = is_prefix eq (List.rev xs) (List.rev ys)
+
+let rec take i = function
+  | x :: xs when i > 0 -> x :: take (i - 1) xs
+  | _ -> []
+
+(*End of List operations*)
 
 let check_rest_invariant = false
 
-let mk_instr instr = {instr}
+let mk_instr instr = Michelson.{instr}
 
-let un_instr {instr} = instr
+let un_instr Michelson.{instr} = instr
 
-let seq xs = MIseq xs
+let seq xs = Michelson.MIseq xs
 
-let seqi xs = MIseq (List.map mk_instr xs)
+let seqi xs = Michelson.MIseq (Core.List.map xs ~f:mk_instr)
 
 let iseq xs = mk_instr (seq xs)
 
 let iseqi xs = iseq (List.map mk_instr xs)
 
 let to_seq = function
-  | MIseq is -> List.map un_instr is
+  | Michelson.MIseq is -> List.map un_instr is
   | i -> [i]
 
 let of_seq = function
   | [i] -> i
-  | is -> MIseq (List.map mk_instr is)
+  | is -> Michelson.MIseq (List.map mk_instr is)
 
 type rule =
      (instr, literal) instr_f list
@@ -53,7 +71,7 @@ let cDr = MIfield [D]
 let rec fails {instr} =
   match instr with
   | MI1_fail _ -> true
-  | MIseq xs -> (
+  | Michelson.MIseq xs -> (
       match Base.List.last xs with
       | Some x -> fails x
       | None -> false)
@@ -92,7 +110,7 @@ let is_pushy = function
 let rec may_fail = function
   | MI2 Exec | MIerror _ | MImich _ | MI1_fail _ | MI2 (View _) -> true
   | MI2 (Lsl | Lsr | Add | Sub | Mul) -> true (* overflow on some types *)
-  | MIseq l -> List.exists (fun x -> may_fail x.instr) l
+  | Michelson.MIseq l -> List.exists (fun x -> may_fail x.instr) l
   | MIif (i1, i2) | MIif_cons (i1, i2) | MIif_none (i1, i2) | MIif_left (i1, i2)
     -> may_fail i1.instr || may_fail i2.instr
   | MIdip i | MIdipn (_, i) | MIloop i | MIloop_left i | MIiter i | MImap i ->
@@ -199,7 +217,7 @@ let may_diverge instr =
   let f_instr = function
     | MI2 Exec | MIloop _ | MIloop_left _ -> true
     | MIcreate_contract _ -> false
-    | e -> fold_instr_f ( || ) (curry fst) false e
+    | e -> fold_instr_f ( || ) (Control.curry fst) false e
   in
   let f_literal _ = () in
   cata_instr {f_instr; f_literal} {instr}
@@ -276,7 +294,7 @@ let mi_unpair fields =
     | true :: rest -> drop acc (i + 1) rest
     | false :: rest -> drop ([MIdig i; MIdrop] :: acc) i rest
   in
-  MIunpair (List.replicate length true) :: drop [] 0 fields
+  MIunpair (replicate length true) :: drop [] 0 fields
 
 let unfold_selective_unpair : rule = function
   | MIunpair fields :: rest when List.exists not fields ->
@@ -344,11 +362,11 @@ let swap_to_dig1 : rule = function
   | _ -> rewrite_none
 
 let is_fail = function
-  | MIseq [{instr}; {instr = MI1_fail Failwith}] when is_pure_push instr -> true
+  | Michelson.MIseq [{instr}; {instr = MI1_fail Failwith}] when is_pure_push instr -> true
   | _ -> false
 
 let is_pair_fail = function
-  | MIseq [{instr = MI2 (Pair _)}; {instr = MI1_fail Failwith}] -> true
+  | Michelson.MIseq [{instr = MI2 (Pair _)}; {instr = MI1_fail Failwith}] -> true
   | _ -> false
 
 let cond_check_last cond x y rest =
@@ -370,12 +388,12 @@ let replay_if_like if_like i1 i2 =
   | _ -> assert false
 
 let has_prefix_drop = function
-  | MIdrop | MIseq ({instr = MIdrop} :: _) -> true
+  | MIdrop | Michelson.MIseq ({instr = MIdrop} :: _) -> true
   | _ -> false
 
 let remove_prefix_drop = function
   | MIdrop -> seq []
-  | MIseq ({instr = MIdrop} :: i) -> seq i
+  | Michelson.MIseq ({instr = MIdrop} :: i) -> seq i
   | _ -> assert false
 
 (* OCaml's mod can return negative numbers, so let's fix that. *)
@@ -402,22 +420,22 @@ let dig_dug ~with_comments n =
   in
   fun x ->
     let y, rest = f 0 x in
-    let consumed = List.take (List.length x - List.length rest) x in
+    let consumed = take (List.length x - List.length rest) x in
     if List.equal equal_instr (List.map mk_instr consumed) (List.map mk_instr y)
     then rewrite_none
     else y $ rest
 
 let conditionals xs =
-  match List.map (map_instr_f un_instr id) xs with
+  match List.map (map_instr_f un_instr Control.id) xs with
   | MIif
-      ( MIseq ({instr = MIdig n} :: {instr = MIdrop} :: xs)
-      , MIseq ({instr = MIdig n'} :: {instr = MIdrop} :: ys) )
+      ( Michelson.MIseq ({instr = MIdig n} :: {instr = MIdrop} :: xs)
+      , Michelson.MIseq ({instr = MIdig n'} :: {instr = MIdrop} :: ys) )
     :: rest
     when n = n' && n >= 1 ->
       [MIdig (n + 1); MIdrop; MIif (seq xs, seq ys)] $ rest
   | MIif
-      ( MIseq ({instr = MIdig 2} :: {instr = MIdrop} :: xs)
-      , MIseq
+      ( Michelson.MIseq ({instr = MIdig 2} :: {instr = MIdrop} :: xs)
+      , Michelson.MIseq
           ({instr = MIdig 1}
           :: {instr = MIdrop}
           :: {instr = MIdig 1}
@@ -432,8 +450,8 @@ let conditionals xs =
       $ rest
   (* min / max *)
   | MIif
-      ( MIseq [{instr = MIdrop}; {instr = MIdig n}; {instr = MIdrop}]
-      , MIseq
+      ( Michelson.MIseq [{instr = MIdrop}; {instr = MIdig n}; {instr = MIdrop}]
+      , Michelson.MIseq
           [
             {instr = MIdig 1}
           ; {instr = MIdrop}
@@ -444,10 +462,10 @@ let conditionals xs =
     when n = n' && n > 1 ->
       [MIdig (n + 2); MIdrop; MIif (seqi [MIdrop], seqi [MIdig 1; MIdrop])]
       $ rest
-  | MIif (MIseq [], MIseq []) :: rest
-  | MIif_none (MIseq [], MIdrop) :: rest
+  | MIif (Michelson.MIseq [], Michelson.MIseq []) :: rest
+  | MIif_none (Michelson.MIseq [], MIdrop) :: rest
   | MIif_left (MIdrop, MIdrop) :: rest
-  | MIif_cons (MIseq [{instr = MIdrop}; {instr = MIdrop}], MIseq []) :: rest ->
+  | MIif_cons (Michelson.MIseq [{instr = MIdrop}; {instr = MIdrop}], Michelson.MIseq []) :: rest ->
       [MIdrop] $ rest
   | MI1 Not :: MIif (a, b) :: rest -> [MIif (b, a)] $ rest
   | MIif
@@ -482,22 +500,22 @@ let conditionals xs =
           (seqi [i2; MIdig n; MIdrop])
       ]
       $ rest
-  | (MIif (MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i1), i2) as if_like)
+  | (MIif (Michelson.MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i1), i2) as if_like)
     :: rest
     when is_fail i2 && n >= 1 ->
       [MIdig (n + 1); MIdrop; replay_if_like if_like (seq i1) i2] $ rest
-  | (MIif (i2, MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i1)) as if_like)
+  | (MIif (i2, Michelson.MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i1)) as if_like)
     :: rest
     when is_fail i2 && n >= 1 ->
       [MIdig (n + 1); MIdrop; replay_if_like if_like i2 (seq i1)] $ rest
-  | (MIif_left (i2, MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i1)) as
+  | (MIif_left (i2, Michelson.MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i1)) as
     if_like)
     :: rest
     when is_fail i2 && n >= 1 ->
       [MIdig n; MIdrop; replay_if_like if_like i2 (seq i1)] $ rest
   | (MIif_none
        ( i2
-       , MIseq ({instr = MIdrop} :: {instr = MIdig n} :: {instr = MIdrop} :: i1)
+       , Michelson.MIseq ({instr = MIdrop} :: {instr = MIdig n} :: {instr = MIdrop} :: i1)
        ) as if_like)
     :: rest
     when is_fail i2 && n >= 1 ->
@@ -507,31 +525,31 @@ let conditionals xs =
       ; replay_if_like if_like i2 (seq ({instr = MIdrop} :: i1))
       ]
       $ rest
-  | (MIif_none (i2, MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i1)) as
+  | (MIif_none (i2, Michelson.MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i1)) as
     if_like)
     :: rest
     when is_pair_fail i2 && n >= 3 ->
       [MIdig n; MIdrop; replay_if_like if_like i2 (seq i1)] $ rest
-  | (MIif_none (i1, MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i2)) as
+  | (MIif_none (i1, Michelson.MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i2)) as
     if_like)
     :: rest
     when is_fail i1 && n >= 1 ->
       [MIdig n; MIdrop; replay_if_like if_like i1 (seq i2)] $ rest
   | MIif_left
-      ( MIseq
+      ( Michelson.MIseq
           [
             {instr = MIpush ({mt = MT0 Int}, {literal = Int n1}) as push}
           ; {instr = MI1_fail Failwith}
           ]
-      , MIseq
+      , Michelson.MIseq
           [
             {instr = MIpush ({mt = MT0 Int}, {literal = Int n2})}
           ; {instr = MI1_fail Failwith}
           ] )
     :: rest
     when Bigint.equal n1 n2 -> [push; MI1_fail Failwith] $ rest
-  | (( MIif_left (MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i1), i2)
-     | MIif_cons (MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i1), i2) ) as
+  | (( MIif_left (Michelson.MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i1), i2)
+     | MIif_cons (Michelson.MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i1), i2) ) as
     if_like)
     :: rest
     when is_fail i2 && n >= 1 ->
@@ -542,8 +560,8 @@ let conditionals xs =
       in
       [MIdig n; MIdrop; replay_if_like if_like (seq i1) i2] $ rest
   | (MIif_left
-       ( MIseq ({instr = MIdig 1} :: {instr = MIdrop} :: i1)
-       , MIseq ({instr = MIdrop} :: {instr = MIdrop} :: i2) ) as if_like)
+       ( Michelson.MIseq ({instr = MIdig 1} :: {instr = MIdrop} :: i1)
+       , Michelson.MIseq ({instr = MIdrop} :: {instr = MIdrop} :: i2) ) as if_like)
     :: rest ->
       [
         MIdig 1
@@ -551,16 +569,16 @@ let conditionals xs =
       ; replay_if_like if_like (seq i1) (seq ({instr = MIdrop} :: i2))
       ]
       $ rest
-  | (( MIif (MIseq ({instr = MIdrop} :: i1), MIseq ({instr = MIdrop} :: i2))
+  | (( MIif (Michelson.MIseq ({instr = MIdrop} :: i1), Michelson.MIseq ({instr = MIdrop} :: i2))
      | MIif_left
-         ( MIseq ({instr = MIdig 1} :: {instr = MIdrop} :: i1)
-         , MIseq ({instr = MIdig 1} :: {instr = MIdrop} :: i2) )
+         ( Michelson.MIseq ({instr = MIdig 1} :: {instr = MIdrop} :: i1)
+         , Michelson.MIseq ({instr = MIdig 1} :: {instr = MIdrop} :: i2) )
      | MIif_none
-         ( MIseq ({instr = MIdrop} :: i1)
-         , MIseq ({instr = MIdig 1} :: {instr = MIdrop} :: i2) )
+         ( Michelson.MIseq ({instr = MIdrop} :: i1)
+         , Michelson.MIseq ({instr = MIdig 1} :: {instr = MIdrop} :: i2) )
      | MIif_cons
-         ( MIseq ({instr = MIdig 2} :: {instr = MIdrop} :: i1)
-         , MIseq ({instr = MIdrop} :: i2) ) ) as if_like)
+         ( Michelson.MIseq ({instr = MIdig 2} :: {instr = MIdrop} :: i1)
+         , Michelson.MIseq ({instr = MIdrop} :: i2) ) ) as if_like)
     :: rest ->
       [MIdig 1; MIdrop; replay_if_like if_like (seq i1) (seq i2)] $ rest
   (* drop | fail *)
@@ -572,17 +590,17 @@ let conditionals xs =
       [MIdig 1; MIdrop; replay_if_like if_like i1 (remove_prefix_drop i2)]
       $ rest
   | (( MIif_cons
-         ( (MIseq ({instr = MIdrop} :: {instr = MIdrop} :: _) as i1)
-         , ((MIdrop | MIseq ({instr = MIdrop} :: _)) as i2) )
+         ( (Michelson.MIseq ({instr = MIdrop} :: {instr = MIdrop} :: _) as i1)
+         , ((MIdrop | Michelson.MIseq ({instr = MIdrop} :: _)) as i2) )
      | MIif
-         ( ((MIdrop | MIseq ({instr = MIdrop} :: _)) as i1)
-         , ((MIdrop | MIseq ({instr = MIdrop} :: _)) as i2) )
+         ( ((MIdrop | Michelson.MIseq ({instr = MIdrop} :: _)) as i1)
+         , ((MIdrop | Michelson.MIseq ({instr = MIdrop} :: _)) as i2) )
      | MIif_none
-         ( ((MIdrop | MIseq ({instr = MIdrop} :: _)) as i1)
-         , (MIseq ({instr = MIdrop} :: {instr = MIdrop} :: _) as i2) )
+         ( ((MIdrop | Michelson.MIseq ({instr = MIdrop} :: _)) as i1)
+         , (Michelson.MIseq ({instr = MIdrop} :: {instr = MIdrop} :: _) as i2) )
      | MIif_left
-         ( (MIseq ({instr = MIdrop} :: {instr = MIdrop} :: _) as i1)
-         , (MIseq ({instr = MIdrop} :: {instr = MIdrop} :: _) as i2) ) ) as
+         ( (Michelson.MIseq ({instr = MIdrop} :: {instr = MIdrop} :: _) as i1)
+         , (Michelson.MIseq ({instr = MIdrop} :: {instr = MIdrop} :: _) as i2) ) ) as
     if_like)
     :: rest ->
       [
@@ -592,12 +610,12 @@ let conditionals xs =
       ]
       $ rest
   | MIif_left
-      ( MIseq
+      ( Michelson.MIseq
           [
             {instr = MIdrop}
           ; {instr = MIpush ({mt = MT0 Bool}, {literal = Bool b1})}
           ]
-      , MIseq
+      , Michelson.MIseq
           [
             {instr = MIdrop}
           ; {instr = MIpush ({mt = MT0 Bool}, {literal = Bool b2})}
@@ -613,7 +631,7 @@ let conditionals xs =
       $ rest
   | MIif_none
       ( MIpush ({mt = MT0 Bool}, {literal = Bool b2})
-      , MIseq
+      , Michelson.MIseq
           [
             {instr = MIdrop}
           ; {instr = MIpush ({mt = MT0 Bool}, {literal = Bool b1})}
@@ -623,13 +641,13 @@ let conditionals xs =
     when b1 = not b2 ->
       [MIif_none ((if b1 then y else x), seqi [MIdrop; (if b1 then x else y)])]
       $ rest
-  | MIif_none (b, MIseq [{instr = MIdrop}; {instr = MIdrop}]) :: rest
+  | MIif_none (b, Michelson.MIseq [{instr = MIdrop}; {instr = MIdrop}]) :: rest
     when is_fail b -> [MIdig 1; MIdrop; MIif_none (b, MIdrop)] $ rest
   | _ -> rewrite_none
 
 let conditionals : rule =
  fun x ->
-  let f = List.map (map_instr_f mk_instr id) in
+  let f = List.map (map_instr_f mk_instr Control.id) in
   Option.map (fun (x, y) -> (f x, f y)) (conditionals x)
 
 let remove_comments : pipeline =
@@ -643,7 +661,7 @@ let remove_comments : pipeline =
 
 let is_iter_cons = function
   | MIiter {instr = MI2 Cons} -> true
-  | MIiter {instr = MIseq [{instr = MIcomment _}; {instr = MI2 Cons}]} -> true
+  | MIiter {instr = Michelson.MIseq [{instr = MIcomment _}; {instr = MI2 Cons}]} -> true
   | _ -> false
 
 let main ~protocol : rule =
@@ -662,7 +680,7 @@ let main ~protocol : rule =
       in
       [MIcomment (remove_double (a @ b))] $ rest
   (* Flatten sequences: *)
-  | MIseq is :: rest -> List.map un_instr is $ rest
+  | Michelson.MIseq is :: rest -> List.map un_instr is $ rest
   (* Superfluous SWAP: *)
   | MIdup 1 :: MIdig 1 :: rest -> [MIdup 1] $ rest
   | p1 :: p2 :: MIdig 1 :: rest when is_pure_push p1 && is_pure_push p2 ->
@@ -681,7 +699,7 @@ let main ~protocol : rule =
       [MIdrop; MIdrop; MIdrop] $ rest
   (* Remove DIPs: *)
   | MIdip {instr = MIdrop} :: rest -> [MIdig 1; MIdrop] $ rest
-  | MIdip {instr = MIseq []} :: rest -> [] $ rest
+  | MIdip {instr = Michelson.MIseq []} :: rest -> [] $ rest
   | MIdip i1 :: MIdip i2 :: rest -> [MIdip (iseq [i1; i2])] $ rest
   | MIdup 1 :: MIdip {instr} :: rest when has_arity (1, 1) instr ->
       [MIdup 1; instr; MIdig 1] $ rest
@@ -1007,8 +1025,8 @@ let unpair : rule = function
 
 let normalize f =
   let rec norm = function
-    | {instr = MIseq xs} -> norm_seq xs
-    | {instr} -> mk_instr (map_instr_f norm1 id instr)
+    | {instr = Michelson.MIseq xs} -> norm_seq xs
+    | {instr} -> mk_instr (map_instr_f norm1 Control.id instr)
   and norm1 {instr} = norm_seq (List.map mk_instr (to_seq instr))
   and norm_seq xs = norm_seq_aux [] (List.rev xs)
   and norm_seq_aux acc = function
@@ -1023,7 +1041,7 @@ let normalize f =
             then
               assert (
                 let i instr = {instr} in
-                List.is_suffix equal_instr (List.map i rest) (List.map i acc));
+                is_suffix equal_instr (List.map i rest) (List.map i acc));
             norm_seq_aux rest (List.map mk_instr (List.rev result) @ is))
   in
   norm1
@@ -1037,7 +1055,7 @@ let run_group rs =
   normalize (List.fold_left comp (fun _ -> None) rs)
 
 let run groups =
-  List.fold_left (fun f g x -> g (f x)) id (List.map run_group groups)
+  List.fold_left (fun f g x -> g (f x)) Control.id (List.map run_group groups)
 
 let run_on_tinstance ~protocol groups c =
   if List.length (has_error_tinstance ~accept_missings:true c) > 0

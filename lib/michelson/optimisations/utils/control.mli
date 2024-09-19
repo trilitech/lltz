@@ -180,39 +180,6 @@ module type FIXPOINT = sig
   val unF : t -> t f
 end
 
-module type UNTIED = sig
-  include FIXPOINT
-
-  val cata : ('a f -> 'a) -> t -> 'a
-
-  val para : ((t * 'a) f -> 'a) -> t -> 'a
-end
-
-module Fix (F : TYPE1) : FIXPOINT with type 'a f := 'a F.t
-
-module FixFUNCTOR (F : FUNCTOR_CORE) :
-  UNTIED with type 'a f := 'a F.t and type t := Fix(F).t
-
-module FixEQ (F : EQ1) : EQ with type t := Fix(F).t
-
-module FixORD (F : ORD1) : ORD with type t := Fix(F).t
-
-module FixSHOW (F : SHOW1) : SHOW with type t := Fix(F).t
-
-module Either : sig
-  type ('a, 'b) t =
-    | Left of 'a
-    | Right of 'b
-
-  val of_left : ('a, 'b) t -> 'a option
-
-  val of_right : ('a, 'b) t -> 'b option
-
-  val is_left : ('a, 'b) t -> bool
-
-  val is_right : ('a, 'b) t -> bool
-end
-
 module Result : sig
   type 'a t = ('a, string) result [@@deriving eq, ord, show]
 
@@ -237,72 +204,6 @@ module Result : sig
   val get_error : 'a t -> string option
 end
 
-module State (T : TYPE) : sig
-  type 'a t
-
-  val get : T.t t
-
-  val set : T.t -> unit t
-
-  val local : T.t -> 'a t -> 'a t
-
-  val modify : (T.t -> T.t) -> unit t
-
-  include MONAD with type 'a t := 'a t
-
-  val run : 'a t -> T.t -> 'a * T.t
-
-  val exec : 'a t -> T.t -> 'a
-end
-
-module Reader (T : TYPE) : sig
-  type 'a t
-
-  val ask : T.t t
-
-  val local : (T.t -> T.t) -> 'a t -> 'a t
-
-  include MONAD with type 'a t := 'a t
-
-  val run : 'a t -> T.t -> 'a
-end
-
-module Writer (T : TYPE) : sig
-  type 'a t
-
-  include MONAD with type 'a t := 'a t
-
-  val write : T.t -> unit t
-
-  val run : 'a t -> T.t list * 'a
-end
-
-val print_list : (Format.formatter -> unit) list -> Format.formatter -> unit
-
-val pp_int : Format.formatter -> int -> unit
-
 val curry : ('a * 'b -> 'c) -> 'a -> 'b -> 'c
 
 val uncurry : ('a -> 'b -> 'c) -> 'a * 'b -> 'c
-
-val eq3 : 'a -> 'a -> 'a -> bool
-
-val pp_no_breaks : Format.formatter -> unit -> unit
-
-val equal_pair :
-  ('a -> 'a -> bool) -> ('b -> 'b -> bool) -> 'a * 'b -> 'a * 'b -> bool
-
-val pp_pair :
-     (Format.formatter -> 'a -> unit)
-  -> (Format.formatter -> 'b -> unit)
-  -> Format.formatter
-  -> 'a * 'b
-  -> unit
-
-val show_pair :
-     (Format.formatter -> 'a -> unit)
-  -> (Format.formatter -> 'b -> unit)
-  -> 'a * 'b
-  -> string
-
-val map_pair : ('a -> 'b) -> ('c -> 'd) -> 'a * 'c -> 'b * 'd
