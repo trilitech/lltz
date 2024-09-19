@@ -7,6 +7,8 @@ module LLTZ = struct
   module R = Row
 end
 
+
+(* Computes a map from free variables to their types in the given expression *)
 let free_vars_with_types (expr : LLTZ.E.t) : LLTZ.T.t String.Map.t =
   let empty = String.Map.empty in
 

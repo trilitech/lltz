@@ -364,6 +364,8 @@ let update_n idx ~length:n =
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-LAMBDA *)
 (*  Lambdas used in LLTZ-IR do not use heaps. *)
+(* The environment specifies free variables that are used in the lambda.
+   The environment variables need to be pushed on the stack before calling the lambda. *)
 let lambda ~environment ~lam_var ~return_type return stack =
   let n = (List.length environment) + 1 in
   let environment_slots = List.map environment ~f:(fun (ident, _) -> `Ident ident) in
@@ -385,6 +387,7 @@ let lambda ~environment ~lam_var ~return_type return stack =
   Config.ok (`Value :: stack) [ I.lambda parameter_type return_type instructions ]
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-LAMBDA_REC *)
+(* Recursive version of lambda, mu is the name of the recursive variable *)
 let lambda_rec ~environment ~lam_var ~mu ~return_type return stack =
   let n = (List.length environment) + 1 in
   let environment_slots = List.map environment ~f:(fun (ident, _) -> `Ident ident) in
@@ -469,6 +472,7 @@ let cons = prim 2 1 I.cons (* https://tezos.gitlab.io/michelson-reference/#instr
 let debug = ref true
 let next_trace_point = ref (-1)
 
+(* Directly using michelson specified via micheline. Can take arbitrary number of args and return a single value. *)
 let raw_michelson michelson args stack =
   let n = List.length args in
   if List.length stack < n then

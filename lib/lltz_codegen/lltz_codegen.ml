@@ -622,6 +622,7 @@ and compile_raw_michelson michelson args =
   let args_instrs = List.map ~f:compile args in
   trace ~flag:"raw_michelson" (seq (List.rev_append (args_instrs) [ raw_michelson [michelson] args ]))
 
+(* Compile and additionally convert to a single micheline node *)
 let compile_to_micheline expr stack=
   let compiled = compile expr in
   let micheline = Michelson.Ast.seq (compiled stack).instructions in
