@@ -5,7 +5,7 @@
    does not match instruction requirements.
 *)
 
-module M = Michelson.Ast
+module M = Lltz_michelson.Ast
 module I = M.Instruction
 module T = M.Type
 
@@ -71,6 +71,26 @@ let dug n stack =
   | 1 -> [ I.swap ]
   | n -> [ I.dug_n n ]
 
+(* https://tezos.gitlab.io/michelson-reference/#instr-DIP *)
+let dip n (t : t) : t =
+  fun stack ->
+  match n with
+  | 0 -> t stack (* noop *)
+  | n ->
+    let rev_left_stack, right_stack = rev_prefix n stack in
+    let { Config.stack = right_stack; instructions } = t right_stack in
+    let stack =
+      Config.ExtStack.apply right_stack ~f:(fun right_stack ->
+        List.rev_append rev_left_stack right_stack)
+    in
+    { Config.stack
+    ; instructions =
+        [ (match n with
+           | 1 -> I.dip instructions
+           | n -> I.dip_n n instructions)
+        ]
+    }
+
 (* https://tezos.gitlab.io/michelson-reference/#instr-DUP, stack is 0-indexed *)
 let dup n stack =
   (* n is a index into the stack *)
@@ -121,8 +141,42 @@ let remove n stack =
   | 1 -> I.[ swap; drop ]
   | n -> I.[ dig_n n; drop ]
 
+let remove_sequence from count stack_init =
+  (* removes count elements starting from index from *)
+  let stack_left, stack_right =
+    match List.split_n stack_init from with
+    | left, nth :: right -> left, nth :: right
+    | _ ->
+      raise_s
+        [%message
+          "Instruction.remove_sequence: invalid stack"
+            (stack_init : SlotStack.t)
+            (from : int)
+            (count : int)]
+  in
+  if List.length stack_right < count then
+    raise_s
+      [%message
+        "Instruction.remove_sequence: invalid stack"
+          (stack_init : SlotStack.t)
+          (from : int)
+          (count : int)]
+  else
+    let stack = stack_left @ (List.drop stack_right count) in
+    let instructions =
+      match count, from with
+      | 0, _ -> []
+      | 1, 0 -> [ I.drop ]
+      | 1, 1 -> [ I.swap; I.drop ]
+      | 1, _ -> [ I.dig_n from; I.drop ]
+      | _ ,0 -> [ I.drop_n count ]
+      | _ , _-> (dip from (drop count) stack_init).instructions
+    in
+    Config.ok stack instructions
+
 (* prim m n instr stack: m elements are consumed from the stack, n elements are produced *)
 let prim m n instr stack =
+  (M.pp Format.err_formatter instr);
   let stack =
     let left, right = List.split_n stack m in
     (* split stack into left and right at index m *)
@@ -133,7 +187,7 @@ let prim m n instr stack =
     then
       raise_s
         [%message
-          "Instruction.prim: invalid stack" (stack : SlotStack.t) (m : int) (n : int)];
+          "Instruction.prim: invalid stack" (stack : SlotStack.t) (m : int) (n : int) ((M.pp_string instr) : string)];
     List.init n ~f:(fun _ -> `Value) @ right
   in
   Config.ok stack [ instr ]
@@ -264,7 +318,19 @@ module Slot = struct
     in
     in_ stack
 
-  let collect_all slots = seq (List.map slots ~f:collect)
+  (*let collect_all slots = seq (List.map slots ~f:collect)*)
+
+  let collect_all slots_seq = 
+    if List.length slots_seq = 0 then
+      seq []
+    else
+      function stack ->
+        (*raise_s [%message "Instruction.Slot.collect_all: collect_all invalid stack" (stack : SlotStack.t) (slots_seq : Slot.definable list)]*)
+        let top_found_slot = SlotStack.find_exn stack (List.hd_exn slots_seq) in
+        Printf.eprintf "top_found_slot: %d\n" top_found_slot;
+        remove_sequence top_found_slot (List.length slots_seq) stack
+
+
   let let_all slots ~in_ = seq [ def_all slots ~in_; collect_all slots ]
   (* bind and remove after used*)
 
@@ -295,26 +361,6 @@ module Slot = struct
 
 end
 
-(* https://tezos.gitlab.io/michelson-reference/#instr-DIP *)
-let dip n (t : t) : t =
-  fun stack ->
-  match n with
-  | 0 -> t stack (* noop *)
-  | n ->
-    let rev_left_stack, right_stack = rev_prefix n stack in
-    let { Config.stack = right_stack; instructions } = t right_stack in
-    let stack =
-      Config.ExtStack.apply right_stack ~f:(fun right_stack ->
-        List.rev_append rev_left_stack right_stack)
-    in
-    { Config.stack
-    ; instructions =
-        [ (match n with
-           | 1 -> I.dip instructions
-           | n -> I.dip_n n instructions)
-        ]
-    }
-
 (* https://tezos.gitlab.io/michelson-reference/#instr-UNPAIR, accepts 0 and 1 *)
 let unpair_n n =
   (* invariant: pop 1 value, push n *)
@@ -330,7 +376,7 @@ let pair_n n =
   match n with
   | 0 -> prim 0 1 I.unit
   | 1 -> noop
-  | 2 -> prim 2 1 I.pair
+  | 2 -> prim 2 1 (I.pair ())
   | n -> prim n 1 (I.pair_n n)
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-GET *)
@@ -425,7 +471,7 @@ let failwith stack =
 let create_contract ~storage ~parameter ~code stack =
   match stack with
   | `Value :: `Value :: `Value :: stack -> 
-    Config.ok stack [ I.create_contract storage parameter (code (`Value :: stack)) ]
+    Config.ok (`Value :: `Value :: stack) [ I.create_contract storage parameter (code (`Value :: stack)) ]
   | _ ->
     raise_s
       [%message "Instruction.create_contract: invalid stack" (stack : SlotStack.t)]
@@ -442,7 +488,7 @@ let update = prim 3 1 I.update (* https://tezos.gitlab.io/michelson-reference/#i
 let add = prim 2 1 I.add (* https://tezos.gitlab.io/michelson-reference/#instr-ADD *)
 let sub = prim 2 1 I.sub (* https://tezos.gitlab.io/michelson-reference/#instr-SUB *)
 let mul = prim 2 1 I.mul (* https://tezos.gitlab.io/michelson-reference/#instr-MUL *)
-let pair = prim 2 1 I.pair (* https://tezos.gitlab.io/michelson-reference/#instr-PAIR *)
+let pair = prim 2 1 (I.pair ()) (* https://tezos.gitlab.io/michelson-reference/#instr-PAIR *)
 let car = prim 1 1 I.car (* https://tezos.gitlab.io/michelson-reference/#instr-CAR *)
 let cdr = prim 1 1 I.cdr (* https://tezos.gitlab.io/michelson-reference/#instr-CDR *)
 let get = prim 2 1 I.get (* https://tezos.gitlab.io/michelson-reference/#instr-GET *)
@@ -469,7 +515,7 @@ let ge = prim 1 1 I.ge (* https://tezos.gitlab.io/michelson-reference/#instr-GE 
 let int = prim 1 1 I.int (* https://tezos.gitlab.io/michelson-reference/#instr-INT *)
 let nil type_ = prim 0 1 (I.nil type_) (* https://tezos.gitlab.io/michelson-reference/#instr-NIL *)
 let cons = prim 2 1 I.cons (* https://tezos.gitlab.io/michelson-reference/#instr-CONS *)
-let debug = ref true
+let debug = ref false
 let next_trace_point = ref (-1)
 
 (* Directly using michelson specified via micheline. Can take arbitrary number of args and return a single value. *)
@@ -498,7 +544,7 @@ let to_michelson t stack ~debug =
     instructions)
 
 let print_s sexp stack =
-  if !debug then print_s sexp;
+  if !debug then Printf.eprintf "%s\n" (Sexp.to_string_hum (sexp));
   Config.ok stack []
 
 let trace ?(flag = "") t =

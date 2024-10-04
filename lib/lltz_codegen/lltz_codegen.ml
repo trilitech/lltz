@@ -20,8 +20,8 @@ module LLTZ = struct
 end
 
 module Michelson = struct
-  module Ast = Michelson.Ast
-  module T = Michelson.Ast.Type
+  module Ast = Lltz_michelson.Ast
+  module T = Lltz_michelson.Ast.Type
 end
 
 open Instruction
@@ -29,14 +29,23 @@ open Tezos_micheline
 
 let rec compile_row_types row =
   match row with
-  | LLTZ.R.Node nodes -> Type.tuple (List.map nodes ~f:compile_row_types)
+  | LLTZ.R.Node nodes -> 
+    let annots = List.map nodes ~f:(
+      fun node -> match node with 
+      | LLTZ.R.Leaf(Some (LLTZ.R.Label value),_) -> Some(value)
+      | _ -> None) in
+    Type.tuple (List.map nodes ~f:compile_row_types) ~annots
   | LLTZ.R.Leaf (_, value) -> convert_type value
 
 and compile_row_types_for_or row =
   match row with
   | LLTZ.R.Node nodes ->
-    let converted_types = List.map nodes ~f:compile_row_types in
-    Type.ors converted_types
+    let converted_types = List.map nodes ~f:compile_row_types_for_or in
+    let annots = List.map nodes ~f:(
+      fun node -> match node with 
+      | LLTZ.R.Leaf(Some (LLTZ.R.Label value),_) -> Some (value) 
+      | _ -> None) in
+    Type.ors converted_types ~annots
   | LLTZ.R.Leaf (_, value) -> convert_type value
 
 and convert_type (ty : LLTZ.T.t) : Michelson.Ast.t =
@@ -80,19 +89,19 @@ and convert_constant (const : LLTZ.E.constant) : Michelson.Ast.t =
   match const with
   | Unit -> Michelson.Ast.Instruction.unit
   | Bool b -> if b then Michelson.Ast.true_ else Michelson.Ast.false_
-  | Nat n -> Michelson.Ast.int (Z.to_int n)
-  | Int n -> Michelson.Ast.int (Z.to_int n)
-  | Mutez n -> Michelson.Ast.int (Z.to_int n)
+  | Nat n -> Michelson.Ast.int_of_z (n)
+  | Int n -> Michelson.Ast.int_of_z (n)
+  | Mutez n -> Michelson.Ast.int_of_z (n)
   | String s -> Michelson.Ast.string s
   | Key s -> Michelson.Ast.string s
   | Key_hash s -> Michelson.Ast.string s
   | Bytes s -> Michelson.Ast.(bytes (Bytes.of_string s))
-  | Chain_id s -> Michelson.Ast.string s
+  | Chain_id s -> Michelson.Ast.(bytes (Bytes.of_string s))
   | Address s -> Michelson.Ast.string s
   | Timestamp s -> Michelson.Ast.string s
-  | Bls12_381_g1 s -> Michelson.Ast.string s
-  | Bls12_381_g2 s -> Michelson.Ast.string s
-  | Bls12_381_fr s -> Michelson.Ast.string s
+  | Bls12_381_g1 s -> Michelson.Ast.(bytes (Bytes.of_string s))
+  | Bls12_381_g2 s -> Michelson.Ast.(bytes (Bytes.of_string s))
+  | Bls12_381_fr s -> Michelson.Ast.(bytes (Bytes.of_string s))
   | Signature s -> Michelson.Ast.string s
 ;;
 
@@ -144,9 +153,9 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Eq -> eq
   | Abs -> abs
   | Neg -> neg
-  | Nat -> int
+  | Nat -> nat
   | Int -> int
-  | Bytes -> pack (* Assuming pack handles bytes conversion *)
+  | Bytes -> bytes
   | Is_nat -> is_nat
   | Neq -> neq
   | Le -> le
@@ -157,7 +166,7 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Size -> size
   | Address -> address
   | Implicit_account -> implicit_account
-  | Contract (opt, ty) -> contract (convert_type ty) (* TODO: resolve tag option*)
+  | Contract (opt, ty) -> contract opt (convert_type ty)
   | Pack -> pack
   | Unpack ty -> unpack (convert_type ty)
   | Hash_key -> hash_key
@@ -167,7 +176,7 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Keccak -> keccak
   | Sha3 -> sha3
   | Set_delegate -> set_delegate
-  | Read_ticket -> Michelson.Ast.seq [read_ticket; pair]
+  | Read_ticket -> Michelson.Ast.seq [read_ticket; pair ()]
   | Join_tickets -> join_tickets
   | Pairing_check -> pairing_check
   | Voting_power -> voting_power
@@ -175,9 +184,9 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Cast ty -> cast (convert_type ty)
   | Rename opt -> failwith (* TODO: Check why the instruction does not exist. *)
   | Emit (opt, ty_opt) -> emit opt (Option.map ~f:convert_type ty_opt)
-  | Failwith -> failwith
-  | Never -> never
-  | Pair (opt1, opt2) -> pair (* TODO: resolve tag options*)
+  | Failwith -> assert false
+  | Never -> assert false
+  | Pair (opt1, opt2) -> pair ~left_annot:opt1 ~right_annot:opt2 ()
   | Add -> add
   | Mul -> mul
   | Sub -> sub
@@ -204,7 +213,7 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | View (name, ty) -> view name (convert_type ty)
   | Slice -> slice
   | Update -> update
-  | Get_and_update -> Michelson.Ast.seq [get_and_update; pair]
+  | Get_and_update -> Michelson.Ast.seq [get_and_update; pair ()]
   | Transfer_tokens -> transfer_tokens
   | Check_signature -> check_signature
   | Open_chest -> open_chest
@@ -229,22 +238,22 @@ let rec compile : LLTZ.E.t -> t =
        | Assign (Mut_var var, value) -> compile_assign var value
        | If_bool { condition; if_true; if_false } ->
          compile_if_bool condition if_true if_false
-       | If_none { subject; if_none; if_some = {lam_var = Var var, var_type; body = some} } ->
+       | If_none { subject; if_none; if_some = {lam_var = Var var; body = some} } ->
          compile_if_none subject if_none (var, some)
-       | If_cons { subject; if_empty; if_nonempty = { lam_var1 = Var hd, var1_ty; lam_var2 = Var tl, var2_ty; body =nonempty }} ->
+       | If_cons { subject; if_empty; if_nonempty = { lam_var1 = Var hd; lam_var2 = Var tl; body =nonempty }} ->
          compile_if_cons subject if_empty (hd, tl, nonempty)
-       | If_left { subject; if_left = {lam_var = Var left, left_ty; body =l}; if_right = {lam_var = Var right, right_ty; body = r} } ->
+       | If_left { subject; if_left = {lam_var = Var left; body =l}; if_right = {lam_var = Var right; body = r} } ->
          compile_if_left subject (left, l) (right, r)
        | While { cond; body } -> compile_while cond body
-       | While_left { cond; body = {lam_var = Var var, var_ty; body=body_lambda} } -> compile_while_left cond var body_lambda expr.type_
+       | While_left { cond; body = {lam_var = Var var; body=body_lambda} } -> compile_while_left cond var body_lambda expr.type_
        | For { index = Mut_var var; init; cond; update; body } ->
          compile_for var init cond update body
-       | For_each { collection; body = {lam_var = Var var, var_ty; body = lambda_body} } ->
+       | For_each { collection; body = {lam_var = Var var; body = lambda_body} } ->
          compile_for_each collection var lambda_body
-       | Map { collection; map = {lam_var = Var var, var_ty; body=lam_body} } -> compile_map collection var lam_body
-       | Fold_left { collection; init = init_body; fold = {lam_var = Var var, var_ty; body = fold_body} } ->
+       | Map { collection; map = {lam_var = Var var; body=lam_body} } -> compile_map collection var lam_body
+       | Fold_left { collection; init = init_body; fold = {lam_var = Var var; body = fold_body} } ->
          compile_fold_left collection init_body var fold_body
-       | Fold_right { collection; init = init_body; fold = {lam_var = Var var, var_ty; body = fold_body} }
+       | Fold_right { collection; init = init_body; fold = {lam_var = Var var; body = fold_body} }
          -> compile_fold_right collection init_body var fold_body
        | Let_tuple_in { components; rhs; in_ } -> compile_let_tuple_in components rhs in_
        | Tuple row -> compile_tuple row
@@ -266,8 +275,7 @@ let rec compile : LLTZ.E.t -> t =
        | Global_constant hash -> assert false)
     ]
 
-and compile_contract (input_var: string) (input_ty: LLTZ.T.t) (code: LLTZ.E.t) =
-  let input_ty = convert_type input_ty in
+and compile_contract (input_var: string) (code: LLTZ.E.t) =
   let code_instr = compile code in
   seq [ Slot.mock_value; Slot.let_ (`Ident input_var) ~in_:code_instr; ]
 
@@ -291,7 +299,11 @@ and compile_const constant =
 (* Compile a primitive by compiling its arguments, then applying the primitive to the arguments. *)
 and compile_prim primitive args =
   let args_instrs = List.map ~f:compile args in
-  trace ~flag:((Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))) (seq (List.rev_append (args_instrs)  [ prim (List.length args) 1 (convert_primitive primitive) ]))
+  match primitive with
+  | LLTZ.P.Failwith -> seq (List.rev_append (args_instrs) [Instruction.failwith])
+  | LLTZ.P.Never -> seq (List.rev_append (args_instrs) [Instruction.never])
+  | _ ->
+    trace ~flag:((Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))) (seq (List.rev_append (args_instrs)  [ prim (List.length args) 1 (convert_primitive primitive) ]))
 
 (* Compile a dereference by duplicating the value of the mutable variable on the stack. *)
 and compile_deref (var : string) = trace ~flag:(String.append "mut_var " var)  (Slot.dup (`Ident var))
@@ -417,7 +429,6 @@ and get_tuple_lengths tuple path =
 
 (* Expand a tuple expression to a sequence of instructions that get the nth element *)
 and expand_tuple tuple path =
-  Printf.printf "tuple: %s\n" (Sexp.to_string_hum (LLTZ.E.sexp_of_t tuple));
   Out_channel.flush stdout;
   let lengths = get_tuple_lengths tuple path in
   let gets =
@@ -441,37 +452,38 @@ and compile_let_tuple_in components rhs in_ =
 
 (* Compile lambda expression by compiling the body and creating a lambda instruction. *)
 and compile_lambda expr =
-  let Lambda { lam_var = Var var, lam_var_type; body } = expr.desc in
-
-  let lam_var = var, convert_type lam_var_type in
-  let return_type = convert_type body.type_ in
-
-  let environment =
-    LLTZ.Free_vars.free_vars_with_types expr
-    |> Map.map ~f:convert_type
-    |> Map.to_alist
-  in
-  seq
-    ([ lambda ~environment ~lam_var ~return_type (compile body) ]
-    @ List.map environment ~f:(fun (ident, _) -> seq [ Slot.dup (`Ident ident); apply ])
-    )
+  match expr.desc with
+  | Lambda { lam_var = Var var, lam_var_type; body } ->
+    let lam_var = var, convert_type lam_var_type in
+    let return_type = convert_type body.type_ in
+    let environment =
+      LLTZ.Free_vars.free_vars_with_types expr
+      |> Map.map ~f:convert_type
+      |> Map.to_alist
+    in
+    seq
+      ([ lambda ~environment ~lam_var ~return_type (compile body) ]
+      @ List.map environment ~f:(fun (ident, _) -> seq [ Slot.dup (`Ident ident); apply ])
+      )
+  | _ -> raise_s [%message "Lambda expected"]
 
 (* Compile lambda-rec expression by compiling the body and creating a lambda-rec instruction. *)
 and compile_lambda_rec expr =
-  let Lambda_rec { mu_var = Var mu, mu_type; lambda = {lam_var = Var var, lam_var_type; body} } = expr.desc in
+  match expr.desc with
+  | Lambda_rec { mu_var = Var mu, mu_type; lambda = {lam_var = Var var, lam_var_type; body} } ->
+    let lam_var = var, convert_type lam_var_type in
+    let return_type = convert_type body.type_ in
 
-  let lam_var = var, convert_type lam_var_type in
-  let return_type = convert_type body.type_ in
-
-  let environment =
-    LLTZ.Free_vars.free_vars_with_types expr
-    |> Map.map ~f:convert_type
-    |> Map.to_alist
-  in
-  seq
-    ([ lambda_rec ~environment ~lam_var ~mu ~return_type (compile body) ]
-    @ List.map environment ~f:(fun (ident, _) -> seq [ Slot.dup (`Ident ident); apply ])
-    )
+    let environment =
+      LLTZ.Free_vars.free_vars_with_types expr
+      |> Map.map ~f:convert_type
+      |> Map.to_alist
+    in
+    seq
+      ([ lambda_rec ~environment ~lam_var ~mu ~return_type (compile body) ]
+      @ List.map environment ~f:(fun (ident, _) -> seq [ Slot.dup (`Ident ident); apply ])
+      )
+  | _ -> raise_s [%message "Lambda_rec expected"]
 
 (* Compile an application by compiling a lambda and argument, then applying the EXEC instruction. *)
 and compile_app abs arg =
@@ -489,15 +501,19 @@ and compile_create_contract
   =
   let storage_ty = convert_type storage in
   let param_ty = convert_type param_ty in
+  Printf.eprintf "param_var: %s\n" param_var;
   let code_instr = seq[Slot.let_ (`Ident param_var)  ~in_:(compile code_body)] in
-  seq
-    [ compile delegate
-    ; compile initial_balance
-    ; compile initial_storage
-    ; create_contract ~storage:storage_ty ~parameter:param_ty ~code:(fun stack ->
-        M.seq (code_instr stack).instructions)
-    ; pair
-    ]
+  Printf.eprintf "woohoo\n";
+  trace ~flag:"create_contract" (
+    seq
+      [ compile delegate
+      ; compile initial_balance
+      ; compile initial_storage
+      ; create_contract ~storage:storage_ty ~parameter:param_ty ~code:(fun stack ->
+          M.seq (code_instr stack).instructions)
+      ; trace ~flag:"pair woohoo" (pair)
+      ]
+  )
 
 (* Compile for-each expression by compiling the collection, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the body. *)
 and compile_for_each collection var body =
@@ -628,9 +644,9 @@ let compile_to_micheline expr stack=
   let micheline = Michelson.Ast.seq (compiled stack).instructions in
   micheline
 
-let compile_contract_to_micheline input_var input_ty expr stack=
-  let compiled = compile_contract input_var input_ty expr in
-  let micheline = Michelson.Ast.seq (compiled stack).instructions in
+let compile_contract_to_micheline input_var expr=
+  let compiled = compile_contract input_var expr in
+  let micheline = Michelson.Ast.seq (compiled []).instructions in
   micheline
 
 

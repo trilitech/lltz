@@ -7,6 +7,8 @@ module T = struct
     ; range : Range.t
     }
 
+  and sapling_state = { memo : int }
+
   and desc =
     (* sum and product types *)
     | Tuple of t Row.t
@@ -35,8 +37,8 @@ module T = struct
     | Key_hash
     | Signature
     | Operation
-    | Sapling_state of { memo : int }
-    | Sapling_transaction of { memo : int }
+    | Sapling_state of sapling_state
+    | Sapling_transaction of sapling_state
     | Never
     | Bls12_381_g1
     | Bls12_381_g2

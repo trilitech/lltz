@@ -79,9 +79,9 @@ and convert_constant (const : LLTZ.E.constant) : Michelson.Ast.t =
   match const with
   | Unit -> Michelson.Ast.Instruction.unit
   | Bool b -> if b then Michelson.Ast.true_ else Michelson.Ast.false_
-  | Nat n -> Michelson.Ast.int (Z.to_int n)
-  | Int n -> Michelson.Ast.int (Z.to_int n)
-  | Mutez n -> Michelson.Ast.int (Z.to_int n)
+  | Nat n -> Michelson.Ast.int_of_z (n)
+  | Int n -> Michelson.Ast.int_of_z (n)
+  | Mutez n -> Michelson.Ast.int_of_z (n)
   | String s -> Michelson.Ast.string s
   | Key s -> Michelson.Ast.string s
   | Key_hash s -> Michelson.Ast.string s

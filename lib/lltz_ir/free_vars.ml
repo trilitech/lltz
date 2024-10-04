@@ -12,18 +12,25 @@ end
 let free_vars_with_types (expr : LLTZ.E.t) : LLTZ.T.t String.Map.t =
   let empty = String.Map.empty in
 
+  let () = Printexc.record_backtrace true in
+
   (* Merge two maps, ensuring consistent types for identical variables *)
   let merge fvs1 fvs2 =
     Map.merge_skewed fvs1 fvs2 ~combine:(fun ~key:ident type1 type2 ->
         if LLTZ.T.equal type1 type2 then
           type1
         else
+          try
           raise_s
             [%message
               "free_vars_with_types: inconsistent types in free variables"
                 (ident : string)
                 (type1 : LLTZ.T.t)
-                (type2 : LLTZ.T.t)]
+                (type2 : LLTZ.T.t)
+            ]
+          with e -> let backtrace = Printexc.get_backtrace () in
+          Printf.eprintf "An error occurred: %s\nBacktrace:\n%s\n" ((Exn.to_string e)) backtrace;
+          exit 1
       )
   in
 
@@ -79,19 +86,19 @@ let free_vars_with_types (expr : LLTZ.E.t) : LLTZ.T.t String.Map.t =
     | If_bool { condition; if_true; if_false } ->
       merge_all [loop condition bound_vars; loop if_true bound_vars; loop if_false bound_vars]
 
-    | If_none { subject; if_none; if_some = { lam_var = Var var, var_type; body } } ->
+    | If_none { subject; if_none; if_some = { lam_var = Var var; body } } ->
       let subject_fvs = loop subject bound_vars in
       let if_none_fvs = loop if_none bound_vars in
       let some_fvs = loop body (var :: bound_vars) in
       merge_all [subject_fvs; if_none_fvs; some_fvs]
 
-    | If_cons { subject; if_empty; if_nonempty = { lam_var1 = Var hd, var1_ty; lam_var2 = Var tl, var2_ty; body } } ->
+    | If_cons { subject; if_empty; if_nonempty = { lam_var1 = Var hd; lam_var2 = Var tl; body } } ->
       let subject_fvs = loop subject bound_vars in
       let if_empty_fvs = loop if_empty bound_vars in
       let nonempty_fvs = loop body (hd :: tl :: bound_vars) in
       merge_all [subject_fvs; if_empty_fvs; nonempty_fvs]
 
-    | If_left { subject; if_left = { lam_var = Var left, left_ty; body = l }; if_right = { lam_var = Var right, right_ty; body = r } } ->
+    | If_left { subject; if_left = { lam_var = Var left; body = l }; if_right = { lam_var = Var right; body = r } } ->
       let subject_fvs = loop subject bound_vars in
       let left_fvs = loop l (left :: bound_vars) in
       let right_fvs = loop r (right :: bound_vars) in
@@ -100,7 +107,7 @@ let free_vars_with_types (expr : LLTZ.E.t) : LLTZ.T.t String.Map.t =
     | While { cond; body } ->
       merge (loop cond bound_vars) (loop body bound_vars)
 
-    | While_left { cond; body = {lam_var = Var var, var_ty; body=body_lambda} } ->
+    | While_left { cond; body = {lam_var = Var var; body=body_lambda} } ->
       let cond_fvs = loop cond bound_vars in
       let body_fvs = loop body_lambda (var :: bound_vars) in
       merge cond_fvs body_fvs
@@ -112,21 +119,21 @@ let free_vars_with_types (expr : LLTZ.E.t) : LLTZ.T.t String.Map.t =
       let body_fvs = loop body (var :: bound_vars) in
       merge_all [init_fvs; cond_fvs; update_fvs; body_fvs]
 
-    | For_each { collection; body = { lam_var = Var var, var_ty; body } } ->
+    | For_each { collection; body = { lam_var = Var var; body } } ->
       merge (loop collection bound_vars) (remove (loop body (var :: bound_vars)) [var])
 
-    | Map { collection; map = {lam_var = Var var, var_ty; body=lam_body} } ->
+    | Map { collection; map = {lam_var = Var var; body=lam_body} } ->
       let collection_fvs = loop collection bound_vars in
       let body_fvs = loop lam_body (var :: bound_vars) in
       merge collection_fvs body_fvs
 
-    | Fold_left { collection; init = init_body; fold = {lam_var = Var var, var_ty; body = fold_body} } ->
+    | Fold_left { collection; init = init_body; fold = {lam_var = Var var; body = fold_body} } ->
       let collection_fvs = loop collection bound_vars in
       let init_fvs = loop init_body bound_vars in
       let fold_fvs = loop fold_body (var :: bound_vars) in
       merge_all [collection_fvs; init_fvs; fold_fvs]
 
-    | Fold_right { collection; init = init_body; fold = {lam_var = Var var, var_ty; body = fold_body} } ->
+    | Fold_right { collection; init = init_body; fold = {lam_var = Var var; body = fold_body} } ->
       let collection_fvs = loop collection bound_vars in
       let init_fvs = loop init_body bound_vars in
       let fold_fvs = loop fold_body (var :: bound_vars) in
@@ -162,6 +169,8 @@ let free_vars_with_types (expr : LLTZ.E.t) : LLTZ.T.t String.Map.t =
       let initial_balance_fvs = loop initial_balance bound_vars in
       let initial_storage_fvs = loop initial_storage bound_vars in
       merge_all [code_body_fvs; delegate_fvs; initial_balance_fvs; initial_storage_fvs]
+    
+    | Global_constant _ -> assert false
 
   and compile_row_free_vars_with_types row bound_vars =
     match row with

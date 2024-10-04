@@ -136,7 +136,7 @@ let map ?(range = dummy) collection ~map = create ~range (LLTZ.E.Map { collectio
     | LLTZ.T.List ty1 -> mk_type (LLTZ.T.List map.body.type_) ~range
     | LLTZ.T.Option ty1 -> mk_type (LLTZ.T.Option map.body.type_) ~range
     | LLTZ.T.Map (kty, ty1) -> mk_type (LLTZ.T.Map (kty, map.body.type_)) ~range
-    | _ -> raise_s [%message "Expected list, option, or map type" (collection.type_ : LLTZ.T.t)]
+    | _ -> raise_s [%message "Expected list, option, or map type" (collection.desc: LLTZ.E.desc) (collection.type_ : LLTZ.T.t)]
 )
 let fold_left ?(range = dummy) collection ~init ~fold = create ~range (LLTZ.E.Fold_left { collection; init; fold }) fold.body.type_
 let fold_right ?(range = dummy) collection ~init ~fold = create ~range (LLTZ.E.Fold_right { collection; init; fold }) fold.body.type_
@@ -154,7 +154,7 @@ let match_ ?(range = dummy) subject ~cases = create ~range (LLTZ.E.Match (subjec
       match leaf with
       | {lam_var = _; body} -> body.type_
     )
-  | None -> raise_s [%message "Expected a leaf with lambda" (cases : LLTZ.E.lambda LLTZ.R.t)]
+  | None -> raise_s [%message "Expected a leaf with lambda" (cases : LLTZ.E.lambda_typed LLTZ.R.t)]
   )
 let raw_michelson ?(range = dummy) michelson args return_ty = create ~range (LLTZ.E.Raw_michelson {michelson; args}) return_ty
 let create_contract ?(range = dummy) () ~storage ~code ~delegate ~initial_balance ~initial_storage =
@@ -368,7 +368,7 @@ let div_ ?(range = dummy) (lhs:Expr.t) (rhs:Expr.t) =
   (if_none ~range (ediv ~range lhs rhs) ~some:(
   let var_ty = tuple_ty ~range (Row.Node [Row.Leaf (None, lhs.type_); Row.Leaf(None, rhs.type_)]) in
   let var_name = Name.create () in
-  {lam_var=(Var var_name, var_ty ); 
+  {lam_var=Var var_name; 
   body = car (variable ~range (Var var_name) (var_ty ))})
   ~none:(failwith ~range (string ~range "DIV by 0")))
 
@@ -376,7 +376,7 @@ let mod_ ?(range = dummy) (lhs:Expr.t) (rhs:Expr.t) =
     (if_none ~range (ediv ~range lhs rhs) ~some:(
     let var_ty = tuple_ty ~range (Row.Node [Row.Leaf (None, lhs.type_); Row.Leaf(None, rhs.type_)]) in
     let var_name = Name.create () in
-    {lam_var=(Var var_name, var_ty ); 
+    {lam_var=Var var_name; 
     body = cdr (variable ~range (Var var_name) (var_ty ))})
     ~none:(failwith ~range (string ~range "MOD by 0")))
 
@@ -451,4 +451,4 @@ let convert_list (exprs: LLTZ.E.t list) : LLTZ.E.t Row.t =
   Row.Node converted_row_leaves
 
 let gen_name () = Name.create ()
-let annon_function var_name var_ty ~body : LLTZ.E.lambda = { lam_var = (Var (var_name), var_ty); body }
+let annon_function var_name var_ty ~body : LLTZ.E.lambda = { lam_var = Var (var_name); body }

@@ -626,10 +626,13 @@ let pp ppf t =
   t |> Micheline.strip_locations |> printable Prim.to_string |> print_expr ppf
 ;;
 
+let pp_string t = Format.asprintf "%a" pp t
+
 (* "Smart constructors" *)
 let seq ts : t = Seq ((), ts)
 let prim ?(arguments = []) ?(annot = []) prim : t = Prim ((), prim, arguments, annot)
 let int n : t = Int ((), Z.of_int n)
+let int_of_z z : t = Int ((), z)
 let string str : t = String ((), str)
 let bytes str : t = Bytes ((), str)
 let true_ : t = prim (C True)
@@ -658,12 +661,25 @@ module Type = struct
   let never = prim (T Never)
   let operation = prim (T Operation)
   let option ty = prim ~arguments:[ ty ] (T Option)
-  let or_ t1 t2 = prim ~arguments:[ t1; t2 ] (T Or)
+  let or_ ?(annot1 = None) ?(annot2 = None) t1 t2 =
+    match annot1, annot2 with
+    | None, None -> prim ~arguments:[ t1; t2 ] (T Or)
+    | Some a1, None -> prim ~annot:[a1] ~arguments:[ t1; t2 ] (T Or)  
+    | None, Some _ -> assert false
+    | Some a1, Some a2 -> prim ~annot:[a1; a2] ~arguments:[ t1; t2 ] (T Or)
 
-  let pair ts =
+  let pair ?(annot1 = None) ?(annot2 = None) t1 t2 =
+    match annot1, annot2 with
+    | None, None -> prim ~arguments:[ t1; t2 ] (T Pair)
+    | Some a1, None -> prim ~annot:[a1] ~arguments:[ t1; t2 ] (T Pair)  
+    | None, Some _ -> assert false
+    | Some a1, Some a2 -> prim ~annot:[a1; a2] ~arguments:[ t1; t2 ] (T Pair)
+
+  let pair_n ts = 
     assert (List.length ts >= 2);
     prim ~arguments:ts (T Pair)
   ;;
+
 
   let sampling_state n = prim ~arguments:[ n ] (T Sapling_state)
   let sapling_transaction n = prim ~arguments:[ n ] (T Sapling_transaction)
@@ -691,6 +707,7 @@ module Instruction = struct
   let apply = prim (I Apply)
   let balance = prim (I Balance)
   let blake2b = prim (I Blake2b)
+  let bytes = prim (I Bytes)
   let car = prim (I Car)
   let cast ty = prim ~arguments:[ ty ] (I Cast)
   let cdr = prim (I Cdr)
@@ -699,8 +716,8 @@ module Instruction = struct
   let compare = prim (I Compare)
   let concat = prim (I Concat)
   let cons = prim (I Cons)
-  let contract ty = prim ~arguments:[ ty ] (I Contract)
-  let create_contract ty1 ty2 instr1 = prim ~arguments:[ ty1; ty2; instr1 ] (I Create_contract) (*Any reason why this was just Contract before?*)
+  let contract annot ty = prim ~annot:(match annot with | None -> [] | Some a -> [a]) ~arguments:[ ty ] (I Contract)
+  let create_contract storage parameter instr1 = prim ~arguments:[ parameter; storage; instr1 ] (I Create_contract) (*Any reason why this was just Contract before?*)
   let dig_n n = prim ~arguments:[ int n ] (I Dig)
   let dip instr = prim ~arguments:[ seq instr ] (I Dip)
   let dip_n n instr = prim ~arguments:[ int n; seq instr ] (I Dip)
@@ -713,9 +730,9 @@ module Instruction = struct
   let emit opt ty_opt = 
     match opt, ty_opt with
     | None, None -> prim (I Emit)
-    | Some s, None -> prim ~arguments:[ string s ] (I Emit)
+    | Some s, None -> prim ~annot:[s] (I Emit)
     | None, Some ty -> prim ~arguments:[ ty ] (I Emit)
-    | Some s, Some ty -> prim ~arguments:[ string s; ty ] (I Emit)
+    | Some s, Some ty -> prim ~annot:[s] ~arguments:[ty ] (I Emit)
   let empty_big_map kty vty = prim ~arguments:[ kty; vty ] (I Empty_big_map)
   let empty_map kty vty = prim ~arguments:[ kty; vty ] (I Empty_map)
   let empty_set cty = prim ~arguments:[ cty ] (I Empty_set)
@@ -760,7 +777,12 @@ module Instruction = struct
   let open_chest = prim (I Open_chest)
   let or_ = prim (I Or)
   let pack = prim (I Pack)
-  let pair = prim (I Pair)
+  let pair ?(left_annot=None) ?(right_annot=None) () =
+    match left_annot, right_annot with
+    | None, None -> prim (I Pair)
+    | Some l, None -> prim ~annot:[l] (I Pair)
+    | None, Some r -> prim ~annot:[r] (I Pair)
+    | Some l, Some r -> prim ~annot:[l; r] (I Pair)
   let pair_n n = prim ~arguments:[ int n ] (I Pair)
   let pairing_check = prim (I Pairing_check)
   let push ty x = prim ~arguments:[ ty; x ] (I Push)
@@ -772,7 +794,7 @@ module Instruction = struct
   let self opt = 
     match opt with
     | None -> prim (I Self)
-    | Some s -> prim ~arguments:[ string s ] (I Self)
+    | Some s -> prim ~annot:[ s ] (I Self)
   let self_address = prim (I Self_address)
   let sender = prim (I Sender)
   let set_delegate = prim (I Set_delegate)
@@ -801,6 +823,7 @@ module Instruction = struct
   let voting_power = prim (I Voting_power)
   let xor = prim (I Xor)
   let int = prim (I Int)
+  let nat = prim (I Nat)
 
   (*Sequence*)
   (*Empty sequence*)
@@ -816,7 +839,7 @@ module Contract = struct
   let dummy code =
     { parameter = Type.unit
     ; storage = Type.unit
-    ; code = seq Instruction.([ drop ] @ code @ [ drop; unit; nil Type.operation; pair ])
+    ; code = seq Instruction.([ drop ] @ code @ [ drop; unit; nil Type.operation; pair ()])
     }
   ;;
 
