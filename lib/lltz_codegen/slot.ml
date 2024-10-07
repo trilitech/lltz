@@ -16,3 +16,4 @@ let is_assignable (from : t) ~(to_ : [< definable ]) =
   | `Heap, `Ident (_ : string) -> false
   | `Value, _ -> true
   | `Ident _, _ -> false
+;;
