@@ -4,4 +4,5 @@
   (libraries core lltz.michelson lltz.ir fmt)
   (inline_tests)
   (preprocess (pps ppx_jane))
+  (flags (:standard -w -26-27))
 )
