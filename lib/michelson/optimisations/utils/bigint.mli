@@ -1,5 +1,5 @@
 (* Copyright 2022-2023 Morum LLC, 2019-2022 Smart Chain Arena LLC *)
-type t = Big_int.big_int [@@deriving eq, ord, show, sexp]
+type t = Big_int.big_int [@@deriving eq, ord, show]
 
 val of_int : int -> t
 

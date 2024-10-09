@@ -8,8 +8,8 @@ let optimise_micheline (node : (unit, Michelson.Ast.Prim.t) Tezos_micheline.Mich
   let code = Oasis_core.Michelson.Of_micheline.instruction oasis_micheline in
 
   (* Optimise the code here *)
-  let optimised_code = Oasis_core.Michelson_rewriter.run (Oasis_core.Michelson_rewriter.simplify Michelson_base.Protocol.Paris) code in
+  let optimised_code = Oasis_core.Michelson_rewriter.run (Oasis_core.Michelson_rewriter.simplify) code in
 
-  let oasis_micheline_list = Oasis_core.Michelson.To_micheline.instruction Michelson_base.Protocol.Paris optimised_code in
+  let oasis_micheline_list = Oasis_core.Michelson.To_micheline.instruction optimised_code in
   let oasis_micheline = Oasis_core.Micheline.Sequence (oasis_micheline_list) in
   Smartpy_lltz_interopt.oasis_micheline_to_micheline oasis_micheline

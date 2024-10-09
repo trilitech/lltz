@@ -1,13 +1,12 @@
 (* Copyright 2022-2023 Morum LLC, 2019-2022 Smart Chain Arena LLC *)
-open Utils.Control
+(*open Utils.Control*)
 module Bigint = Utils.Bigint
 module Option = Utils.Option
 module List = Utils.List
-module Misc = Utils.Misc
-include Michelson_base.Type
+open Utils.Control
 include Michelson_base.Primitive
-include Michelson_base.Protocol
 include Michelson_base.Typing
+include Michelson_base.Type
 open Printf
 
 (*List operations*)
@@ -43,21 +42,6 @@ let split_at ?(err = "split_at") i l =
 (*End of list operations*)
 
 let full_types_and_tags = false
-
-let cata_mtype_stripped f =
-  cata_mtype (fun ?annot_type:_ ?annot_variable:_ x -> f x)
-
-let has_missing_type ~path =
-  cata_mtype_stripped (function
-    | MT_var t ->
-        [Printf.sprintf "Missing type in %s (unknown type variable: %s)" path t]
-    | x -> fold_mtype_f ( @ ) [] x)
-
-let remove_annots =
-  cata_mtype_stripped (function
-    | MT2 (Pair _, fst, snd) -> mt_pair fst snd
-    | MT2 (Or _, left, right) -> mt_or left right
-    | x -> mk_mtype x)
 
 type ad_step =
   | A
@@ -152,6 +136,7 @@ type ('instr, 'literal) literal_f =
 
 let sequence_literal_f =
   let open Result in
+  let open Utils.Control in
   function
   | (Int _ | Bool _ | String _ | Bytes _ | Unit | None_ | Constant _) as l ->
       Ok l
@@ -288,48 +273,6 @@ module MLiteral = struct
   let instr body = {literal = Instr body}
 
   let lambda_rec body = {literal = Lambda_rec body}
-
-  let rec to_michelson_string instr_to_string ~protect : literal -> string =
-    let continue ~protect = to_michelson_string instr_to_string ~protect in
-    let open Printf in
-    let prot ~protect s = if protect then sprintf "(%s)" s else s in
-    fun {literal} ->
-      match literal with
-      | Int i -> Big_int.string_of_big_int i
-      | Unit -> "Unit"
-      | String s -> sprintf "%S" s
-      | Bool true -> "True"
-      | Bool false -> "False"
-      | Pair (l, r) ->
-          prot ~protect
-            (sprintf "Pair %s %s" (continue ~protect:true l)
-               (continue ~protect:true r))
-      | None_ -> "None"
-      | Left l -> prot ~protect (sprintf "Left %s" (continue ~protect:true l))
-      | Right l -> prot ~protect (sprintf "Right %s" (continue ~protect:true l))
-      | Some_ l -> prot ~protect (sprintf "Some %s" (continue ~protect:true l))
-      | Bytes string_bytes -> "0x" ^ Hex.(show (of_string string_bytes))
-      | Seq xs ->
-          sprintf "{%s}"
-            (String.concat "; "
-               (List.filter_map
-                  (fun x ->
-                    let x = continue ~protect:false x in
-                    if x = "" then None else Some x)
-                  xs))
-      | AnyMap xs ->
-          let f (k, v) = {literal = Elt (k, v)} in
-          let xs = {literal = Seq (List.map f xs)} in
-          continue ~protect xs
-      | Elt (k, v) ->
-          sprintf "Elt %s %s" (continue ~protect:true k)
-            (continue ~protect:true v)
-      | Instr i -> instr_to_string i
-      | Lambda_rec i ->
-          prot ~protect (sprintf "Lambda_rec %s" (instr_to_string i))
-      | Constant s -> prot ~protect (sprintf "constant %S" s)
-
-  let to_michelson_string = to_michelson_string ~protect:true
 end
 
 let string_of_ad_path p =
@@ -338,117 +281,6 @@ let string_of_ad_path p =
     | D -> "D"
   in
   String.concat "" (List.map f p)
-
-let insert_field_annot a e =
-  let open Sexplib.Sexp in
-  match a with
-  | None | Some "" -> e
-  | Some a -> (
-      let a = Atom ("%" ^ a) in
-      match e with
-      | Atom s -> List [Atom s; a]
-      | List (Atom s :: xs) -> List (Atom s :: a :: xs)
-      | _ -> assert false)
-
-let s_expression_of_mtype ?full ?human =
-  let is_full = full = Some () in
-  let is_human = human = Some () && not is_full in
-  let open Sexplib.Sexp in
-  let f ?annot_type ?annot_variable mt =
-    let annots =
-      let get pref = function
-        | None -> None
-        | Some s -> Some (Atom (pref ^ s))
-      in
-      somes [get ":" annot_type; get "@" annot_variable]
-    in
-    let mk = function
-      | [] -> assert false
-      | [x] -> x
-      | xs -> List xs
-    in
-    let atom s = mk (Atom s :: annots) in
-    let call s l = List ((Atom s :: annots) @ l) in
-    match annot_variable with
-    | Some a when is_human -> (
-        match Base.String.split ~on:'.' a with
-        | [] -> assert false
-        | hd :: xs ->
-            let rec collapse = function
-              | ("left" | "right") :: xs -> collapse xs
-              | [last] -> Atom ("@" ^ hd ^ "%" ^ last)
-              | _ -> Atom ("@" ^ a)
-            in
-            collapse xs)
-    | _ -> (
-        match mt with
-        | MT0 t ->
-            let s, memo = string_of_type0 t in
-            Option.cata (atom s) (fun memo -> call s [Atom memo]) memo
-        | MT1 (t, t1) -> call (string_of_type1 t) [t1]
-        | MT2 (t, t1, t2) ->
-            let t, a1, a2 = string_of_type2 t in
-            call t [insert_field_annot a1 t1; insert_field_annot a2 t2]
-        | MT_var s -> call "missing_type_conversion" [Atom s])
-  in
-  cata_mtype f
-
-let buffer_mtype_sexp ~html b =
-  let rec buffer : Sexplib.Sexp.t -> _ = function
-    | Atom s ->
-        Buffer.add_string b (Base.Sexp.Private.mach_maybe_esc_str s)
-        (* See how this is used in `_opam/lib/sexplib0/sexp.ml` *)
-    | List [] -> Buffer.add_string b "()"
-    | List (h :: t) ->
-        let is_partial =
-          match h with
-          | Atom "missing_type_conversion" when html -> true
-          | _ -> false
-        in
-        Buffer.add_char b '(';
-        if is_partial then Buffer.add_string b "<span class='partial-type'>";
-        buffer h;
-        List.iter
-          (fun elt ->
-            Buffer.add_char b ' ';
-            buffer elt)
-          t;
-        if is_partial then Buffer.add_string b "</span>";
-        Buffer.add_char b ')'
-  in
-  buffer
-
-let buffer_mtype ?full ?human ?protect ?annot ~html b t =
-  let s_expr = s_expression_of_mtype ?full ?human t in
-  let s_expr = insert_field_annot annot s_expr in
-  let sexp_to_string_flat = buffer_mtype_sexp ~html b in
-  match (protect, s_expr) with
-  | None, List l -> Misc.buffer_concat b " " sexp_to_string_flat l
-  | None, Atom a -> Buffer.add_string b (Base.Sexp.Private.mach_maybe_esc_str a)
-  | Some (), any -> sexp_to_string_flat any
-
-let string_of_mtype ?full ?human ?protect ?annot ~html t =
-  Misc.with_buffer (fun b ->
-      buffer_mtype ?full ?human ?protect ?annot ~html b t)
-
-let string_of_tparameter ~html (tparameter, annot) =
-  string_of_mtype ~protect:() ~html ?annot tparameter
-
-let memo_string_of_mtype_human =
-  Misc.memoize ~clear_after:1000 (fun _f (full, se) ->
-      string_of_mtype
-        ?full:(if full then Some () else None)
-        ~human:() ~html:false se)
-
-let memo_string_of_mtype_human ?full t =
-  memo_string_of_mtype_human (full = Some (), t)
-
-let string_of_ok_stack ?full stack =
-  String.concat " : " (List.map (memo_string_of_mtype_human ?full) stack)
-
-let string_of_stack ?full = function
-  | Stack_ok stack -> string_of_ok_stack ?full stack
-  | Stack_failed -> "FAILED"
 
 let strip_annots {mt} = mk_mtype mt
 
@@ -488,22 +320,6 @@ let tcata {f_tinstr; f_tliteral} =
 let cata_tinstr alg = fst (tcata alg)
 
 let cata_tliteral alg = snd (tcata alg)
-
-(* Paramorphisms on instructions and literals. *)
-let para_alg ~p_instr ~p_literal =
-  let f_instr i = ({instr = map_instr_f fst fst i}, p_instr i) in
-  let f_literal l = ({literal = map_literal_f fst fst l}, p_literal l) in
-  {f_instr; f_literal}
-
-let _size_tinstr, _size_tliteral =
-  let f_tinstr ~stack_in:_ ~stack_out:_ = fold_instr_f ( + ) ( + ) 1 in
-  let f_tliteral ~t:_ = fold_literal_f ( + ) ( + ) 1 in
-  tcata {f_tinstr; f_tliteral}
-
-let erase_types_instr, erase_types_literal =
-  let f_tinstr ~stack_in:_ ~stack_out:_ instr = {instr} in
-  let f_tliteral ~t:_ literal = {literal} in
-  tcata {f_tinstr; f_tliteral}
 
 type instr_spec = {
     name : string
@@ -1159,7 +975,7 @@ let mi_ediv =
         Some [mt_option (mt_pair mt_nat mt_mutez)]
     | _ -> None)
 
-let mi_not ~protocol:_ =
+let mi_not :_ =
   mk_spec_basic "NOT" ~commutative:() ~arities:(1, 1) (function
     | {mt = MT0 Bool} :: _ -> Some [mt_bool]
     | {mt = MT0 Nat} :: _ -> Some [mt_int]
@@ -1167,7 +983,7 @@ let mi_not ~protocol:_ =
     | {mt = MT0 Bytes} :: _ -> Some [mt_bytes]
     | _ -> None)
 
-let mi_and ~protocol:_ =
+let mi_and :_ =
   mk_spec_basic "AND" ~commutative:() ~arities:(2, 1) (function
     | {mt = MT0 Bool} :: {mt = MT0 Bool} :: _ -> Some [mt_bool]
     | {mt = MT0 Nat} :: {mt = MT0 Nat} :: _ -> Some [mt_nat]
@@ -1175,22 +991,22 @@ let mi_and ~protocol:_ =
     | {mt = MT0 Bytes} :: {mt = MT0 Bytes} :: _ -> Some [mt_bytes]
     | _ -> None)
 
-let mi_or ~protocol:_ =
+let mi_or :_ =
   mk_spec_basic "OR" ~commutative:() ~arities:(2, 1) (function
     | {mt = MT0 Bool} :: {mt = MT0 Bool} :: _ -> Some [mt_bool]
     | {mt = MT0 Nat} :: {mt = MT0 Nat} :: _ -> Some [mt_nat]
     | {mt = MT0 Bytes} :: {mt = MT0 Bytes} :: _ -> Some [mt_bytes]
     | _ -> None)
 
-let mi_xor ~protocol = {(mi_or ~protocol) with name = "XOR"}
+let mi_xor  = {(mi_or ) with name = "XOR"}
 
-let mi_shift_left ~protocol:_ =
+let mi_shift_left :_ =
   mk_spec_basic "LSL" ~arities:(2, 1) (function
     | {mt = MT0 Nat} :: {mt = MT0 Nat} :: _ -> Some [mt_nat]
     | {mt = MT0 Bytes} :: {mt = MT0 Nat} :: _ -> Some [mt_bytes]
     | _ -> None)
 
-let mi_shift_right ~protocol = {(mi_shift_left ~protocol) with name = "LSR"}
+let mi_shift_right  = {(mi_shift_left ) with name = "LSR"}
 
 let mi_unit = mk_spec_const "UNIT" mt_unit
 
@@ -1512,27 +1328,6 @@ let mi_voting_power =
     | {mt = MT0 Key_hash} :: _ -> Some [mt_nat]
     | _ -> None)
 
-let typecheck_view ~tstorage ({tparameter; onchain_code; offchain_code} as v) =
-  let check offchain code =
-    let stack =
-      match tparameter with
-      | None ->
-          let stack =
-            if offchain
-            then Stack_ok [{tstorage with annot_variable = Some "storage"}]
-            else initial_stack ~tparameter:mt_unit ~tstorage
-          in
-          stack
-      | Some tparameter -> initial_stack ~tparameter ~tstorage
-    in
-    code (Ok stack)
-  in
-  {
-    v with
-    onchain_code = Option.map (check false) onchain_code
-  ; offchain_code = (check true) offchain_code
-  }
-
 let mi_create_contract =
   let rule ~tparameter:_ stack = function
     | MIcreate_contract {tparameter; tstorage; code; views} -> (
@@ -1543,7 +1338,7 @@ let mi_create_contract =
             let code =
               code (Ok (initial_stack ~tparameter:(fst tparameter) ~tstorage))
             in
-            let views = List.map (typecheck_view ~tstorage) views in
+            let views = [] in
             if unifiable_types storage tstorage
             then
               let tinstr =
@@ -1581,7 +1376,7 @@ let spec_of_prim0 p =
   | Unit_ -> mi_unit
   | Self _ -> mi_self
 
-let spec_of_prim1 ~protocol p =
+let spec_of_prim1  p =
   let mk name =
     let t1, t = Michelson_base.Typing.type_prim1 p in
     let f = function
@@ -1599,7 +1394,7 @@ let spec_of_prim1 ~protocol p =
   | Keccak -> mk "KECCAK"
   | Sha3 -> mk "SHA3"
   | Abs -> mk "ABS"
-  | Not -> mi_not ~protocol
+  | Not -> mi_not 
   | Contract (_, t) -> mi_contract t
   | Cast t -> mi_cast t
   | Emit (_tag, ty) -> mi_emit ty
@@ -1631,7 +1426,7 @@ let spec_of_prim1 ~protocol p =
   | Size -> mi_size
   | Car | Cdr -> assert false
 
-let spec_of_prim2 ~protocol p =
+let spec_of_prim2  p =
   let mk ?commutative name =
     match Michelson_base.Typing.type_prim2 p with
     | [((t1, t2), t)] ->
@@ -1654,8 +1449,8 @@ let spec_of_prim2 ~protocol p =
         mk_spec_basic name ?commutative ~arities:(2, 1) f
   in
   match p with
-  | Lsl -> mi_shift_left ~protocol
-  | Lsr -> mi_shift_right ~protocol
+  | Lsl -> mi_shift_left 
+  | Lsr -> mi_shift_right 
   | Add -> mk ~commutative:() "ADD"
   | Sub -> mi_sub
   | Sub_mutez -> mk "SUB_MUTEZ"
@@ -1669,9 +1464,9 @@ let spec_of_prim2 ~protocol p =
   | Compare -> mi_compare
   | Pair (annot_fst, annot_snd) -> mi_pair ?annot_fst ?annot_snd ()
   | Cons -> mi_cons
-  | And -> mi_and ~protocol
-  | Or -> mi_or ~protocol
-  | Xor -> mi_xor ~protocol
+  | And -> mi_and 
+  | Or -> mi_or 
+  | Xor -> mi_xor 
   | Get -> mi_get
   | Updaten n -> mi_updaten n
   | Mem -> mi_mem
@@ -1698,10 +1493,10 @@ let spec_of_prim3 p =
   | Get_and_update -> mi_get_and_update
   | Open_chest -> mi_open_chest
 
-let spec_of_instr ~protocol = function
+let spec_of_instr  = function
   | MI0 p -> spec_of_prim0 p
-  | MI1 p -> spec_of_prim1 ~protocol p
-  | MI2 p -> spec_of_prim2 ~protocol p
+  | MI1 p -> spec_of_prim1  p
+  | MI2 p -> spec_of_prim2  p
   | MI3 p -> spec_of_prim3 p
   | MI1_fail Failwith -> mi_failwith
   | MI1_fail Never -> mi_never
@@ -1738,31 +1533,11 @@ let spec_of_instr ~protocol = function
   | MIcomment _ -> mi_comment
   | MIerror s -> mi_error s
 
-let is_commutative ~protocol instr = (spec_of_instr ~protocol instr).commutative
+let is_commutative  instr = (spec_of_instr  instr).commutative
 
-let name_of_instr ~protocol instr = (spec_of_instr ~protocol instr).name
+let name_of_instr  instr = (spec_of_instr  instr).name
 
 (** {1 Type checking} *)
-
-(* Recognize lists of Elts and lists of Instrs. *)
-let sanitize_instr, sanitize_literal =
-  let f_literal : _ literal_f -> _ = function
-    | Seq ({literal = Elt _} :: _ as xs) ->
-        let f = function
-          | {literal = Elt (k, v)} -> (k, v)
-          | _ -> failwith "sanitize: Elt followed by non-Elt"
-        in
-        {literal = AnyMap (List.map f xs)}
-    | Seq ({literal = Instr _} :: _ as xs) ->
-        let f = function
-          | {literal = Instr i} -> i
-          | _ -> failwith "sanitize: instruction followed by non-instruction"
-        in
-        {literal = Instr {instr = MIseq (List.map f xs)}}
-    | literal -> {literal}
-  in
-  let f_instr instr = {instr} in
-  cata {f_instr; f_literal}
 
 (* Match a comb type against the given tuple. *)
 let rec match_comb t xs =
@@ -1779,199 +1554,7 @@ let rec comb_literal = function
       {tliteral = Pair (x, xs); t = Result.map2 mt_pair x.t xs.t}
   | _ -> assert false
 
-let typecheck_literal_f ~tparameter:_ (literal : _ literal_f)
-    (t : mtype Result.t) =
-  let tliteral' :
-      (stack Result.t -> tinstr, mtype Result.t -> tliteral) literal_f =
-    map_literal_f snd snd literal
-  in
-  let r =
-    let open Result in
-    let* t = map_error (fun _ -> "type error") t in
-    match (t.mt, tliteral') with
-    | _, (Constant _ as l) -> return l
-    | MT0 Unit, (Unit as l)
-    | MT0 Bool, (Bool _ as l)
-    | MT0 Nat, (Int _ as l)
-    | MT0 Int, (Int _ as l)
-    | MT0 Mutez, (Int _ as l)
-    | MT0 String, (String _ as l)
-    | MT0 Bytes, (Bytes _ as l)
-    | MT0 Chain_id, (Bytes _ as l)
-    | MT0 Timestamp, ((Int _ | String _) as l)
-    | MT0 Address, ((Bytes _ | String _) as l)
-    | MT0 Key, ((Bytes _ | String _) as l)
-    | MT0 Key_hash, ((Bytes _ | String _) as l)
-    | MT0 Signature, ((Bytes _ | String _) as l)
-    | MT0 (Sapling_state _), (Seq [] as l)
-    | MT0 (Sapling_transaction _), (String "FAKE_SAPLING_TRANSACTION" as l)
-    | MT0 Bls12_381_g1, (Bytes _ as l)
-    | MT0 Bls12_381_g2, (Bytes _ as l)
-    | MT0 Bls12_381_fr, (Bytes _ as l)
-    | MT0 Chest_key, (Bytes _ as l)
-    | MT0 Chest, (Bytes _ as l) -> return l
-    | MT1 (Contract, _), (String _ as l) ->
-        (* needed for scenarios: "Contract_*" *) return l
-    | MT2 (Pair _, fst, snd), Pair (x1, x2) ->
-        return (Pair (x1 (Ok fst), x2 (Ok snd)))
-    | MT2 (Pair _, _, _), Seq xs ->
-        let xs = List.map (fun (t, x) -> x (Ok t)) (match_comb t xs) in
-        return (comb_literal xs).tliteral
-    | MT2 (Or _, left, _), Left x -> return (Left (x (Ok left)))
-    | MT2 (Or _, _, right), Right x -> return (Right (x (Ok right)))
-    | MT1 (Option, t), Some_ x -> return (Some_ (x (Ok t)))
-    | MT1 (Option, _), None_ -> return None_
-    | MT1 ((Set | List), t), Seq xs ->
-        return (Seq (List.map (fun x -> x (Ok t)) xs))
-    | MT2 ((Map | Big_map), _tk, _tv), Seq [] -> return (AnyMap [])
-    | MT2 ((Map | Big_map), _tk, _tv), Seq (_ :: _) ->
-        assert false (* eliminated by 'sanitize' *)
-    | MT2 ((Map | Big_map), tk, tv), AnyMap xs ->
-        let f (k, v) = (k (Ok tk), v (Ok tv)) in
-        return (AnyMap (List.map f xs))
-    | MT2 (Lambda, t_in, _), Instr i ->
-        return (Instr (i (Ok (Stack_ok [t_in]))))
-    | MT2 (Lambda, _t1, _), Seq (_ :: _) ->
-        assert false (* eliminated by 'sanitize' *)
-    | MT2 (Lambda, t_in, _), Lambda_rec i ->
-        return (Lambda_rec (i (Ok (Stack_ok [t_in; t]))))
-    | ( ( MT0
-            ( Unit
-            | Bool
-            | Nat
-            | Int
-            | Mutez
-            | String
-            | Bytes
-            | Chain_id
-            | Timestamp
-            | Address
-            | Key
-            | Key_hash
-            | Signature
-            | Operation
-            | Sapling_state _
-            | Sapling_transaction _
-            | Never
-            | Bls12_381_g1
-            | Bls12_381_g2
-            | Bls12_381_fr
-            | Chest_key
-            | Chest )
-        | MT1 ((Option | List | Set | Contract | Ticket), _)
-        | MT2 ((Pair _ | Or _ | Lambda | Map | Big_map), _, _)
-        | MT_var _ )
-      , ( Int _
-        | Bool _
-        | String _
-        | Bytes _
-        | Unit
-        | Pair _
-        | None_
-        | Left _
-        | Right _
-        | Some_ _
-        | Seq _
-        | Elt _
-        | AnyMap _
-        | Instr _
-        | Lambda_rec _ ) ) ->
-        let msg =
-          let literal = map_literal_f fst fst literal in
-          let l = MLiteral.to_michelson_string show_instr {literal} in
-          let t = string_of_mtype ~html:false t in
-          sprintf "Literal %s does not have type %s." l t
-        in
-        error msg
-  in
-  match r with
-  | Ok tliteral ->
-      let r =
-        sequence_literal_f
-          (map_literal_f (fun {stack_out} -> stack_out) (fun {t} -> t) tliteral)
-      in
-      let t =
-        match Result.get_error r with
-        | Some error -> Error (Printf.sprintf "type error in literal %s" error)
-        | None -> t
-      in
-      {tliteral; t}
-  | Error msg ->
-      let err = Error "type error in literal" in
-      let tliteral =
-        map_literal_f (fun f -> f err) (fun f -> f err) tliteral'
-      in
-      {tliteral; t = Error msg}
-
-let typecheck_instr_f ~protocol ~tparameter i (stack_in : stack Result.t) :
-    tinstr =
-  let i : (stack Result.t -> tinstr, mtype Result.t -> tliteral) instr_f =
-    map_instr_f snd snd i
-  in
-  let on_error_stack stack_in msg =
-    let err = Error "outer error" in
-    let tinstr = map_instr_f (fun x -> x err) (fun x -> x err) i in
-    {tinstr; stack_in; stack_out = Error msg}
-  in
-  match (stack_in, i) with
-  | _, (MIcomment _ as tinstr) -> {tinstr; stack_in; stack_out = stack_in}
-  | Ok (Stack_ok stack), _ ->
-      let {rule} = spec_of_instr ~protocol i in
-      let okify f x = f (Ok x) in
-      let tinstr, stack_out = rule ~tparameter stack (map_instr_f id okify i) in
-      {tinstr; stack_in; stack_out}
-  | Ok Stack_failed, _ -> on_error_stack stack_in "instruction on failed stack"
-  | Error _, _ -> on_error_stack stack_in "previous error"
-
-let typecheck_alg ~protocol ~tparameter =
-  let p_instr = typecheck_instr_f ~protocol ~tparameter in
-  let p_literal = typecheck_literal_f ~tparameter in
-  para_alg ~p_instr ~p_literal
-
-let typecheck_instr ~protocol ~tparameter stack i =
-  let i = sanitize_instr i in
-  snd (cata_instr (typecheck_alg ~protocol ~tparameter) i) (Ok stack)
-
-let typecheck_literal ~protocol ~tparameter t l =
-  let l = sanitize_literal l in
-  snd (cata_literal (typecheck_alg ~protocol ~tparameter) l) (Ok t)
-
-let has_error ~path ~accept_missings =
-  let has_missing_type t =
-    if accept_missings then [] else has_missing_type ~path t
-  in
-  let f_tinstr ~stack_in:_ ~stack_out instr =
-    match stack_out with
-    | Error s -> [s]
-    | Ok _ -> (
-        match instr with
-        | MIerror s -> [s]
-        | MI0 (Nil t)
-        | MI0 (Empty_set t)
-        | MI0 (None_ t)
-        | MI1 (Left (_, _, t))
-        | MI1 (Right (_, _, t))
-        | MI1 (Contract (_, t))
-        | MI1 (Unpack t) -> has_missing_type t
-        | MI0 (Empty_bigmap (k, v) | Empty_map (k, v)) ->
-            has_missing_type k @ has_missing_type v
-        | MIpush (t, _) -> has_missing_type t
-        | MImich {typesIn; typesOut} ->
-            List.concat_map has_missing_type typesIn
-            @ List.concat_map has_missing_type typesOut
-        | MIlambda (t1, t2, _i) as x ->
-            has_missing_type t1 @ has_missing_type t2
-            @ fold_instr_f ( @ ) (curry fst) [] x
-        | x -> fold_instr_f ( @ ) (curry fst) [] x)
-  in
-  let f_tliteral ~t _ =
-    match t with
-    | Error msg -> [msg]
-    | Ok t -> has_missing_type t
-  in
-  cata_tinstr {f_tinstr; f_tliteral}
-
-let name_of_instr_exn ~protocol = function
+let name_of_instr_exn  = function
   | ( MI0
         ( Sender
         | Source
@@ -2074,7 +1657,7 @@ let name_of_instr_exn ~protocol = function
     | MIsetField _
     | MIconcat1
     | MIconcat2
-    | MIconcat_unresolved ) as instr -> name_of_instr ~protocol instr
+    | MIconcat_unresolved ) as instr -> name_of_instr  instr
   | MIdip _ -> "DIP"
   | MIdipn _ -> "DIPN"
   | MIloop _ -> "LOOP"
@@ -2101,377 +1684,6 @@ let two_field_annots = function
   | None, Some a2 -> ["%"; "%" ^ a2]
   | None, None -> []
 
-let display_view display_instr {name; tparameter; treturn; onchain_code} =
-  match onchain_code with
-  | None -> ""
-  | Some code ->
-      sprintf "\nview\n  %S %s %s\n%s;" name
-        (string_of_mtype ~protect:() ~html:false
-           (Option.default mt_unit tparameter))
-        (string_of_mtype ~protect:() ~html:false treturn)
-        (display_instr code)
-
-let buffer_f ~protocol ~html ~show_stack ~new_line b =
-  let new_line = if new_line then "\n" else "" in
-  let f_tliteral ~t:_ x indent protect =
-    let out_str x = Buffer.add_string b x in
-    let spaces n =
-      if html
-      then String.concat "" (List.init n (fun _ -> "&nbsp;"))
-      else String.make n ' '
-    in
-    let do_indent () =
-      Buffer.add_string b (spaces (if new_line = "" then 1 else indent))
-    in
-    let line_str x =
-      do_indent ();
-      out_str x;
-      out_str new_line
-    in
-    let prot = Misc.buffer_protect b protect "(" ")" in
-    let elt (k, v) =
-      Buffer.add_string b "Elt ";
-      k indent true;
-      Buffer.add_string b " ";
-      v indent true
-    in
-    let sub1 name x =
-      prot (fun () ->
-          Buffer.add_string b name;
-          Buffer.add_string b " ";
-          x indent true)
-    in
-    match x with
-    | Int i -> Buffer.add_string b (Big_int.string_of_big_int i)
-    | Unit -> Buffer.add_string b "Unit"
-    | String s -> bprintf b "%S" s
-    | Bool true -> Buffer.add_string b "True"
-    | Bool false -> Buffer.add_string b "False"
-    | Pair (l, r) ->
-        prot (fun () ->
-            Buffer.add_string b "Pair ";
-            l indent true;
-            Buffer.add_string b " ";
-            r indent true)
-    | None_ -> Buffer.add_string b "None"
-    | Left x -> sub1 "Left" x
-    | Right x -> sub1 "Right" x
-    | Some_ x -> sub1 "Some" x
-    | Bytes string_bytes ->
-        Buffer.add_string b "0x";
-        Buffer.add_string b Hex.(show (of_string string_bytes))
-    | Seq xs ->
-        Misc.buffer_protect b true "{" "}" (fun () ->
-            Misc.buffer_concat b "; " (fun x -> x indent false) xs)
-    | Elt (k, v) -> elt (k, v)
-    | AnyMap xs ->
-        Misc.buffer_protect b true "{" "}" (fun () ->
-            Misc.buffer_concat b "; " elt xs)
-    | Instr i -> i ~sub:false (indent + 2)
-    | Lambda_rec i ->
-        prot (fun () ->
-            line_str "Lambda_rec ";
-            i ~sub:false (indent + 2))
-    | Constant hash -> bprintf b "(constant %S)" hash
-  in
-  let f_tinstr ~stack_in:_ ~stack_out x ~sub indent =
-    let spaces n =
-      if html
-      then String.concat "" (List.init n (fun _ -> "&nbsp;"))
-      else String.make n ' '
-    in
-    let out x = kbprintf (fun _ -> ()) b x in
-    let out_str x = Buffer.add_string b x in
-    let do_indent () =
-      Buffer.add_string b (spaces (if new_line = "" then 1 else indent))
-    in
-    let line x =
-      do_indent ();
-      kbprintf (fun _ -> out_str new_line) b x
-    in
-    let line_str x =
-      do_indent ();
-      out_str x;
-      out_str new_line
-    in
-    let with_stack s =
-      do_indent ();
-      let l1 = Buffer.length b in
-      s ();
-      let l2 = Buffer.length b in
-      out ";";
-      if show_stack then out_str (spaces (max 0 (10 - (l2 - l1))))
-    in
-    let span className text =
-      if html then sprintf "<span class='%s'>%s</span>" className text else text
-    in
-    let sub1 name code =
-      line_str name;
-      code ~sub:true (indent + 2);
-      out_str ";"
-    in
-    let sub2 name l r =
-      line_str name;
-      l ~sub:true (indent + 2);
-      out_str new_line;
-      r ~sub:true (indent + 2);
-      out_str ";"
-    in
-    (match x with
-    | MIseq [] ->
-        do_indent ();
-        out_str "{}"
-    | MIseq l ->
-        do_indent ();
-        out_str "{";
-        List.iter
-          (fun i ->
-            out_str new_line;
-            i ~sub:false (indent + 2))
-          l;
-        out_str new_line;
-        do_indent ();
-        out_str "}";
-        if not sub then out_str ";"
-    | MIdip code -> sub1 "DIP" code
-    | MIdipn (n, code) -> sub1 (sprintf "DIP %i" n) code
-    | MIloop code -> sub1 "LOOP" code
-    | MIloop_left code -> sub1 "LOOP_LEFT" code
-    | MIiter code -> sub1 "ITER" code
-    | MImap code -> sub1 "MAP" code
-    | MIif_left (l, r) -> sub2 "IF_LEFT" l r
-    | MIif_none (l, r) -> sub2 "IF_NONE" l r
-    | MIif_cons (l, r) -> sub2 "IF_CONS" l r
-    | MIif (l, r) -> sub2 "IF" l r
-    | MIcomment comments ->
-        let lines =
-          List.concat (List.map (String.split_on_char '\n') comments)
-        in
-        List.iteri
-          (fun i line ->
-            if i <> 0 then out_str new_line;
-            do_indent ();
-            out_str (span "comment" (sprintf "# %s" line)))
-          lines
-    | MIdig n -> with_stack (fun () -> out "DIG %d" n)
-    | MIdug n -> with_stack (fun () -> out "DUG %d" n)
-    | MIdropn n -> with_stack (fun () -> out "DROP %d" n)
-    | MIdup 1 -> with_stack (fun () -> out_str "DUP")
-    | MIunpair [true; true] -> with_stack (fun () -> out_str "UNPAIR")
-    | MI0 (Sapling_empty_state {memo}) ->
-        with_stack (fun () -> out "SAPLING_EMPTY_STATE %d" memo)
-    | MIdup n -> with_stack (fun () -> out "DUP %d" n)
-    | MIunpair n -> with_stack (fun () -> out "UNPAIR %s" (unpair_arg n))
-    | MIpairn n -> with_stack (fun () -> out "PAIR %d" n)
-    | MI1 (Getn n) -> with_stack (fun () -> out "GET %d" n)
-    | MI2 (Updaten n) -> with_stack (fun () -> out "UPDATE %d" n)
-    | MI2 (View (name, t)) ->
-        with_stack (fun () ->
-            out "VIEW %S %s" name (string_of_mtype ~protect:() ~html t))
-    | MIerror error ->
-        do_indent ();
-        out_str (span "partial-type" (sprintf "MIerror: %s" error))
-    | MI0 (Empty_set t)
-    | MI0 (Nil t)
-    | MI0 (None_ t)
-    | MI1 (Contract (None, t))
-    | MI1 (Unpack t)
-    | MI1 (Cast t) ->
-        with_stack (fun () ->
-            out_str (name_of_instr_exn ~protocol x);
-            out_str " ";
-            buffer_mtype ~html ~protect:() b t)
-    | MI1 (Rename a) ->
-        with_stack (fun () ->
-            out_str (name_of_instr_exn ~protocol x);
-            match a with
-            | None -> ()
-            | Some a ->
-                out_str " @";
-                out_str a)
-    | MI0 (Empty_bigmap (k, v) | Empty_map (k, v)) ->
-        with_stack (fun () ->
-            out_str (name_of_instr_exn ~protocol x);
-            out_str " ";
-            out_str
-              (String.concat " "
-                 [
-                   string_of_mtype ~protect:() ~html k
-                 ; string_of_mtype ~protect:() ~html v
-                 ]))
-    | MI1 (Left (a1, a2, t) | Right (a1, a2, t)) ->
-        with_stack (fun () ->
-            out_str
-              (String.concat " "
-                 (name_of_instr_exn ~protocol x :: two_field_annots (a1, a2)));
-            out_str " ";
-            out_str (string_of_mtype ~protect:() ~html t))
-    | MI2 (Pair (a1, a2)) ->
-        with_stack (fun () ->
-            out_str
-              (String.concat " "
-                 (name_of_instr_exn ~protocol x :: two_field_annots (a1, a2))))
-    | MI1 (Contract (Some ep, t)) ->
-        with_stack (fun () ->
-            out "CONTRACT %%%s %s" ep (string_of_mtype ~protect:() ~html t))
-    | MIpush (t, l) ->
-        with_stack (fun () ->
-            out "PUSH %s " (string_of_mtype ~protect:() ~html t);
-            l indent true)
-    | MI0 (Self (Some entrypoint)) ->
-        with_stack (fun () -> out "SELF %%%s" entrypoint)
-    | MIlambda (t1, t2, l) ->
-        line "LAMBDA";
-        line "  %s" (string_of_mtype ~protect:() ~html t1);
-        line "  %s" (string_of_mtype ~protect:() ~html t2);
-        l ~sub:true (indent + 2);
-        out_str ";"
-    | MIlambda_rec (t1, t2, l) ->
-        line "LAMBDA_REC";
-        line "  %s" (string_of_mtype ~protect:() ~html t1);
-        line "  %s" (string_of_mtype ~protect:() ~html t2);
-        l ~sub:true (indent + 2);
-        out_str ";"
-    | MI1 (Emit (tag, ty)) ->
-        (do_indent ();
-         out "EMIT";
-         (match tag with
-         | None -> ()
-         | Some tag -> out " %s" tag);
-         match ty with
-         | None -> ()
-         | Some ty -> out " %s" (string_of_mtype ~protect:() ~html ty));
-        out_str ";"
-    | MIcreate_contract {tparameter = t, annot; tstorage; code; views} ->
-        let view {name; tparameter; treturn; onchain_code} =
-          match onchain_code with
-          | None -> ()
-          | Some code ->
-              line "   view";
-              line "     %S %s %s" name
-                (string_of_mtype ~protect:() ~html:false
-                   (Option.default mt_unit tparameter))
-                (string_of_mtype ~protect:() ~html:false treturn);
-              code ~sub:true (indent + 5);
-              out ";%s" new_line
-        in
-        line "CREATE_CONTRACT";
-        line " { parameter %s;" (string_of_tparameter ~html (t, annot));
-        line "   storage   %s;" (string_of_mtype ~protect:() ~html tstorage);
-        line "   code";
-        code ~sub:true (indent + 5);
-        out ";%s" new_line;
-        List.iter view views;
-        do_indent ();
-        out " };"
-    | ( MI0
-          ( Self None
-          | Sender
-          | Source
-          | Amount
-          | Balance
-          | Level
-          | Now
-          | Self_address
-          | Chain_id
-          | Total_voting_power
-          | Unit_ )
-      | MI1
-          ( Car
-          | Cdr
-          | Some_
-          | Eq
-          | Abs
-          | Neg
-          | Nat
-          | Int
-          | Bytes
-          | IsNat
-          | Neq
-          | Le
-          | Lt
-          | Ge
-          | Gt
-          | Not
-          | Concat1
-          | Size
-          | Address
-          | Implicit_account
-          | Pack
-          | Hash_key
-          | Blake2b
-          | Sha256
-          | Sha512
-          | Keccak
-          | Sha3
-          | Set_delegate
-          | Read_ticket
-          | Join_tickets
-          | Pairing_check
-          | Voting_power )
-      | MI1_fail (Failwith | Never)
-      | MI2
-          ( Add
-          | Mul
-          | Sub
-          | Sub_mutez
-          | Lsr
-          | Lsl
-          | Xor
-          | Ediv
-          | And
-          | Or
-          | Cons
-          | Compare
-          | Concat2
-          | Get
-          | Mem
-          | Exec
-          | Apply
-          | Sapling_verify_update
-          | Ticket
-          | Ticket_deprecated
-          | Split_ticket )
-      | MI3
-          ( Slice
-          | Update
-          | Get_and_update
-          | Transfer_tokens
-          | Check_signature
-          | Open_chest )
-      | MIdrop
-      | MIswap
-      | MImich _
-      | MIfield _
-      | MIsetField _
-      | MIconcat1
-      | MIconcat2
-      | MIconcat_unresolved ) as simple ->
-        with_stack (fun () -> out_str (name_of_instr_exn ~protocol simple)));
-    let full =
-      match x with
-      | MIerror _ -> Some ()
-      | _ when full_types_and_tags -> Some ()
-      | _ -> None
-    in
-    if show_stack && not sub
-    then
-      match stack_out with
-      | Ok inst ->
-          out " %s %s" (span "comment" "#")
-            (span "stack" (sprintf "%s" (string_of_stack ?full inst)))
-      | Error msg -> out " # Error: %s" (span "partial-type" msg)
-  in
-  {f_tinstr; f_tliteral}
-
-let _buffer_tliteral ~protocol ~html ~show_stack b indent protect x =
-  cata_tliteral
-    (buffer_f ~protocol ~html ~show_stack ~new_line:true b)
-    x indent protect
-
-let buffer_tinstr ~protocol ~html ~show_stack ~sub ~new_line b indent x =
-  cata_tinstr (buffer_f ~protocol ~html ~show_stack ~new_line b) x ~sub indent
-
 let seq_snoc xs x =
   match xs with
   | {tinstr = MIseq xs; stack_in} ->
@@ -2490,240 +1702,6 @@ let insert_subsequences =
         {tinstr = map_instr_f wrap_in_seq id tinstr; stack_in; stack_out}
   in
   cata_tinstr {f_tinstr; f_tliteral = (fun ~t tliteral -> {tliteral; t})}
-
-let display_tinstr ~protocol ~show_stack ~new_line indent inst =
-  let inst = insert_subsequences inst in
-  Misc.with_buffer (fun b ->
-      buffer_tinstr ~protocol ~html:false ~show_stack ~sub:true ~new_line b
-        indent inst)
-
-let render_tinstr ~protocol ~show_stack indent inst =
-  let inst = insert_subsequences inst in
-  Misc.with_buffer (fun b ->
-      buffer_tinstr ~protocol ~html:true ~show_stack ~sub:true ~new_line:true b
-        indent inst)
-
-let pretty_literal_f literal wrap ppf =
-  let open Format in
-  let wrap x = if wrap then Format.fprintf ppf "(%t)" x else x ppf in
-  match (literal : _ literal_f) with
-  | Int i -> fprintf ppf "%s" (Big_int.string_of_big_int i)
-  | Unit -> fprintf ppf "Unit"
-  | String s -> fprintf ppf "%S" s
-  | Bool true -> fprintf ppf "True"
-  | Bool false -> fprintf ppf "False"
-  | Pair (l, r) -> wrap (fun ppf -> fprintf ppf "Pair %t %t" (l true) (r true))
-  | None_ -> fprintf ppf "None"
-  | Left x -> wrap (fun ppf -> fprintf ppf "Left %t" (x true))
-  | Right x -> wrap (fun ppf -> fprintf ppf "Right %t" (x true))
-  | Some_ x -> wrap (fun ppf -> fprintf ppf "Some %t" (x true))
-  | Bytes s -> fprintf ppf "0x%s" Hex.(show (of_string s))
-  | Seq xs ->
-      let f i x =
-        let x = x false in
-        let s = Format.asprintf "%t" x in
-        if i = 0 || s = "" then fprintf ppf "%s" s else fprintf ppf "; %s" s
-      in
-      fprintf ppf "{";
-      List.iteri f xs;
-      fprintf ppf "}"
-  | Elt (k, v) -> wrap (fun ppf -> fprintf ppf "Elt %t %t" (k true) (v true))
-  | Instr i -> i true ppf
-  | Lambda_rec i -> wrap (fun ppf -> fprintf ppf "Lambda_rec %t" (i true))
-  | AnyMap xs ->
-      let f i (k, v) =
-        if i = 0
-        then fprintf ppf "Elt %t %t" (k true) (v true)
-        else fprintf ppf "; Elt %t %t" (k true) (v true)
-      in
-      fprintf ppf "{";
-      List.iteri f xs;
-      fprintf ppf "}"
-  | Constant hash -> wrap (fun ppf -> fprintf ppf "constant %S" hash)
-
-let pretty_instr_f ~protocol i wrap ppf =
-  let open Format in
-  let name ppf = fprintf ppf "%s" (name_of_instr_exn ~protocol i) in
-  let wrap x = if wrap then Format.fprintf ppf "{ %t }" x else x ppf in
-  match i with
-  | MIseq [] -> fprintf ppf "{}"
-  | MIseq (x :: xs) ->
-      fprintf ppf "{ %t" (x false);
-      List.iter (fun x -> fprintf ppf "; %t" (x false)) xs;
-      fprintf ppf " }"
-  | MIdipn (n, i) -> wrap (fun ppf -> fprintf ppf "DIP %i %t" n (i true))
-  | MIdip i | MIloop i | MIloop_left i | MIiter i | MImap i ->
-      fprintf ppf "%t %t" name (i true)
-  | MIif_left (i1, i2) | MIif_none (i1, i2) | MIif_cons (i1, i2) | MIif (i1, i2)
-    -> wrap (fun ppf -> fprintf ppf "%t %t %t" name (i1 true) (i2 true))
-  | MIdup 1 -> wrap (fun ppf -> fprintf ppf "%t" name)
-  | MIunpair [true; true] -> wrap (fun ppf -> fprintf ppf "%t" name)
-  | MIunpair n -> wrap (fun ppf -> fprintf ppf "%t %s" name (unpair_arg n))
-  | MIpairn n -> wrap (fun ppf -> fprintf ppf "%t %d" name n)
-  | MIdig n
-  | MIdug n
-  | MIdropn n
-  | MI1 (Getn n)
-  | MI2 (Updaten n)
-  | MIdup n
-  | MI0 (Sapling_empty_state {memo = n}) ->
-      wrap (fun ppf -> fprintf ppf "%t %d" name n)
-  | MIcomment _xs -> wrap (fun _ppf -> ())
-  | MIerror msg -> wrap (fun ppf -> fprintf ppf "ERROR %s" msg)
-  | MI1 (Cast t)
-  | MI0 (Nil t | Empty_set t | None_ t)
-  | MI1 (Contract (None, t) | Unpack t | Left (_, _, t) | Right (_, _, t)) ->
-      wrap (fun ppf ->
-          fprintf ppf "%t %s" name (string_of_mtype ~protect:() ~html:false t))
-  | MI1 (Rename a) ->
-      let a = Option.cata "" (( ^ ) "@") a in
-      wrap (fun ppf -> fprintf ppf "%t%s" name a)
-  | MI0 (Empty_bigmap (k, v) | Empty_map (k, v)) ->
-      wrap (fun ppf ->
-          fprintf ppf "%t %s %s" name
-            (string_of_mtype ~protect:() ~html:false k)
-            (string_of_mtype ~protect:() ~html:false v))
-  | MI1 (Contract (Some ep, t)) ->
-      wrap (fun ppf ->
-          fprintf ppf "CONTRACT %%%s %s" ep
-            (string_of_mtype ~protect:() ~html:false t))
-  | MI2 (View (name, t)) ->
-      wrap (fun ppf ->
-          fprintf ppf "VIEW %S %s" name
-            (string_of_mtype ~protect:() ~html:false t))
-  | MIlambda (t1, t2, c) ->
-      wrap (fun ppf ->
-          let t1 = string_of_mtype ~protect:() ~html:false t1 in
-          let t2 = string_of_mtype ~protect:() ~html:false t2 in
-          fprintf ppf "LAMBDA %s %s %t" t1 t2 (c true))
-  | MIlambda_rec (t1, t2, c) ->
-      wrap (fun ppf ->
-          let t1 = string_of_mtype ~protect:() ~html:false t1 in
-          let t2 = string_of_mtype ~protect:() ~html:false t2 in
-          fprintf ppf "LAMBDA_REC %s %s %t" t1 t2 (c true))
-  | MI1 (Emit (tag, ty)) ->
-      wrap (fun ppf ->
-          let tag =
-            match tag with
-            | None -> ""
-            | Some tag -> tag
-          in
-          let ty =
-            match ty with
-            | None -> ""
-            | Some ty -> string_of_mtype ~protect:() ~html:false ty
-          in
-          fprintf ppf "EMIT%s%s" tag ty)
-  | MIpush (t, l) ->
-      wrap (fun ppf ->
-          let t = string_of_mtype ~protect:() ~html:false t in
-          let l = l true in
-          fprintf ppf "PUSH %s %t" t l)
-  | MIcreate_contract {tparameter = tparameter, annot; tstorage; code; views} ->
-      let display_instr i = Format.asprintf "%t" (i false) in
-      let views =
-        String.concat "\n"
-          (List.map (fun v -> "; " ^ display_view display_instr v) views)
-      in
-      wrap (fun ppf ->
-          fprintf ppf "CREATE_CONTRACT { parameter %s; storage %s; code %t%s}"
-            (string_of_tparameter ~html:false (tparameter, annot))
-            (string_of_mtype ~protect:() ~html:false tstorage)
-            (code true) views)
-  | MI0
-      ( Sender
-      | Source
-      | Amount
-      | Balance
-      | Level
-      | Now
-      | Self_address
-      | Chain_id
-      | Total_voting_power
-      | Unit_
-      | Self _ )
-  | MI1
-      ( Car
-      | Cdr
-      | Some_
-      | Eq
-      | Abs
-      | Neg
-      | Int
-      | Nat
-      | Bytes
-      | IsNat
-      | Neq
-      | Le
-      | Lt
-      | Ge
-      | Gt
-      | Not
-      | Concat1
-      | Size
-      | Address
-      | Implicit_account
-      | Pack
-      | Hash_key
-      | Blake2b
-      | Sha256
-      | Sha512
-      | Keccak
-      | Sha3
-      | Set_delegate
-      | Read_ticket
-      | Join_tickets
-      | Pairing_check
-      | Voting_power )
-  | MI1_fail (Failwith | Never)
-  | MI2
-      ( Pair _
-      | Add
-      | Mul
-      | Sub
-      | Sub_mutez
-      | Lsr
-      | Lsl
-      | Xor
-      | Ediv
-      | And
-      | Or
-      | Cons
-      | Compare
-      | Concat2
-      | Get
-      | Mem
-      | Exec
-      | Apply
-      | Sapling_verify_update
-      | Ticket
-      | Ticket_deprecated
-      | Split_ticket )
-  | MI3
-      ( Slice
-      | Update
-      | Get_and_update
-      | Transfer_tokens
-      | Check_signature
-      | Open_chest )
-  | MIdrop | MIswap | MImich _ | MIfield _ | MIsetField _ 
-  | MIconcat1 | MIconcat2 | MIconcat_unresolved 
-    -> wrap (fun ppf -> fprintf ppf "%t" name)
-
-let size_instr, _size_literal =
-  let f_instr = fold_instr_f ( + ) ( + ) 1 in
-  let f_literal = fold_literal_f ( + ) ( + ) 1 in
-  cata {f_instr; f_literal}
-
-let pretty_alg ~protocol =
-  {f_instr = pretty_instr_f ~protocol; f_literal = pretty_literal_f}
-
-let _pretty_instr ~protocol = cata_instr (pretty_alg ~protocol)
-
-let pretty_literal ~protocol = cata_literal (pretty_alg ~protocol)
-
-let string_of_literal ~protocol m =
-  Format.asprintf "%t" (pretty_literal ~protocol m true)
 
 type contract = {
     tparameter : mtype * string option
@@ -3263,9 +2241,9 @@ module To_micheline = struct
         Format.kasprintf failwith "set_c_r_macro: wrong char: '%c' (of %S)"
           other s
 
-  let rec literal ~protocol {literal = l} =
-    let literal = literal ~protocol in
-    let instruction = instruction ~protocol in
+  let rec literal  {literal = l} =
+    let literal = literal  in
+    let instruction = instruction  in
     match l with
     | Int bi -> int (Big_int.string_of_big_int bi)
     | Bool false -> primitive "False" []
@@ -3287,9 +2265,9 @@ module To_micheline = struct
         literal {literal = Seq xs}
     | Constant hash -> primitive "constant" [string hash]
 
-  and instruction ~protocol (the_instruction : instr) =
-    let literal = literal ~protocol in
-    let instruction = instruction ~protocol in
+  and instruction  (the_instruction : instr) =
+    let literal = literal  in
+    let instruction = instruction  in
     let prim0 ?annotations n = [primitive ?annotations n []] in
     let primn ?annotations n l = [primitive ?annotations n l] in
     let rec_instruction instr = Micheline.sequence (instruction instr) in
@@ -3370,7 +2348,7 @@ module To_micheline = struct
               (primn "parameter" [mtype ?annot_field tparameter]
               @ primn "storage" [mtype tstorage]
               @ primn "code" [rec_instruction code]
-              @ List.concat_map (view ~protocol) views)
+              @ List.concat_map (view ) views)
           ]
     | MI0 (Sapling_empty_state {memo}) ->
         primn "SAPLING_EMPTY_STATE" [int (string_of_int memo)]
@@ -3450,10 +2428,10 @@ module To_micheline = struct
           | Check_signature
           | Open_chest )
       | MIdrop | MIswap | MImich _ | MIconcat1 | MIconcat2 | MIconcat_unresolved ) as simple -> (
-        try prim0 (name_of_instr_exn ~protocol simple)
+        try prim0 (name_of_instr_exn  simple)
         with _ -> [sequence [primitive "ERROR-NOT-SIMPLE" []]])
 
-  and view ~protocol {name; tparameter; treturn; onchain_code} =
+  and view  {name; tparameter; treturn; onchain_code} =
     let open Micheline in
     match onchain_code with
     | None -> []
@@ -3461,199 +2439,13 @@ module To_micheline = struct
         [
           primitive "view"
             [
-              literal ~protocol {literal = String name}
+              literal  {literal = String name}
             ; mtype (Option.default mt_unit tparameter)
             ; mtype treturn
-            ; sequence (instruction ~protocol code)
+            ; sequence (instruction  code)
             ]
         ]
 end
-
-let count_bigmaps =
-  let f_tinstr ~stack_in:_ ~stack_out:_ _instr = 0 in
-  let f_tliteral ~t literal =
-    let i =
-      match t with
-      | Ok {mt = MT2 (Big_map, _, _)} -> 1
-      | _ -> 0
-    in
-    fold_literal_f ( + ) ( + ) i literal
-  in
-  cata_tliteral {f_tinstr; f_tliteral}
-
-let unexpected_final_stack_error = "Unexpected final stack"
-
-let erase_types_contract {tparameter; tstorage; code; views} =
-  let code = erase_types_instr code in
-  let views = List.map (map_view erase_types_instr) views in
-  ({tparameter; tstorage; code; views} : contract)
-
-let erase_types_instance ({contract; storage} : tinstance) : instance =
-  let contract = erase_types_contract contract in
-  let storage = Option.map erase_types_literal storage in
-  {contract; storage}
-
-let string_of_tliteral ~protocol x =
-  string_of_literal ~protocol (erase_types_literal x)
-
-let typecheck_contract ~protocol
-    ({tparameter; tstorage; code; views} : contract) =
-  let code =
-    typecheck_instr ~protocol ~tparameter
-      (initial_stack ~tparameter:(fst tparameter) ~tstorage)
-      code
-  in
-  let typecheck_view ({tparameter; onchain_code; offchain_code} as v) =
-    let check offchain code =
-      let tparameter, stack =
-        match tparameter with
-        | None ->
-            let stack =
-              if offchain
-              then Stack_ok [{tstorage with annot_variable = Some "storage"}]
-              else initial_stack ~tparameter:mt_unit ~tstorage
-            in
-            (mt_unit, stack)
-        | Some tparameter -> (tparameter, initial_stack ~tparameter ~tstorage)
-      in
-      typecheck_instr ~protocol ~tparameter:(tparameter, None) stack code
-    in
-    {
-      v with
-      onchain_code = Option.map (check false) onchain_code
-    ; offchain_code = (check true) offchain_code
-    }
-  in
-  let views = List.map typecheck_view views in
-  let code =
-    match code.stack_out with
-    | Ok (Stack_ok [{mt = MT2 (Pair _, fst, snd)}])
-      when unifiable_types fst (mt_list mt_operation)
-           && unifiable_types snd tstorage -> code
-    | Ok Stack_failed -> code
-    | Ok _ ->
-        let msg = unexpected_final_stack_error in
-        let err =
-          {
-            tinstr = MIerror msg
-          ; stack_in = code.stack_in
-          ; stack_out = code.stack_out
-          }
-        in
-        seq_snoc code err
-    | Error _ -> code
-  in
-  {tparameter; tstorage; code; views}
-
-let typecheck_instance ~protocol ({contract; storage} : instance) : tinstance =
-  let ({tparameter; tstorage} as contract) =
-    typecheck_contract ~protocol contract
-  in
-  let storage =
-    Option.map (typecheck_literal ~protocol ~tparameter tstorage) storage
-  in
-  {contract; storage}
-
-let has_error_tinstance ~accept_missings
-    {contract = {tparameter; tstorage; code; views}} =
-  let has_missing_type ~path t =
-    if accept_missings then [] else has_missing_type ~path t
-  in
-  let errors =
-    let has_error_view {name; tparameter; treturn; onchain_code; offchain_code}
-        =
-      Option.cata [] (has_error ~path:name ~accept_missings) onchain_code
-      @ has_error ~path:name ~accept_missings offchain_code
-      @ Option.cata [] (has_missing_type ~path:name) tparameter
-      @ has_missing_type ~path:name treturn
-    in
-    let e =
-      has_error ~path:"code" ~accept_missings code
-      @ List.concat_map has_error_view views
-    in
-    e
-    @ has_missing_type ~path:"storage" tstorage
-    @ has_missing_type ~path:"parameters" (fst tparameter)
-  in
-  let rec clean acc = function
-    | e1 :: e2 :: rest when e1 = e2 -> clean acc (e1 :: rest)
-    | e :: rest -> clean (e :: acc) rest
-    | [] -> List.rev acc
-  in
-  clean [] errors
-
-let to_micheline_tinstance ~protocol
-    {contract = {tstorage; tparameter = tparameter, annot_field; code; views}} =
-  let open Micheline in
-  let erase_types_from_instr code =
-    match To_micheline.instruction ~protocol (erase_types_instr code) with
-    | [Sequence _] as l -> l
-    | l -> [sequence l]
-  in
-  sequence
-    ([
-       primitive "storage" [To_micheline.mtype tstorage]
-     ; primitive "parameter" [To_micheline.mtype ?annot_field tparameter]
-     ; primitive "code" (erase_types_from_instr code)
-     ]
-    @ List.concat_map
-        (To_micheline.view ~protocol)
-        (List.map (map_view erase_types_instr) views))
-
-let display_tinstance ~protocol {contract = {tstorage; tparameter; code; views}}
-    =
-  let display_instr = display_tinstr ~show_stack:true ~new_line:true 2 in
-  sprintf "parameter %s;\nstorage   %s;\ncode\n%s;%s"
-    (string_of_tparameter ~html:false tparameter)
-    (string_of_mtype ~protect:() ~html:false tstorage)
-    (display_instr ~protocol code)
-    (String.concat "" (List.map (display_view (display_instr ~protocol)) views))
-
-let render_tinstance ~protocol {contract = {tstorage; tparameter; code; views}}
-    =
-  sprintf
-    "parameter %s;<br>storage &nbsp;&nbsp;%s;<br><div \
-     class='michelsonLine'>code<br>%s;</div>%s"
-    (string_of_tparameter ~html:true tparameter)
-    (string_of_mtype ~protect:() ~html:true tstorage)
-    (render_tinstr ~protocol ~show_stack:true 2 code)
-    (List.fold_left
-       (fun acc {name; tparameter; treturn; onchain_code} ->
-         match onchain_code with
-         | None -> acc
-         | Some code ->
-             sprintf
-               "%s<br/><div class='michelsonLine'>view<br/>  \"<span \
-                class=\"type\">%s</span>\" %s %s<br/>%s;</div>"
-               acc name
-               (string_of_mtype ~protect:() ~html:true
-                  (Option.default mt_unit tparameter))
-               (string_of_mtype ~protect:() ~html:true treturn)
-               (render_tinstr ~protocol ~show_stack:true 2 code))
-       "" views)
-
-let render_tinstance_no_types ~protocol
-    {contract = {tstorage; tparameter; code; views}} =
-  sprintf
-    "parameter %s;<br>storage &nbsp;&nbsp;%s;<br><div \
-     class='michelsonLine'>code<br>%s;</div>%s"
-    (string_of_tparameter ~html:true tparameter)
-    (string_of_mtype ~protect:() ~html:true tstorage)
-    (render_tinstr ~protocol ~show_stack:false 2 code)
-    (List.fold_left
-       (fun acc {name; tparameter; treturn; onchain_code} ->
-         match onchain_code with
-         | None -> acc
-         | Some code ->
-             sprintf
-               "%s<br/><div class='michelsonLine'>view<br/>  \"<span \
-                class=\"type\">%s</span>\" %s %s<br/>%s;</div>"
-               acc name
-               (string_of_mtype ~protect:() ~html:true
-                  (Option.default mt_unit tparameter))
-               (string_of_mtype ~protect:() ~html:true treturn)
-               (render_tinstr ~protocol ~show_stack:false 2 code))
-       "" views)
 
 let profile_of_arity (m, n) = (m, Some (n - m))
 
@@ -3661,7 +2453,7 @@ let arity_of_profile = function
   | m, None -> (m, None)
   | m, Some d -> (m, Some (m + d))
 
-let profile ~protocol =
+let profile  =
   let open Result in
   let ( =?= ) x y =
     match x with
@@ -3727,160 +2519,13 @@ let profile ~protocol =
     | MIconcat_unresolved -> failwith "profile: CONCAT arity undetermined"
     | MIerror _ -> return (0, Some 0)
     | i -> (
-        match spec_of_instr ~protocol i with
+        match spec_of_instr  i with
         | {arities = Some a} -> return (profile_of_arity a)
         | _ -> assert false)
   in
   cata_instr {f_instr; f_literal = (fun _ -> return ())}
 
-let has_profile ~protocol pr instr = Ok pr = profile ~protocol {instr}
+let has_profile  pr instr = Ok pr = profile  {instr}
 
-let has_arity ~protocol a instr =
-  has_profile ~protocol (profile_of_arity a) instr
-
-let arity ~protocol instr =
-  Result.map arity_of_profile (profile ~protocol instr)
-
-let rec mtype_examples t =
-  match t.mt with
-  | MT0 Unit -> [MLiteral.unit]
-  | MT0 Bool -> [MLiteral.bool false; MLiteral.bool true]
-  | MT0 Nat ->
-      [
-        MLiteral.small_int 0
-      ; MLiteral.small_int 2
-      ; MLiteral.small_int 4
-      ; MLiteral.small_int 8
-      ]
-  | MT0 Int ->
-      [
-        MLiteral.small_int (-2)
-      ; MLiteral.small_int 10
-      ; MLiteral.small_int 5
-      ; MLiteral.small_int 3
-      ]
-  | MT0 Mutez ->
-      [
-        MLiteral.small_int 0
-      ; MLiteral.small_int 1000
-      ; MLiteral.small_int 2000000
-      ; MLiteral.small_int 3000000
-      ]
-  | MT0 String ->
-      [
-        MLiteral.string ""
-      ; MLiteral.string "foo"
-      ; MLiteral.string "bar"
-      ; MLiteral.string "SmartPy"
-      ]
-  | MT0 Chain_id
-  | MT0 Bytes
-  | MT0 Bls12_381_g1
-  | MT0 Bls12_381_g2
-  | MT0 Bls12_381_fr
-  | MT0 Chest_key
-  | MT0 Chest ->
-      [
-        MLiteral.bytes ""
-      ; MLiteral.bytes (Hex.to_string (`Hex "00"))
-      ; MLiteral.bytes (Hex.to_string (`Hex "010203"))
-      ; MLiteral.bytes (Hex.to_string (`Hex "0FFF"))
-      ]
-  | MT0 Timestamp ->
-      [
-        MLiteral.small_int 0
-      ; MLiteral.small_int 1000
-      ; MLiteral.small_int 2000000
-      ; MLiteral.small_int 3000000
-      ]
-  | MT0 Address ->
-      [
-        MLiteral.string "tz1..."
-      ; MLiteral.string "tz2..."
-      ; MLiteral.string "tz3..."
-      ; MLiteral.string "KT1..."
-      ]
-  | MT0 Key_hash ->
-      [
-        MLiteral.string "tz1..."
-      ; MLiteral.string "tz2..."
-      ; MLiteral.string "tz3..."
-      ]
-  | MT0 Signature -> [MLiteral.string "edsigt..."; MLiteral.string "edsigu..."]
-  | MT0 Key ->
-      [
-        MLiteral.string "edpkuvNy6TuQ2z8o9wnoaTtTXkzQk7nhegCHfxBc4ecsd4qG71KYNG"
-      ; MLiteral.string "edpkvThfdv8Efh1MuqSTUk5EnUFCTjqN6kXDCNXpQ8udN3cKRhNDr2"
-      ]
-  | MT1 (Option, t) ->
-      List.map MLiteral.some (mtype_examples t) @ [MLiteral.none]
-  | MT1 (List, t) -> [MLiteral.seq (mtype_examples t); MLiteral.seq []]
-  | MT1 (Set, t) -> [MLiteral.seq (mtype_examples t)]
-  | MT1 (Contract, _t) ->
-      [
-        MLiteral.string "KT1a..."
-      ; MLiteral.string "KT1b..."
-      ; MLiteral.string "KT1c..."
-      ; MLiteral.string "KT1d..."
-      ]
-  | MT2 (Pair _, fst, snd) -> (
-      let l1 = mtype_examples fst in
-      let l2 = mtype_examples snd in
-      match (l1, l2) with
-      | a1 :: a2 :: _, b1 :: b2 :: _ ->
-          [
-            MLiteral.pair a1 b1
-          ; MLiteral.pair a2 b2
-          ; MLiteral.pair a1 b2
-          ; MLiteral.pair a2 b1
-          ]
-      | _ ->
-          List.fold_left
-            (fun acc b ->
-              List.fold_left (fun acc a -> MLiteral.pair a b :: acc) acc l1)
-            [] l2)
-  | MT2 (Or _, left, right) -> (
-      let l1 = mtype_examples left in
-      let l2 = mtype_examples right in
-      match (l1, l2) with
-      | a1 :: a2 :: _, b1 :: b2 :: _ ->
-          [
-            MLiteral.left a1
-          ; MLiteral.left a2
-          ; MLiteral.right b1
-          ; MLiteral.right b2
-          ]
-      | _ ->
-          List.fold_left
-            (fun acc b ->
-              List.fold_left (fun acc a -> MLiteral.pair a b :: acc) acc l1)
-            [] l2)
-  | MT2 (Lambda, _, _) -> [MLiteral.seq []]
-  | MT2 ((Map | Big_map), k, v) ->
-      let l1 = mtype_examples k in
-      let l2 = mtype_examples v in
-      let rec map2 f acc l1 l2 =
-        match (l1, l2) with
-        | a1 :: l1, a2 :: l2 -> map2 f (f a1 a2 :: acc) l1 l2
-        | _ -> List.rev acc
-      in
-      let l = map2 MLiteral.elt [] l1 l2 in
-      [MLiteral.seq l]
-  | MT_var s -> [MLiteral.string (sprintf "no value for %S" s)]
-  | MT0 Operation -> [MLiteral.string "operation"]
-  | MT0 (Sapling_state _) -> [MLiteral.seq []]
-  | MT0 Never -> [MLiteral.string "no value in type never"]
-  | MT0 (Sapling_transaction _) -> [MLiteral.string "sapling_transaction"]
-  | MT1 (Ticket, _) -> [MLiteral.string "no example for tickets"]
-
-let on_instrs f =
-  let f_instr instr = f {instr} in
-  let f_literal literal = {literal} in
-  cata_literal {f_instr; f_literal}
-
-let display_instr ~protocol t1 instr =
-  let tinstr =
-    typecheck_instr ~tparameter:(mt_unit, None) (Stack_ok [t1]) instr
-  in
-  display_tinstr ~protocol ~show_stack:false ~new_line:false 0
-    (tinstr ~protocol)
+let has_arity  a instr =
+  has_profile  (profile_of_arity a) instr

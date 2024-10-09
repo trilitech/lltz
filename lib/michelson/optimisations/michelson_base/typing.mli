@@ -13,6 +13,4 @@ val type_prim2 : mtype prim2 -> ((mtype * mtype) * mtype) list
 
 val type_prim3 : prim3 -> mtype * mtype * mtype * mtype
 
-val is_packable_f : bool mtype_f -> bool
-
 val is_packable : mtype -> bool

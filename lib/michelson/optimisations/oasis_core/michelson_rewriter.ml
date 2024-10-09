@@ -664,9 +664,9 @@ let is_iter_cons = function
   | MIiter {instr = Michelson.MIseq [{instr = MIcomment _}; {instr = MI2 Cons}]} -> true
   | _ -> false
 
-let main ~protocol : rule =
-  let has_arity = has_arity ~protocol in
-  let is_commutative = is_commutative ~protocol in
+let main  : rule =
+  let has_arity = has_arity  in
+  let is_commutative = is_commutative  in
   let open Big_int in
   function
   | MIcomment a :: MIcomment b :: rest ->
@@ -1057,25 +1057,7 @@ let run_group rs =
 let run groups =
   List.fold_left (fun f g x -> g (f x)) Control.id (List.map run_group groups)
 
-let run_on_tinstance ~protocol groups c =
-  if List.length (has_error_tinstance ~accept_missings:true c) > 0
-  then c
-  else
-    let c = erase_types_instance c in
-    let c =
-      {
-        c with
-        contract =
-          {
-            c.contract with
-            code = run groups c.contract.code
-          ; views = List.map (map_view (run groups)) c.contract.views
-          }
-      }
-    in
-    typecheck_instance ~protocol c
-
-let simplify ~protocol =
+let simplify  =
   [
     [
       unfold_mifield
@@ -1085,7 +1067,7 @@ let simplify ~protocol =
     ; instr_to_push
     ; unfold_dropn
     ]
-  ; [main ~protocol; unpair; conditionals]
+  ; [main ; unpair; conditionals]
   ; [
       unfold_selective_unpair
     ; fold_dropn

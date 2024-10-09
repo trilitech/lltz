@@ -17,9 +17,3 @@ let of_string ?msg x =
   match Big_int.big_int_of_string_opt x with
   | None -> failwith ("Bigint.of_string" ^ Option.cata "" (( ^ ) ": ") msg)
   | Some x -> x
-
-let t_of_sexp : Sexplib.Sexp.t -> t = function
-  | Atom x -> big_int_of_string x
-  | _ -> failwith "Bigint.t_of_sexp"
-
-let sexp_of_t x = Sexplib.Sexp.Atom (string_of_big_int x)
