@@ -1,7 +1,7 @@
 (library
   (name lltz_codegen)
   (public_name lltz.codegen)
-  (libraries core lltz.michelson lltz.ir fmt)
+  (libraries core lltz.michelson lltz.ir fmt lltz.michelson.optimisations)
   (inline_tests)
   (preprocess (pps ppx_jane))
 )
