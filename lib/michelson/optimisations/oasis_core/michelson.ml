@@ -1,13 +1,12 @@
 (* Copyright 2022-2023 Morum LLC, 2019-2022 Smart Chain Arena LLC *)
-(*open Utils.Control*)
-module Bigint = Utils.Bigint
-module Option = Utils.Option
-module List = Utils.List
-open Utils.Control
+module Big_int = Big_int
+module Option = Core.Option
+module List = Core.List
 include Michelson_base.Primitive
 include Michelson_base.Typing
 include Michelson_base.Type
 open Printf
+open Utils.Control
 
 (*List operations*)
 let rec map_some f = function
@@ -28,6 +27,7 @@ let rec take i = function
 | _ -> []
 
 let split_at_opt =
+  let open Core in
   let rec split_at acc i = function
     | xs when i = 0 -> Some (List.rev acc, xs)
     | x :: xs when i > 0 -> split_at (x :: acc) (i - 1) xs
@@ -39,7 +39,35 @@ let split_at ?(err = "split_at") i l =
   match split_at_opt i l with
   | Some l -> l
   | None -> failwith err
+
+let assoc_opt ?(equal = ( = )) key =
+  let rec f = function
+    | [] -> None
+    | (k, v) :: xs -> if equal key k then Some v else f xs
+  in
+  f
+
+let rec is_prefix eq xs ys =
+  match xs, ys with
+  | [], _ -> true
+  | x :: xs', y :: ys' -> eq x y && is_prefix eq xs' ys'
+  | _, _ -> false
+
+let map2 ?err f xs ys =
+  if List.length xs <> List.length ys then
+    match err with
+    | Some msg -> failwith ("map2: " ^ msg)
+    | None -> failwith "map2: lists have different lengths"
+  else
+    List.map2_exn xs ys ~f
 (*End of list operations*)
+(*option ops*)
+let option_cata x f = function
+  | None -> x
+  | Some x -> f x
+  
+let default d = option_cata d id
+(*end of option ops*)
 
 let full_types_and_tags = false
 
@@ -47,6 +75,25 @@ type ad_step =
   | A
   | D
 [@@deriving eq, ord, show {with_path = false}]
+
+module Bigint = struct
+  type t = Big_int.big_int
+
+  let equal = Big_int.eq_big_int
+
+  let compare = Big_int.compare_big_int
+
+  let show = Big_int.string_of_big_int
+
+  let pp ppf p = Format.fprintf ppf "%s" (show p)
+
+  let of_int = Big_int.big_int_of_int
+
+  let of_string ?msg x =
+    match Big_int.big_int_of_string_opt x with
+    | None -> failwith ("Bigint.of_string" ^ option_cata "" (( ^ ) ": ") msg)
+    | Some x -> x
+end
 
 type tezos_int = Bigint.t [@@deriving eq, ord, show {with_path = false}]
 
@@ -280,7 +327,7 @@ let string_of_ad_path p =
     | A -> "A"
     | D -> "D"
   in
-  String.concat "" (List.map f p)
+  String.concat "" (List.map ~f:f p)
 
 let strip_annots {mt} = mk_mtype mt
 
@@ -333,7 +380,8 @@ type instr_spec = {
 }
 
 let mk_spec_raw name ?commutative ?arities rule =
-  {name; commutative = commutative = Some (); arities; rule}
+  let commutative = Option.is_some commutative in
+  { name; commutative; arities; rule }
 
 let mk_spec name ?commutative ?arities rule =
   let rule ~tparameter stack instr =
@@ -350,7 +398,8 @@ let mk_spec name ?commutative ?arities rule =
     | Some x -> x
     | None -> err (name ^ ": unexpected stack")
   in
-  {name; commutative = commutative = Some (); arities; rule}
+  let commutative = Option.is_some commutative in
+  {name; commutative; arities; rule}
 
 let mk_spec_no_sub name ?commutative ?arities rule =
   let rule ~tparameter stack instr =
@@ -392,7 +441,7 @@ let rec unify_ok_stacks s1 s2 =
   match (s1, s2) with
   | se1 :: s1, se2 :: s2 ->
       Option.map2
-        (fun x xs -> x :: xs)
+        ~f:(fun x xs -> x :: xs)
         (unify_stack_elements se1 se2)
         (unify_ok_stacks s1 s2)
   | [], [] -> Some []
@@ -403,7 +452,7 @@ let unifiable_ok_stacks t u = Option.is_some (unify_ok_stacks t u)
 let unify_stacks s1 s2 =
   match (s1, s2) with
   | Stack_ok s1, Stack_ok s2 ->
-      Option.map (fun x -> Stack_ok x) (unify_ok_stacks s1 s2)
+      Option.map ~f:(fun x -> Stack_ok x) (unify_ok_stacks s1 s2)
   | Stack_failed, s2 -> Some s2
   | s1, Stack_failed -> Some s1
 
@@ -507,7 +556,7 @@ let cond_aux x y =
   let open Result in
   let* sx = x.stack_out in
   let* sy = y.stack_out in
-  Option.cata (error "cannot unify branches") ok (unify_stacks sx sy)
+  option_cata (error "cannot unify branches") ok (unify_stacks sx sy)
 
 let mi_if =
   let rule ~tparameter:_ stack instr =
@@ -545,10 +594,10 @@ let mi_if_left =
     | ( {mt = MT2 (Or {annot_left; annot_right}, t, u); annot_variable} :: tail
       , MIif_left (x, y) ) ->
         let open Option in
-        let fa v = v ^ "." ^ Option.default "left" annot_left in
-        let t = {t with annot_variable = Option.map fa annot_variable} in
-        let fa v = v ^ "." ^ Option.default "right" annot_right in
-        let u = {u with annot_variable = Option.map fa annot_variable} in
+        let fa v = v ^ "." ^ default "left" annot_left in
+        let t = {t with annot_variable = Option.map ~f:fa annot_variable} in
+        let fa v = v ^ "." ^ default "right" annot_right in
+        let u = {u with annot_variable = Option.map ~f:fa annot_variable} in
         let x = x (Ok (Stack_ok (t :: tail))) in
         let y = y (Ok (Stack_ok (u :: tail))) in
         return (MIif_left (x, y), cond_aux x y)
@@ -610,7 +659,10 @@ let is_hot =
   in
   cata_mtype is_hot
 
-let is_duppable t = is_hot t <> Yes
+let is_duppable t =
+  match is_hot t with
+  | Yes -> false
+  | No | Maybe -> true
 
 let mi_dup i =
   assert (i >= 1);
@@ -660,14 +712,16 @@ let mi_dropn n =
     | _ :: _ -> Some []
     | [] -> None)
 
-let unpair_size = List.fold_left (fun acc x -> acc + if x then 1 else 0) 0
+let unpair_size = List.fold_left ~f:(fun acc x -> acc + if x then 1 else 0) ~init:0
 
 let unpair_arg xs =
-  let open Sexplib.Std in
-  let open Stdlib.String in
-  if List.for_all id xs
-  then string_of_int (List.length xs)
-  else List.show (fun ppf -> Format.fprintf ppf "%s") (List.map string_of_bool xs)
+  let open Core in
+  if List.for_all ~f:Fn.id xs
+  then Int.to_string (List.length xs)
+  else
+    let bools_as_strings = List.map ~f:Bool.to_string xs in
+    sprintf "[%s]" (String.concat ~sep:"; " bools_as_strings)
+
 let mi_unpair fields =
   assert (List.length fields >= 2);
   let rec aux acc fields stack =
@@ -856,7 +910,7 @@ let rec get_comb_type n = function
 
 let mi_getn n =
   mk_spec_basic "GET" ~arities:(1, 1) (function
-    | t :: _ -> Option.map (fun t -> [t]) (get_comb_type n t)
+    | t :: _ -> Option.map ~f:(fun t -> [t]) (get_comb_type n t)
     | [] -> None)
 
 let mi_updaten n =
@@ -1121,16 +1175,16 @@ let mi_update =
   mk_spec_basic "UPDATE" ~arities:(3, 1) (function
     | k :: {mt = MT0 Bool} :: {mt = MT1 (Set, k')} :: _ ->
         Option.map
-          (fun k -> [mt_set k])
+          ~f:(fun k -> [mt_set k])
           (Result.get_ok (unify_types ~tolerant:() k k'))
     | k :: {mt = MT1 (Option, v)} :: {mt = MT2 (Map, k', v')} :: _ ->
         Option.map2
-          (fun k v -> [mt_map k v])
+          ~f:(fun k v -> [mt_map k v])
           (Result.get_ok (unify_types ~tolerant:() k k'))
           (Result.get_ok (unify_types ~tolerant:() v v'))
     | k :: {mt = MT1 (Option, v)} :: {mt = MT2 (Big_map, k', v')} :: _ ->
         Option.map2
-          (fun k v -> [mt_big_map k v])
+          ~f:(fun k v -> [mt_big_map k v])
           (Result.get_ok (unify_types ~tolerant:() k k'))
           (Result.get_ok (unify_types ~tolerant:() v v'))
     | _ -> None)
@@ -1139,12 +1193,12 @@ let mi_get_and_update =
   mk_spec_basic "GET_AND_UPDATE" ~arities:(3, 2) (function
     | k :: {mt = MT1 (Option, v)} :: {mt = MT2 (Map, k', v')} :: _ ->
         Option.map2
-          (fun k v -> [mt_option v; mt_map k v])
+          ~f:(fun k v -> [mt_option v; mt_map k v])
           (Result.get_ok (unify_types ~tolerant:() k k'))
           (Result.get_ok (unify_types ~tolerant:() v v'))
     | k :: {mt = MT1 (Option, v)} :: {mt = MT2 (Big_map, k', v')} :: _ ->
         Option.map2
-          (fun k v -> [mt_option v; mt_big_map k v])
+          ~f:(fun k v -> [mt_option v; mt_big_map k v])
           (Result.get_ok (unify_types ~tolerant:() k k'))
           (Result.get_ok (unify_types ~tolerant:() v v'))
     | _ -> None)
@@ -1284,7 +1338,7 @@ let mi_mich ~name ~types_in ~types_out =
   mk_spec_basic name
     ~arities:(List.length types_in, List.length types_out)
     (fun stack ->
-      if List.is_prefix equal_mtype types_in stack then Some types_out else None)
+      if is_prefix equal_mtype types_in stack then Some types_out else None)
 
 let mi_self =
   let rule ~tparameter stack = function
@@ -1440,7 +1494,7 @@ let spec_of_prim2  p =
         let f = function
           | x1 :: x2 :: _ -> (
               match
-                List.assoc_opt (strip_annots x1, strip_annots x2) instances
+                assoc_opt (strip_annots x1, strip_annots x2) instances
               with
               | None -> None
               | Some t -> Some [t])
@@ -1745,14 +1799,14 @@ module Of_micheline = struct
               let snd, annot_snd = mtype_annotated t2 in
               mt_pair ?annot_fst ?annot_snd fst snd
           | "pair", l -> (
-              match List.rev_map mtype_annotated l with
+              match List.rev_map ~f:mtype_annotated l with
               | [] -> assert false
               | (last, annot) :: rest ->
                   fst
                     (List.fold_left
-                       (fun (snd, annot_snd) (fst, annot_fst) ->
+                       ~f:(fun (snd, annot_snd) (fst, annot_fst) ->
                          (mt_pair ?annot_fst ?annot_snd fst snd, None))
-                       (last, annot) rest))
+                       ~init:(last, annot) rest))
           | "or", [t1; t2] ->
               let left, annot_left = mtype_annotated t1 in
               let right, annot_right = mtype_annotated t2 in
@@ -1791,7 +1845,7 @@ module Of_micheline = struct
           | _ -> mk_mtype (MT_var (sprintf "Parse type error %S" (pretty "" p)))
         in
         List.fold_left
-          (fun (mt, fa) a ->
+          ~f:(fun (mt, fa) a ->
             let update = function
               | Some _ -> failwith "duplicate annotation"
               | None -> Some (String.sub a 1 (String.length a - 1))
@@ -1801,7 +1855,7 @@ module Of_micheline = struct
             | '@' -> ({mt with annot_variable = update mt.annot_variable}, fa)
             | '%' -> (mt, update fa)
             | _ -> failwith "cannot parse annotation")
-          (mt, None) annotations
+          ~init:(mt, None) annotations
     | p -> failwith ("Parse type error " ^ pretty "" p)
 
   let rec literal x : literal =
@@ -1819,8 +1873,8 @@ module Of_micheline = struct
             | [] -> assert false
             | a :: l ->
                 List.fold_left
-                  (fun x y -> MLiteral.pair (literal y) x)
-                  (literal a) l)
+                  ~f:(fun x y -> MLiteral.pair (literal y) x)
+                  ~init:(literal a) l)
         | "None", [] -> MLiteral.none
         | "Some", [x] -> MLiteral.some (literal x)
         | "Left", [x] -> MLiteral.left (literal x)
@@ -1828,7 +1882,7 @@ module Of_micheline = struct
         | "Elt", [k; v] -> MLiteral.elt (literal k) (literal v)
         | "Lambda_rec", [x] -> MLiteral.lambda_rec (instruction x)
         | _ -> MLiteral.instr (instruction x))
-    | Sequence xs -> MLiteral.seq (List.map literal xs)
+    | Sequence xs -> MLiteral.seq (List.map ~f:literal xs)
 
   and instruction x =
     let err () =
@@ -1913,7 +1967,7 @@ module Of_micheline = struct
     let instr =
       match x with
       | Sequence [x] -> (instruction x).instr
-      | Sequence xs -> MIseq (List.map instruction xs)
+      | Sequence xs -> MIseq (List.map ~f:instruction xs)
       | Primitive {name; annotations; arguments} -> (
           match (name, arguments) with
           | "RENAME", [] ->
@@ -1967,7 +2021,7 @@ module Of_micheline = struct
           | "SWAP", [] -> MIswap
           | "UNPAIR", [] -> MIunpair [true; true]
           | "UNPAIR", [Int n] ->
-              MIunpair (List.replicate (int_of_string n) true)
+              MIunpair (List.init (int_of_string n) (fun _ -> true))
           | "CAR", [] -> MIfield [A]
           | "CDR", [] -> MIfield [D]
           | "CONTRACT", [t] ->
@@ -2154,7 +2208,7 @@ module Of_micheline = struct
     in
     function
     | Micheline.Sequence s -> (
-        match List.fold_left read_element (None, None, None, []) s with
+        match List.fold_left ~f:read_element ~init:(None, None, None, []) s with
         | None, _, _, _ -> failwith "ill-formed contract: missing 'parameter'"
         | _, None, _, _ -> failwith "ill-formed contract: missing 'storage'"
         | _, _, None, _ -> failwith "ill-formed contract: missing 'code'"
@@ -2171,15 +2225,15 @@ module To_micheline = struct
   let mtype ?annot_field =
     cata_mtype ~annot_field (fun ?annot_type ?annot_variable t ~annot_field ->
         let annotations =
-          let get pref = Option.map (( ^ ) pref) in
-          List.somes
+          let get pref = Option.map ~f:(( ^ ) pref) in
+          somes
             [get "%" annot_field; get ":" annot_type; get "@" annot_variable]
         in
         let prim = primitive ~annotations in
         match t with
         | MT0 t ->
             let t, memo = string_of_type0 t in
-            Option.cata (prim t []) (fun x -> prim t [Int x]) memo
+            option_cata (prim t []) (fun x -> prim t [Int x]) memo
         | MT1 (t, t1) -> prim (string_of_type1 t) [t1 ~annot_field:None]
         | MT2 (t, t1, t2) ->
             let t, a1, a2 = string_of_type2 t in
@@ -2256,12 +2310,12 @@ module To_micheline = struct
     | Some_ l -> primitive "Some" [literal l]
     | Left e -> primitive "Left" [literal e]
     | Right e -> primitive "Right" [literal e]
-    | Seq xs -> xs |> List.map literal |> sequence
+    | Seq xs -> xs |> List.map ~f:literal |> sequence
     | Elt (k, v) -> primitive "Elt" [literal k; literal v]
     | Instr x -> sequence (instruction x)
     | Lambda_rec x -> primitive "Lambda_rec" (instruction x)
     | AnyMap xs ->
-        let xs = List.map (fun (k, v) -> {literal = Elt (k, v)}) xs in
+        let xs = List.map ~f:(fun (k, v) -> {literal = Elt (k, v)}) xs in
         literal {literal = Seq xs}
     | Constant hash -> primitive "constant" [string hash]
 
@@ -2295,7 +2349,7 @@ module To_micheline = struct
     | MIloop_left instr -> primn "LOOP_LEFT" [rec_instruction instr]
     | MIiter instr -> primn "ITER" [rec_instruction instr]
     | MImap instr -> primn "MAP" [rec_instruction instr]
-    | MIseq ils -> List.concat_map instruction ils
+    | MIseq ils -> List.concat_map ~f:instruction ils
     | MIif (t, e) -> primn "IF" [rec_instruction t; rec_instruction e]
     | MIif_left (t, e) -> primn "IF_LEFT" [rec_instruction t; rec_instruction e]
     | MIif_none (t, e) -> primn "IF_NONE" [rec_instruction t; rec_instruction e]
@@ -2348,7 +2402,7 @@ module To_micheline = struct
               (primn "parameter" [mtype ?annot_field tparameter]
               @ primn "storage" [mtype tstorage]
               @ primn "code" [rec_instruction code]
-              @ List.concat_map (view ) views)
+              @ List.concat_map ~f:(view ) views)
           ]
     | MI0 (Sapling_empty_state {memo}) ->
         primn "SAPLING_EMPTY_STATE" [int (string_of_int memo)]
@@ -2440,7 +2494,7 @@ module To_micheline = struct
           primitive "view"
             [
               literal  {literal = String name}
-            ; mtype (Option.default mt_unit tparameter)
+            ; mtype (default mt_unit tparameter)
             ; mtype treturn
             ; sequence (instruction  code)
             ]
@@ -2460,7 +2514,7 @@ let profile  =
     | Some x when x <> y -> error "profile: unequal p"
     | _ -> return ()
   in
-  let if_some d x = Option.map (fun _ -> x) d in
+  let if_some d x = Option.map ~f:(fun _ -> x) d in
   let same x y =
     match (x, y) with
     | Some x, Some y ->
@@ -2469,8 +2523,8 @@ let profile  =
     | Some x, None -> return (Some x)
     | None, None -> return None
   in
-  let pred = Option.map (fun x -> x - 1) in
-  let succ = Option.map (fun x -> x + 1) in
+  let pred = Option.map ~f:(fun x -> x - 1) in
+  let succ = Option.map ~f:(fun x -> x + 1) in
   let f_instr i =
     let* i = sequence_instr_f i in
     match i with
@@ -2512,7 +2566,7 @@ let profile  =
               return (max p1 (p2 - d1), Some (d1 + d2))
           | (p1, Some d1), Ok (p2, None) -> return (max p1 (p2 - d1), None)
         in
-        List.fold_right (curry f) xs (return (0, Some 0))
+        List.fold_right ~f:(curry f) xs ~init:(return (0, Some 0))
     | MIcomment _ -> return (0, Some 0)
     | MIlambda _ -> return (0, Some 1)
     | MIlambda_rec _ -> return (0, Some 1)

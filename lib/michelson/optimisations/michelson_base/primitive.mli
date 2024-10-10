@@ -19,7 +19,7 @@ type 'ty prim0 =
   | None_ of 'ty  (** Push None.*)
   | Sapling_empty_state of {memo : int}  (** Push an Empty Sapling State.*)
   | Unit_  (** Push unit.*)
-[@@deriving eq, ord, show, map, fold, sexp]
+[@@deriving eq, ord, show, map, fold, sexp_of]
 
 (** Michelson Unary Primitives *)
 type 'ty prim1 =
@@ -64,13 +64,13 @@ type 'ty prim1 =
   | Cast of 'ty  (** Change toplevel type. *)
   | Rename of string option  (** Change toplevel annotation. *)
   | Emit of string option * 'ty option
-[@@deriving eq, ord, show, map, sexp]
+[@@deriving eq, ord, show, map, sexp_of]
 
 (** Branch Terminating and Failing Primitives *)
 type prim1_fail =
   | Failwith
   | Never
-[@@deriving eq, ord, show, sexp]
+[@@deriving eq, ord, show, sexp_of]
 
 type 'ty prim2 =
   | Pair of string option * string option
@@ -97,7 +97,7 @@ type 'ty prim2 =
   | Split_ticket
   | Updaten of int
   | View of string (* view name *) * 'ty (* return type *)
-[@@deriving eq, ord, show, map, sexp]
+[@@deriving eq, ord, show, map, sexp_of]
 
 type prim3 =
   | Slice
@@ -106,4 +106,4 @@ type prim3 =
   | Transfer_tokens
   | Check_signature
   | Open_chest
-[@@deriving eq, ord, show, sexp]
+[@@deriving eq, ord, show, sexp_of]

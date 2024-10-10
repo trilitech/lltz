@@ -175,3 +175,37 @@ let type_prim3 = function
   | Check_signature -> (mt_key, mt_signature, mt_bytes, mt_bool)
   | Open_chest -> (mt_chest_key, mt_chest, mt_nat, mt_or mt_bytes mt_bool)
   | Slice | Update | Get_and_update | Transfer_tokens -> assert false
+
+let is_packable_f = function
+  | MT0
+      ( Address
+      | Bls12_381_g1
+      | Bls12_381_g2
+      | Bls12_381_fr
+      | Bool
+      | Bytes
+      | Chain_id
+      | Chest
+      | Chest_key
+      | Int
+      | Key
+      | Key_hash
+      | Mutez
+      | Nat
+      | Never
+      | Sapling_transaction _
+      | Signature
+      | String
+      | Timestamp
+      | Unit ) -> true
+  | MT0 (Operation | Sapling_state _) -> false
+  | MT1 (Contract, _) -> true
+  | MT1 (Ticket, _) -> false
+  | MT1 ((List | Option | Set), p1) -> p1
+  | MT2 (Lambda, _, _) -> true
+  | MT2 (Big_map, _, _) -> false
+  | MT2 ((Map | Pair _ | Or _), p1, p2) -> p1 && p2
+  | MT_var _ -> (* TODO *) assert false
+
+let is_packable =
+  cata_mtype (fun ?annot_type:_ ?annot_variable:_ -> is_packable_f)

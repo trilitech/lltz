@@ -3,7 +3,7 @@
 (** Michelson-to-michelson code simplification. *)
 
 module Control = Utils.Control
-module Bigint = Utils.Bigint
+module Big_int = Big_int
 open Michelson
 
 
@@ -36,15 +36,15 @@ let seqi xs = Michelson.MIseq (Core.List.map xs ~f:mk_instr)
 
 let iseq xs = mk_instr (seq xs)
 
-let iseqi xs = iseq (List.map mk_instr xs)
+let iseqi xs = iseq (List.map ~f:mk_instr xs)
 
 let to_seq = function
-  | Michelson.MIseq is -> List.map un_instr is
+  | Michelson.MIseq is -> List.map ~f:un_instr is
   | i -> [i]
 
 let of_seq = function
   | [i] -> i
-  | is -> Michelson.MIseq (List.map mk_instr is)
+  | is -> Michelson.MIseq (List.map ~f:mk_instr is)
 
 type rule =
      (instr, literal) instr_f list
@@ -110,7 +110,7 @@ let is_pushy = function
 let rec may_fail = function
   | MI2 Exec | MIerror _ | MImich _ | MI1_fail _ | MI2 (View _) -> true
   | MI2 (Lsl | Lsr | Add | Sub | Mul) -> true (* overflow on some types *)
-  | Michelson.MIseq l -> List.exists (fun x -> may_fail x.instr) l
+  | Michelson.MIseq l -> List.exists ~f:(fun x -> may_fail x.instr) l
   | MIif (i1, i2) | MIif_cons (i1, i2) | MIif_none (i1, i2) | MIif_left (i1, i2)
     -> may_fail i1.instr || may_fail i2.instr
   | MIdip i | MIdipn (_, i) | MIloop i | MIloop_left i | MIiter i | MImap i ->
@@ -297,7 +297,7 @@ let mi_unpair fields =
   MIunpair (replicate length true) :: drop [] 0 fields
 
 let unfold_selective_unpair : rule = function
-  | MIunpair fields :: rest when List.exists not fields ->
+  | MIunpair fields :: rest when List.exists ~f:not fields ->
       mi_unpair fields $ rest
   | _ -> rewrite_none
 
@@ -421,12 +421,12 @@ let dig_dug ~with_comments n =
   fun x ->
     let y, rest = f 0 x in
     let consumed = take (List.length x - List.length rest) x in
-    if List.equal equal_instr (List.map mk_instr consumed) (List.map mk_instr y)
+    if List.equal equal_instr (List.map ~f:mk_instr consumed) (List.map ~f:mk_instr y)
     then rewrite_none
     else y $ rest
 
 let conditionals xs =
-  match List.map (map_instr_f un_instr Control.id) xs with
+  match List.map ~f:(map_instr_f un_instr Control.id) xs with
   | MIif
       ( Michelson.MIseq ({instr = MIdig n} :: {instr = MIdrop} :: xs)
       , Michelson.MIseq ({instr = MIdig n'} :: {instr = MIdrop} :: ys) )
@@ -547,7 +547,7 @@ let conditionals xs =
           ; {instr = MI1_fail Failwith}
           ] )
     :: rest
-    when Bigint.equal n1 n2 -> [push; MI1_fail Failwith] $ rest
+    when Big_int.eq_big_int n1 n2 -> [push; MI1_fail Failwith] $ rest
   | (( MIif_left (Michelson.MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i1), i2)
      | MIif_cons (Michelson.MIseq ({instr = MIdig n} :: {instr = MIdrop} :: i1), i2) ) as
     if_like)
@@ -647,8 +647,8 @@ let conditionals xs =
 
 let conditionals : rule =
  fun x ->
-  let f = List.map (map_instr_f mk_instr Control.id) in
-  Option.map (fun (x, y) -> (f x, f y)) (conditionals x)
+  let f = List.map ~f:(map_instr_f mk_instr Control.id) in
+  Option.map ~f:(fun (x, y) -> (f x, f y)) (conditionals x)
 
 let remove_comments : pipeline =
   [
@@ -680,7 +680,7 @@ let main  : rule =
       in
       [MIcomment (remove_double (a @ b))] $ rest
   (* Flatten sequences: *)
-  | Michelson.MIseq is :: rest -> List.map un_instr is $ rest
+  | Michelson.MIseq is :: rest -> List.map ~f:un_instr is $ rest
   (* Superfluous SWAP: *)
   | MIdup 1 :: MIdig 1 :: rest -> [MIdup 1] $ rest
   | p1 :: p2 :: MIdig 1 :: rest when is_pure_push p1 && is_pure_push p2 ->
@@ -936,25 +936,25 @@ let main  : rule =
     :: MIpush ({mt = MT0 Int}, {literal = Int x})
     :: MI2 Add
     :: rest ->
-      [MIpush (mt_int, {literal = Int (Bigint.add_big_int x y)})] $ rest
+      [MIpush (mt_int, {literal = Int (Big_int.add_big_int x y)})] $ rest
   | MIpush ({mt = MT0 Int}, {literal = Int y})
     :: MIpush ({mt = MT0 Int}, {literal = Int x})
     :: MI2 Sub
     :: rest ->
-      [MIpush (mt_int, {literal = Int (Bigint.sub_big_int x y)})] $ rest
+      [MIpush (mt_int, {literal = Int (Big_int.sub_big_int x y)})] $ rest
   | MIpush ({mt = MT0 Int}, {literal = Int y})
     :: MIpush ({mt = MT0 Int}, {literal = Int x})
     :: MI2 Mul
     :: rest ->
-      [MIpush (mt_int, {literal = Int (Bigint.mult_big_int x y)})] $ rest
+      [MIpush (mt_int, {literal = Int (Big_int.mult_big_int x y)})] $ rest
   | MIpush ({mt = MT0 Int}, {literal = Int x}) :: MI1 Neg :: rest ->
-      [MIpush (mt_int, {literal = Int (Bigint.minus_big_int x)})] $ rest
+      [MIpush (mt_int, {literal = Int (Big_int.minus_big_int x)})] $ rest
   (* Rules involving subtraction: *)
   | MIpush ({mt = MT0 (Int | Nat)}, {literal = Int y})
     :: MIdig 1
     :: MI2 Sub
     :: rest ->
-      [MIpush (mt_int, {literal = Int (Bigint.minus_big_int y)}); MI2 Add]
+      [MIpush (mt_int, {literal = Int (Big_int.minus_big_int y)}); MI2 Add]
       $ rest
   | MI1 Neg :: MIdig 1 :: MI2 Add :: rest -> [MI2 Sub] $ rest
   | MI1 Neg :: MIdig 1 :: MI2 Sub :: rest -> [MI2 Add] $ rest
@@ -1027,7 +1027,7 @@ let normalize f =
   let rec norm = function
     | {instr = Michelson.MIseq xs} -> norm_seq xs
     | {instr} -> mk_instr (map_instr_f norm1 Control.id instr)
-  and norm1 {instr} = norm_seq (List.map mk_instr (to_seq instr))
+  and norm1 {instr} = norm_seq (List.map ~f:mk_instr (to_seq instr))
   and norm_seq xs = norm_seq_aux [] (List.rev xs)
   and norm_seq_aux acc = function
     | [] -> {instr = of_seq acc}
@@ -1041,8 +1041,8 @@ let normalize f =
             then
               assert (
                 let i instr = {instr} in
-                is_suffix equal_instr (List.map i rest) (List.map i acc));
-            norm_seq_aux rest (List.map mk_instr (List.rev result) @ is))
+                is_suffix equal_instr (List.map ~f:i rest) (List.map ~f:i acc));
+            norm_seq_aux rest (List.map ~f:mk_instr (List.rev result) @ is))
   in
   norm1
 
@@ -1052,10 +1052,10 @@ let run_group rs =
     | Some x -> Some x
     | None -> g x
   in
-  normalize (List.fold_left comp (fun _ -> None) rs)
+  normalize (List.fold_left ~f:comp ~init:(fun _ -> None) rs)
 
 let run groups =
-  List.fold_left (fun f g x -> g (f x)) Control.id (List.map run_group groups)
+  List.fold_left ~f:(fun f g x -> g (f x)) ~init:Control.id (List.map ~f:run_group groups)
 
 let simplify  =
   [

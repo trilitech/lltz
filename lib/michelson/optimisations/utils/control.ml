@@ -1,5 +1,7 @@
 (* Copyright 2022-2023 Morum LLC, 2019-2022 Smart Chain Arena LLC *)
 
+open Core
+
 let id x = x
 
 let pair x y = (x, y)

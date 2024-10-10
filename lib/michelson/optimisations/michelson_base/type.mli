@@ -23,7 +23,7 @@ type type0 =
   | Bls12_381_fr
   | Chest_key
   | Chest
-[@@deriving eq, ord, show, sexp]
+[@@deriving eq, ord, show, sexp_of]
 
 type type1 =
   | Option
@@ -31,7 +31,7 @@ type type1 =
   | Set
   | Contract
   | Ticket
-[@@deriving eq, ord, show, sexp]
+[@@deriving eq, ord, show, sexp_of]
 
 type type2 =
   | Lambda
@@ -45,7 +45,7 @@ type type2 =
         annot_left : string option
       ; annot_right : string option
     }
-[@@deriving eq, ord, show, sexp]
+[@@deriving eq, ord, show, sexp_of]
 
 val string_of_type0 : type0 -> string * string option
 
@@ -65,7 +65,7 @@ type mtype = {
   ; annot_type : string option (* :a *)
   ; annot_variable : string option (* @a *)
 }
-[@@deriving eq, ord, show, sexp]
+[@@deriving eq, ord, show, sexp_of]
 
 val cata_mtype :
      (?annot_type:string -> ?annot_variable:string -> 'a mtype_f -> 'a)

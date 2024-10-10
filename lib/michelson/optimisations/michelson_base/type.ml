@@ -1,6 +1,6 @@
 (* Copyright 2022-2023 Morum LLC, 2019-2022 Smart Chain Arena LLC *)
 
-open Sexplib.Std
+open Core
 
 type type0 =
   | Unit
@@ -25,7 +25,7 @@ type type0 =
   | Bls12_381_fr
   | Chest_key
   | Chest
-[@@deriving eq, ord, show {with_path = false}, sexp]
+[@@deriving eq, ord, show {with_path = false}, sexp_of]
 
 type type1 =
   | Option
@@ -33,7 +33,7 @@ type type1 =
   | Set
   | Contract
   | Ticket
-[@@deriving eq, ord, show {with_path = false}, sexp]
+[@@deriving eq, ord, show {with_path = false}, sexp_of]
 
 type type2 =
   | Lambda
@@ -47,7 +47,7 @@ type type2 =
         annot_left : string option
       ; annot_right : string option
     }
-[@@deriving eq, ord, show {with_path = false}, sexp]
+[@@deriving eq, ord, show {with_path = false}, sexp_of]
 
 let string_of_type0 = function
   | Unit -> ("unit", None)
@@ -93,14 +93,14 @@ type 'm mtype_f =
   | MT1 of type1 * 'm
   | MT2 of type2 * 'm * 'm
   | MT_var of string
-[@@deriving eq, ord, fold, map, show {with_path = false}, sexp]
+[@@deriving eq, ord, fold, map, show {with_path = false}, sexp_of]
 
 type mtype = {
     mt : mtype mtype_f
   ; annot_type : string option (* :a *)
   ; annot_variable : string option (* @a *)
 }
-[@@deriving eq, ord, show {with_path = false}, sexp]
+[@@deriving eq, ord, show {with_path = false}, sexp_of]
 
 let mk_mtype ?annot_type ?annot_variable mt = {mt; annot_type; annot_variable}
 
