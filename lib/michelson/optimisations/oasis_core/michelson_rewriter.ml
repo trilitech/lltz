@@ -6,24 +6,6 @@ module Control = Utils.Control
 module Big_int = Big_int
 open Michelson
 
-
-(*List operations*)
-let replicate i x = List.init i (fun _ -> x)
-
-let rec is_prefix eq xs ys =
-  match (xs, ys) with
-  | [], _ -> true
-  | x :: xs, y :: ys -> eq x y && is_prefix eq xs ys
-  | _ -> false
-
-let is_suffix eq xs ys = is_prefix eq (List.rev xs) (List.rev ys)
-
-let rec take i = function
-  | x :: xs when i > 0 -> x :: take (i - 1) xs
-  | _ -> []
-
-(*End of List operations*)
-
 let check_rest_invariant = false
 
 let mk_instr instr = Michelson.{instr}
@@ -46,6 +28,15 @@ let of_seq = function
   | [i] -> i
   | is -> Michelson.MIseq (List.map ~f:mk_instr is)
 
+(* 
+  Type definitions for rewrite rules and groups.
+  
+  - rule: A function that takes a list of instructions and optionally
+          returns a pair of rewritten instructions and the remaining instructions.
+  - group: A list of rules that are tried in order.
+  - pipeline: A list of groups that are executed sequentially.
+*)
+
 type rule =
      (instr, literal) instr_f list
   -> ((instr, literal) instr_f list * (instr, literal) instr_f list) option
@@ -67,7 +58,10 @@ let cAr = MIfield [A]
 let cDr = MIfield [D]
 
 (** {1 Our concrete rule sets} *)
-
+(* 
+  Recursive function to determine if an instruction fails.
+  It traverses the instruction tree and checks for failure points.
+*)
 let rec fails {instr} =
   match instr with
   | MI1_fail _ -> true
@@ -107,6 +101,7 @@ let is_pushy = function
   | MIdup _ -> true
   | x -> is_pure_push x
 
+(* Determines if an instruction may cause the program to fail.*)
 let rec may_fail = function
   | MI2 Exec | MIerror _ | MImich _ | MI1_fail _ | MI2 (View _) -> true
   | MI2 (Lsl | Lsr | Add | Sub | Mul) -> true (* overflow on some types *)
@@ -213,6 +208,10 @@ let rec may_fail = function
   | MIconcat2
   | MIconcat_unresolved -> false
 
+(* 
+  Determines if an instruction may cause the program to diverge.
+  Specifically checks for instructions like Exec, loop constructs, etc.
+*)
 let may_diverge instr =
   let f_instr = function
     | MI2 Exec | MIloop _ | MIloop_left _ -> true
@@ -222,16 +221,25 @@ let may_diverge instr =
   let f_literal _ = () in
   cata_instr {f_instr; f_literal} {instr}
 
+(* 
+  Checks if an instruction is harmless, meaning it neither fails nor diverges.
+*)
 let harmless i = not (may_fail i || may_diverge i)
 
 let is_comparison = function
   | MI1 Eq | MI1 Neq | MI1 Ge | MI1 Gt | MI1 Le | MI1 Lt -> true
   | _ -> false
 
+(* 
+  Checks if the type is integer or natural and the literal is zero.
+*)
 let is_int_or_nat_zero t l =
   (equal_mtype t mt_nat || equal_mtype t mt_int)
   && equal_literal l (MLiteral.small_int 0)
 
+(** 
+  Rule to convert specific instructions to push operations, e.g.: PUSH unit UNIT
+*)
 let instr_to_push : rule = function
   | MI0 Unit_ :: rest -> [MIpush (mt_unit, MLiteral.unit)] $ rest
   | MI0 (None_ t) :: rest -> [MIpush (mt_option t, MLiteral.none)] $ rest
@@ -247,6 +255,9 @@ let instr_to_push : rule = function
       [MIpush (mt_lambda t1 t2, {literal = Lambda_rec body})] $ rest
   | _ -> rewrite_none
 
+(** 
+  Rule to convert push operations back to their original instructions.
+*)
 let push_to_instr : rule = function
   | MIpush ({mt = MT0 Unit}, {literal = Unit}) :: rest -> [MI0 Unit_] $ rest
   | MIpush ({mt = MT1 (Option, t)}, {literal = None_}) :: rest ->
@@ -263,8 +274,11 @@ let push_to_instr : rule = function
       [MIlambda_rec (t1, t2, body)] $ rest
   | _ -> rewrite_none
 
+(** 
+  Macros definitions.
+*)
 let unfold_macros : rule = function
-  (* Unfold SEC[AD]+R: *)
+  (* Unfold set fields of C[AD]R lists *)
   | MIsetField [A] :: rest -> [cDr; MIdig 1; MI2 (Pair (None, None))] $ rest
   | MIsetField [D] :: rest -> [cAr; MI2 (Pair (None, None))] $ rest
   | MIsetField (A :: ops) :: rest ->
@@ -281,12 +295,14 @@ let unfold_macros : rule = function
   | MIpairn 2 :: rest -> [MI2 (Pair (None, None))] $ rest
   | _ -> rewrite_none
 
+(* Unfold getter fields *)
 let unfold_mifield : rule = function
   | MIfield (f :: (_ :: _ as op)) :: rest -> [MIfield [f]; MIfield op] $ rest
   | MI1 (Getn 1) :: rest -> [MIfield [A]] $ rest
   | MI1 (Getn 2) :: rest -> [MIfield [D]] $ rest
   | _ -> rewrite_none
 
+(* Unpair selected values *)
 let mi_unpair fields =
   let length = List.length fields in
   let rec drop acc i = function
@@ -296,11 +312,13 @@ let mi_unpair fields =
   in
   MIunpair (replicate length true) :: drop [] 0 fields
 
+(* Role unpairing selected values, rewrites nothing if the fields are all selected. *)
 let unfold_selective_unpair : rule = function
   | MIunpair fields :: rest when List.exists ~f:not fields ->
       mi_unpair fields $ rest
   | _ -> rewrite_none
 
+(* Fold consecutive Getns into a single one *)
 let fold_getn : rule = function
   | MIfield [D] :: MIfield [A] :: rest -> [MI1 (Getn 3)] $ rest
   | MIfield [D] :: MIfield [D] :: rest -> [MI1 (Getn 4)] $ rest
@@ -309,6 +327,7 @@ let fold_getn : rule = function
       [MI1 (Getn (k + n))] $ rest
   | _ -> rewrite_none
 
+(* Fold consecutive drops into a single one *)
 let fold_dropn : rule = function
   (* PUSH-PUSH and PUSH-DUP appear to have the same cost gas-wise,
      but for the latter storage is cheaper: *)
@@ -318,6 +337,7 @@ let fold_dropn : rule = function
   | MIdropn m :: MIdropn n :: rest -> [MIdropn (m + n)] $ rest
   | _ -> rewrite_none
 
+(* Rule to unfold Dropn into multiple Drop instructions. *)
 let unfold_dropn : rule = function
   | MIdropn n :: rest ->
       let rec aux acc = function
@@ -330,6 +350,7 @@ let unfold_dropn : rule = function
       aux [] n $ rest
   | _ -> rewrite_none
 
+(* Optimise consecutive equal Push instructions by replacing with Push & Dup *)
 let push_push : rule = function
   (* PUSH-PUSH and PUSH-DUP appear to have the same cost gas-wise,
      but for the latter storage is cheaper: *)
@@ -338,6 +359,7 @@ let push_push : rule = function
       [MIpush (t1, l1); MIdup 1] $ rest
   | _ -> rewrite_none
 
+(* Optimise out compare instruction when comparing against zero *)
 let push_zero_compare : rule = function
   | MIpush (t, l) :: MIdig n :: MI2 Compare :: ec :: rest
     when is_int_or_nat_zero t l && is_comparison ec ->
@@ -353,13 +375,16 @@ let push_zero_compare : rule = function
       $ rest
   | _ -> rewrite_none
 
+(**   Rule to convert DIG 1 to SWAP. *)
 let dig1_to_swap : rule = function
   | MIdig 1 :: rest -> [MIswap] $ rest
   | _ -> rewrite_none
 
+(**   Rule to convert SWAP to DIG 1. *)
 let swap_to_dig1 : rule = function
   | MIswap :: rest -> [MIdig 1] $ rest
   | _ -> rewrite_none
+
 
 let is_fail = function
   | Michelson.MIseq [{instr}; {instr = MI1_fail Failwith}] when is_pure_push instr -> true
@@ -368,6 +393,7 @@ let is_fail = function
 let is_pair_fail = function
   | Michelson.MIseq [{instr = MI2 (Pair _)}; {instr = MI1_fail Failwith}] -> true
   | _ -> false
+
 
 let cond_check_last cond x y rest =
   match (List.rev (to_seq x.instr), List.rev (to_seq y.instr)) with
@@ -399,6 +425,11 @@ let remove_prefix_drop = function
 (* OCaml's mod can return negative numbers, so let's fix that. *)
 let pos_mod k n = ((k mod n) + n) mod n
 
+
+(** 
+  Handles transformations involving DIG and DUG instructions.
+  E.g.: DIG n -> [DUG (n+1); DIG 1]
+*)
 let dig_dug ~with_comments n =
   let rec f shift = function
     | MIdig n' :: rest when n = n' -> f (shift + 1) rest
@@ -704,8 +735,8 @@ let main  : rule =
   | MIdup 1 :: MIdip {instr} :: rest when has_arity (1, 1) instr ->
       [MIdup 1; instr; MIdig 1] $ rest
   (* Push literals: *)
-  | MIpush (t, l) :: MI1 Some_ :: rest ->
-      [MIpush (mt_option t, MLiteral.some l)] $ rest
+  (*| MIpush (t, l) :: MI1 Some_ :: rest ->
+      [MIpush (mt_option t, MLiteral.some l)] $ rest*)
   | MIpush (tl, x) :: MI1 (Left (annot_left, annot_right, tr)) :: rest ->
       [MIpush (mt_or ?annot_left ?annot_right tl tr, MLiteral.left x)] $ rest
   | MIpush (tr, x) :: MI1 (Right (annot_left, annot_right, tl)) :: rest ->

@@ -639,15 +639,21 @@ and compile_raw_michelson michelson args =
   trace ~flag:"raw_michelson" (seq (List.rev_append (args_instrs) [ raw_michelson [michelson] args ]))
 
 (* Compile and additionally convert to a single micheline node *)
-let compile_to_micheline expr stack=
+let compile_to_micheline ?(optimize = true) expr stack=
   let compiled = compile expr in
   let micheline = Michelson.Ast.seq (compiled stack).instructions in
-  let optimised_micheline = Michelson_optimisations.Rewriter.optimise_micheline micheline in
-  optimised_micheline
 
-let compile_contract_to_micheline input_var input_ty expr stack=
+  if optimize then
+    Michelson_optimisations.Rewriter.optimise_micheline micheline
+  else
+    micheline
+
+let compile_contract_to_micheline ?(optimize = true) input_var input_ty expr stack=
   let compiled = compile_contract input_var input_ty expr in
   let micheline = Michelson.Ast.seq (compiled stack).instructions in
-  Michelson_optimisations.Rewriter.optimise_micheline micheline
+  if optimize then
+    Michelson_optimisations.Rewriter.optimise_micheline micheline
+  else
+    micheline
 
 

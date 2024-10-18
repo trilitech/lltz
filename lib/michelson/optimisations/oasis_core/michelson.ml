@@ -47,12 +47,6 @@ let assoc_opt ?(equal = ( = )) key =
   in
   f
 
-let rec is_prefix eq xs ys =
-  match xs, ys with
-  | [], _ -> true
-  | x :: xs', y :: ys' -> eq x y && is_prefix eq xs' ys'
-  | _, _ -> false
-
 let map2 ?err f xs ys =
   if List.length xs <> List.length ys then
     match err with
@@ -60,14 +54,25 @@ let map2 ?err f xs ys =
     | None -> failwith "map2: lists have different lengths"
   else
     List.map2_exn xs ys ~f
+
+let replicate i x = List.init i (fun _ -> x)
+
+let rec is_prefix eq xs ys =
+  match (xs, ys) with
+  | [], _ -> true
+  | x :: xs, y :: ys -> eq x y && is_prefix eq xs ys
+  | _ -> false
+
+let is_suffix eq xs ys = is_prefix eq (List.rev xs) (List.rev ys)
 (*End of list operations*)
-(*option ops*)
+
+(* Option operations*)
 let option_cata x f = function
   | None -> x
   | Some x -> f x
   
 let default d = option_cata d id
-(*end of option ops*)
+(* end of option operations *)
 
 let full_types_and_tags = false
 
@@ -649,20 +654,16 @@ let mi_dipn =
   mk_spec "DIPn" rule
 
 let is_hot =
-  let open Utils.Ternary in
-  let is_hot ?annot_type:_ ?annot_variable:_ mt =
+  let is_hot_function ?annot_type:_ ?annot_variable:_ mt =
     match mt with
-    | MT1 (Ticket, _) -> Yes
-    | MT1 (Contract, _) | MT2 (Lambda, _, _) -> No
-    | MT_var _ -> Maybe
-    | t -> fold_mtype_f or_ No t
+    | MT1 (Ticket, _) -> true
+    | MT1 (Contract, _) | MT2 (Lambda, _, _) -> false
+    | MT_var _ -> false  (* Actually maybe, but we care about strong yes*)
+    | t -> fold_mtype_f (||) false t
   in
-  cata_mtype is_hot
+  cata_mtype is_hot_function
 
-let is_duppable t =
-  match is_hot t with
-  | Yes -> false
-  | No | Maybe -> true
+let is_duppable t = not (is_hot t) 
 
 let mi_dup i =
   assert (i >= 1);
