@@ -19,6 +19,7 @@ type 'ty prim0 =
   | None_ of 'ty
   | Sapling_empty_state of {memo : int}
   | Unit_
+  | Min_block_time
 [@@deriving eq, ord, show {with_path = false}, map, fold, sexp_of]
 
 type 'ty prim1 =

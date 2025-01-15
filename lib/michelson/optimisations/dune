@@ -8,6 +8,7 @@
   lltz.michelson.optimisations.utils
   lltz.michelson.optimisations.michelson_base
   lltz.michelson.optimisations.oasis_core
+  ligo.tezos-utils
  )
  (preprocess
   (pps

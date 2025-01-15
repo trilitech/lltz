@@ -17,7 +17,7 @@ type mut_var = Mut_var of string
 let dummy : Range.t = Range.initial (`String { content = ""; name = Some "" })
 
 (* Creation with optional range *)
-let create ?(range = dummy) desc type_ = LLTZ.E.{ desc; range; type_} 
+let create ?(range = dummy) desc type_ = LLTZ.E.{ desc; range; type_; annotations = Annotations.empty } 
 let mk_type ?(range=dummy) (desc: LLTZ.T.desc) : LLTZ.T.t = { desc; range}
 
 let rec get_type_row (row: LLTZ.E.t Row.t) : LLTZ.T.t Row.t =
@@ -452,3 +452,5 @@ let convert_list (exprs: LLTZ.E.t list) : LLTZ.E.t Row.t =
 
 let gen_name () = Name.create ()
 let annon_function var_name var_ty ~body : LLTZ.E.lambda = { lam_var = (Var (var_name), var_ty); body }
+
+let global_constant ?(range = dummy) hash args val_ty = create ~range (LLTZ.E.Global_constant {hash; args}) val_ty

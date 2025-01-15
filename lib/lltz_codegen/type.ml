@@ -1,27 +1,31 @@
 module M = Michelson.Ast 
 module T = M.Type
 
-let tuple types =
+let tuple ?(annot = None) types =
   (* Right-comb encoding of tuple-types *)
-  match types with
-  | [] -> T.unit
-  | [ type_ ] -> type_
-  | types -> T.pair types
+  let rec loop ?(annot = None) types =
+    match types with
+    | [] -> assert false
+    | [ type1 ] -> type1
+    | [ type1; type2 ] -> T.pair ~annot type1 type2
+    | type_ :: types -> T.pair ~annot type_ (loop types)
+  in
+  loop types ~annot
 ;;
 
-let rec tuple_left types =
+(*let rec tuple_left types =
   (* Left-comb encoding of tuple-types *)
   match types with
   | [] -> T.unit
   | [ type_ ] -> type_
-  | a::b::types -> tuple_left ((T.pair [a;b])::types)
+  | a::b::types -> tuple_left ((T.pair [a;b])::types)*)
 
-let ors types =
+let ors ?(annot = None) types =
   (* Right-comb encoding of or-types (not efficient, but cheap) *)
-  let rec loop = function
+  let rec loop ?(annot = None) types =
+    match types with
     | [] | [ _ ] -> assert false
-    | [ type1; type2 ] -> T.or_ type1 type2
-    | type_ :: types -> T.or_ type_ (loop types)
+    | [ type1; type2 ] -> T.or_ ~annot type1 type2
+    | type_ :: types -> T.or_ ~annot type_ (loop types)
   in
-  loop types
-;;
+  loop types ~annot
