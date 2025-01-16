@@ -7,7 +7,7 @@ module LLTZ = struct
   module T = Lltz_ir.Type
   module R = Lltz_ir.Row
   module P = Lltz_ir.Primitive
-  module Dsl = Lltz_ir.Dsl
+  module Dsl = Lltz_ir.Ast_builder.Default
   module Free_vars = Lltz_ir.Free_vars
 end
 

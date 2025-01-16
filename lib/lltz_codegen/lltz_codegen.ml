@@ -15,7 +15,8 @@ module LLTZ = struct
   module T = Lltz_ir.Type
   module R = Lltz_ir.Row
   module P = Lltz_ir.Primitive
-  module Dsl = Lltz_ir.Dsl
+  module Dsl = Lltz_ir.Ast_builder.Default
+  module Dsl_with_dummy = Lltz_ir.Ast_builder.With_dummy
   module Free_vars = Lltz_ir.Free_vars
 end
 
@@ -700,7 +701,7 @@ and compile_row_of_lambdas row =
     let compiled_nodes = List.map nodes ~f:compile_row_of_lambdas in
     Instruction.seq (compiled_nodes @ [ Instruction.pair_n (List.length compiled_nodes) ])
   | LLTZ.R.Leaf (_, LLTZ.E.{lam_var = Var var, var_type; body}) -> 
-    compile  (LLTZ.Dsl.lambda (Var var, var_type) ~body)
+    compile  (LLTZ.Dsl_with_dummy.lambda (Var var, var_type) ~body)
 
 and compile_match subject cases =
   (* subject is a result of Inj *)
@@ -718,7 +719,7 @@ and compile_matching cases =
          ]
      | [] -> seq [])
   | LLTZ.R.Leaf (_, {lam_var = Var var, var_type; body}) ->
-    seq [ compile  (LLTZ.Dsl.lambda (Var var, var_type) ~body); exec ]
+    seq [ compile  (LLTZ.Dsl_with_dummy.lambda (Var var, var_type) ~body); exec ]
     (*seq [ Slot.let_ (`Ident var) ~in_:(compile  body); ]*)
 
 and compile_raw_michelson michelson args =
