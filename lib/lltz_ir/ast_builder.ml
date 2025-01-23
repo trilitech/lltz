@@ -57,7 +57,7 @@ let convert_option str_opt =
 
 module Default = struct
   (* Constants *)
-  let unit ~range () =
+  let unit ~range =
     create ~range (LLTZ.E.Const (Unit)) (mk_type ~range LLTZ.T.Unit)
 
   let bool ~range b =
@@ -110,19 +110,25 @@ module Default = struct
   let mut_var name = LLTZ.E.Mut_var name
 
   (* Types *)
-  let unit_ty ~range () = { LLTZ.T.desc = Unit; range }
-  let bool_ty ~range () = { LLTZ.T.desc = Bool; range }
-  let nat_ty ~range () = { LLTZ.T.desc = Nat; range }
-  let int_ty ~range () = { LLTZ.T.desc = Int; range }
-  let mutez_ty ~range () = { LLTZ.T.desc = Mutez; range }
-  let string_ty ~range () = { LLTZ.T.desc = String; range }
-  let bytes_ty ~range () = { LLTZ.T.desc = Bytes; range }
-  let chain_id_ty ~range () = { LLTZ.T.desc = Chain_id; range }
-  let timestamp_ty ~range () = { LLTZ.T.desc = Timestamp; range }
-  let address_ty ~range () = { LLTZ.T.desc = Address; range }
-  let key_ty ~range () = { LLTZ.T.desc = Keys; range }
-  let key_hash_ty ~range () = { LLTZ.T.desc = Key_hash; range }
-  let signature_ty ~range () = { LLTZ.T.desc = Signature; range }
+  let unit_ty ~range = { LLTZ.T.desc = Unit; range }
+  let bool_ty ~range = { LLTZ.T.desc = Bool; range }
+  let nat_ty ~range = { LLTZ.T.desc = Nat; range }
+  let int_ty ~range = { LLTZ.T.desc = Int; range }
+  let mutez_ty ~range = { LLTZ.T.desc = Mutez; range }
+  let string_ty ~range = { LLTZ.T.desc = String; range }
+  let bytes_ty ~range = { LLTZ.T.desc = Bytes; range }
+  let chain_id_ty ~range = { LLTZ.T.desc = Chain_id; range }
+  let timestamp_ty ~range = { LLTZ.T.desc = Timestamp; range }
+  let address_ty ~range = { LLTZ.T.desc = Address; range }
+  let key_ty ~range = { LLTZ.T.desc = Keys; range }
+  let key_hash_ty ~range = { LLTZ.T.desc = Key_hash; range }
+  let signature_ty ~range = { LLTZ.T.desc = Signature; range }
+  let operation_ty ~range = { LLTZ.T.desc = Operation; range }
+  let sapling_state_ty ~range memo = { LLTZ.T.desc = Sapling_state { memo }; range }
+  let sapling_transaction_ty ~range memo = { LLTZ.T.desc = Sapling_transaction { memo }; range }
+  let bls12_381_g1_ty ~range = { LLTZ.T.desc = Bls12_381_g1; range }
+  let bls12_381_g2_ty ~range = { LLTZ.T.desc = Bls12_381_g2; range }
+  let bls12_381_fr_ty ~range = { LLTZ.T.desc = Bls12_381_fr; range }
 
   let tuple_ty ~range row = { LLTZ.T.desc = Tuple row; range }
   let or_ty ~range row = { LLTZ.T.desc = Or row; range }
@@ -180,7 +186,7 @@ module Default = struct
     create ~range (LLTZ.E.Deref var) var_ty
 
   let assign ~range var value =
-    create ~range (LLTZ.E.Assign (var, value)) (unit_ty ~range ())
+    create ~range (LLTZ.E.Assign (var, value)) (unit_ty ~range)
 
   let if_bool ~range condition ~then_ ~else_ =
     create ~range (LLTZ.E.If_bool { condition; if_true = then_; if_false = else_ })
@@ -188,18 +194,18 @@ module Default = struct
 
   let if_none ~range subject ~none ~some =
     create ~range (LLTZ.E.If_none { subject; if_none = none; if_some = some })
-      none.LLTZ.E.type_
+      some.body.LLTZ.E.type_
 
   let if_cons ~range subject ~empty ~nonempty =
     create ~range (LLTZ.E.If_cons { subject; if_empty = empty; if_nonempty = nonempty })
-      empty.LLTZ.E.type_
+      nonempty.body.LLTZ.E.type_
 
   let if_left ~range subject ~left ~right =
     create ~range (LLTZ.E.If_left { subject; if_left = left; if_right = right })
       left.body.LLTZ.E.type_
 
   let while_ ~range cond ~body =
-    create ~range (LLTZ.E.While { cond; body }) (unit_ty ~range ())
+    create ~range (LLTZ.E.While { cond; body }) (unit_ty ~range)
 
   let while_left ~range cond ~body =
     create ~range (LLTZ.E.While_left { cond; body })
@@ -213,7 +219,7 @@ module Default = struct
     create ~range (LLTZ.E.For { index; init; cond; update; body }) body.LLTZ.E.type_
 
   let for_each ~range collection ~body =
-    create ~range (LLTZ.E.For_each { collection; body }) (unit_ty ~range ())
+    create ~range (LLTZ.E.For_each { collection; body }) (unit_ty ~range)
 
   let map ~range collection ~map =
     create ~range (LLTZ.E.Map { collection; map })
@@ -262,7 +268,7 @@ module Default = struct
   let raw_michelson ~range michelson args return_ty =
     create ~range (LLTZ.E.Raw_michelson { michelson; args }) return_ty
 
-  let create_contract ~range () ~storage ~code ~delegate ~initial_balance ~initial_storage =
+  let create_contract ~range ~storage ~code ~delegate ~initial_balance ~initial_storage =
     create ~range (LLTZ.E.Create_contract {
       storage; code; delegate; initial_balance; initial_storage
     })
@@ -275,34 +281,34 @@ module Default = struct
 
   (* Primitives *)
   (* Arity 0 *)
-  let amount ~range () =
+  let amount ~range =
     create ~range (LLTZ.E.Prim (LLTZ.P.Amount, [])) (mk_type ~range LLTZ.T.Mutez)
 
-  let balance ~range () =
+  let balance ~range =
     create ~range (LLTZ.E.Prim (LLTZ.P.Balance, [])) (mk_type ~range LLTZ.T.Mutez)
 
-  let chain_id_prim ~range () =
+  let chain_id_prim ~range =
     create ~range (LLTZ.E.Prim (LLTZ.P.Chain_id, [])) (mk_type ~range LLTZ.T.Chain_id)
 
-  let level ~range () =
+  let level ~range =
     create ~range (LLTZ.E.Prim (LLTZ.P.Level, [])) (mk_type ~range LLTZ.T.Nat)
 
-  let now ~range () =
+  let now ~range =
     create ~range (LLTZ.E.Prim (LLTZ.P.Now, [])) (mk_type ~range LLTZ.T.Timestamp)
 
   let self ~range str_opt contract_ty =
     create ~range (LLTZ.E.Prim (LLTZ.P.Self str_opt, [])) contract_ty
 
-  let self_address ~range () =
+  let self_address ~range =
     create ~range (LLTZ.E.Prim (LLTZ.P.Self_address, [])) (mk_type ~range LLTZ.T.Address)
 
-  let sender ~range () =
+  let sender ~range =
     create ~range (LLTZ.E.Prim (LLTZ.P.Sender, [])) (mk_type ~range LLTZ.T.Address)
 
-  let source ~range () =
+  let source ~range =
     create ~range (LLTZ.E.Prim (LLTZ.P.Source, [])) (mk_type ~range LLTZ.T.Address)
 
-  let total_voting_power ~range () =
+  let total_voting_power ~range =
     create ~range (LLTZ.E.Prim (LLTZ.P.Total_voting_power, []))
       (mk_type ~range LLTZ.T.Nat)
 
@@ -330,7 +336,7 @@ module Default = struct
     create ~range (LLTZ.E.Prim (LLTZ.P.Sapling_empty_state { memo }, []))
       (mk_type ~range (LLTZ.T.Sapling_state { memo }))
 
-  let unit_prim ~range () =
+  let unit_prim ~range =
     create ~range (LLTZ.E.Prim (LLTZ.P.Unit, []))
       (mk_type ~range LLTZ.T.Unit)
 
@@ -398,35 +404,35 @@ module Default = struct
       (mk_type ~range (LLTZ.T.Option (mk_type ~range LLTZ.T.Nat)))
 
   (* comparisons modified to have arity 2 *)
-  let compare_ ~range lhs rhs =
+  let compare ~range lhs rhs =
     create ~range (LLTZ.E.Prim (LLTZ.P.Compare, [lhs; rhs]))
       (mk_type ~range LLTZ.T.Int)
 
   let eq ~range lhs rhs =
-    create ~range (LLTZ.E.Prim (LLTZ.P.Eq, [compare_ ~range lhs rhs]))
+    create ~range (LLTZ.E.Prim (LLTZ.P.Eq, [compare ~range lhs rhs]))
       (mk_type ~range LLTZ.T.Bool)
 
   let neq ~range lhs rhs =
-    create ~range (LLTZ.E.Prim (LLTZ.P.Neq, [compare_ ~range lhs rhs]))
+    create ~range (LLTZ.E.Prim (LLTZ.P.Neq, [compare ~range lhs rhs]))
       (mk_type ~range LLTZ.T.Bool)
 
   let le ~range lhs rhs =
-    create ~range (LLTZ.E.Prim (LLTZ.P.Le, [compare_ ~range lhs rhs]))
+    create ~range (LLTZ.E.Prim (LLTZ.P.Le, [compare ~range lhs rhs]))
       (mk_type ~range LLTZ.T.Bool)
 
   let lt ~range lhs rhs =
-    create ~range (LLTZ.E.Prim (LLTZ.P.Lt, [compare_ ~range lhs rhs]))
+    create ~range (LLTZ.E.Prim (LLTZ.P.Lt, [compare ~range lhs rhs]))
       (mk_type ~range LLTZ.T.Bool)
 
   let ge ~range lhs rhs =
-    create ~range (LLTZ.E.Prim (LLTZ.P.Ge, [compare_ ~range lhs rhs]))
+    create ~range (LLTZ.E.Prim (LLTZ.P.Ge, [compare ~range lhs rhs]))
       (mk_type ~range LLTZ.T.Bool)
 
   let gt ~range lhs rhs =
-    create ~range (LLTZ.E.Prim (LLTZ.P.Gt, [compare_ ~range lhs rhs]))
+    create ~range (LLTZ.E.Prim (LLTZ.P.Gt, [compare ~range lhs rhs]))
       (mk_type ~range LLTZ.T.Bool)
 
-  let not_ ~range value =
+  let not ~range value =
     create ~range (LLTZ.E.Prim (LLTZ.P.Not, [value]))
       (mk_type ~range (
          match value.LLTZ.E.type_.LLTZ.T.desc with
@@ -798,7 +804,7 @@ module Default = struct
     in
     LLTZ.R.Node converted_row_leaves
 
-  let gen_name () = Name.create ()
+  let gen_name = Name.create ()
 
   let annon_function var_name var_ty ~body : LLTZ.E.lambda =
     { lam_var = (Var var_name, var_ty); body }
@@ -810,8 +816,8 @@ end
 module With_dummy = struct
   open Dummy_range
 
-  let unit_ () =
-    Default.unit ~range:v ()
+  let unit =
+    Default.unit ~range:v
 
   let bool b =
     Default.bool ~range:v b
@@ -819,13 +825,13 @@ module With_dummy = struct
   let nat n =
     Default.nat ~range:v n
 
-  let int_ n =
+  let int n =
     Default.int ~range:v n
 
   let mutez n =
     Default.mutez ~range:v n
 
-  let string_ s =
+  let string s =
     Default.string ~range:v s
 
   let key s =
@@ -861,19 +867,25 @@ module With_dummy = struct
   let var = Default.var
   let mut_var = Default.mut_var
 
-  let unit_ty () = Default.unit_ty ~range:v ()
-  let bool_ty () = Default.bool_ty ~range:v ()
-  let nat_ty () = Default.nat_ty ~range:v ()
-  let int_ty () = Default.int_ty ~range:v ()
-  let mutez_ty () = Default.mutez_ty ~range:v ()
-  let string_ty () = Default.string_ty ~range:v ()
-  let bytes_ty () = Default.bytes_ty ~range:v ()
-  let chain_id_ty () = Default.chain_id_ty ~range:v ()
-  let timestamp_ty () = Default.timestamp_ty ~range:v ()
-  let address_ty () = Default.address_ty ~range:v ()
-  let key_ty () = Default.key_ty ~range:v ()
-  let key_hash_ty () = Default.key_hash_ty ~range:v ()
-  let signature_ty () = Default.signature_ty ~range:v ()
+  let unit_ty = Default.unit_ty ~range:v
+  let bool_ty = Default.bool_ty ~range:v
+  let nat_ty = Default.nat_ty ~range:v
+  let int_ty = Default.int_ty ~range:v
+  let mutez_ty = Default.mutez_ty ~range:v
+  let string_ty = Default.string_ty ~range:v
+  let bytes_ty = Default.bytes_ty ~range:v
+  let chain_id_ty = Default.chain_id_ty ~range:v
+  let timestamp_ty = Default.timestamp_ty ~range:v
+  let address_ty = Default.address_ty ~range:v
+  let key_ty = Default.key_ty ~range:v
+  let key_hash_ty = Default.key_hash_ty ~range:v
+  let signature_ty = Default.signature_ty ~range:v
+  let operation_ty = Default.operation_ty ~range:v
+  let sapling_state_ty memo_size = Default.sapling_state_ty ~range:v memo_size
+  let sapling_transaction_ty memo_size = Default.sapling_transaction_ty ~range:v memo_size
+  let bls12_381_g1_ty = Default.bls12_381_g1_ty ~range:v
+  let bls12_381_g2_ty = Default.bls12_381_g2_ty ~range:v
+  let bls12_381_fr_ty = Default.bls12_381_fr_ty ~range:v
   let tuple_ty row = Default.tuple_ty ~range:v row
   let or_ty row = Default.or_ty ~range:v row
   let option_ty ty = Default.option_ty ~range:v ty
@@ -915,25 +927,25 @@ module With_dummy = struct
   let inj context expr = Default.inj ~range:v context expr
   let match_ subject ~cases = Default.match_ ~range:v subject ~cases
   let raw_michelson michelson args return_ty = Default.raw_michelson ~range:v michelson args return_ty
-  let create_contract () ~storage ~code ~delegate ~initial_balance ~initial_storage =
-    Default.create_contract ~range:v () ~storage ~code ~delegate ~initial_balance ~initial_storage
-  let amount () = Default.amount ~range:v ()
-  let balance () = Default.balance ~range:v ()
-  let chain_id_prim () = Default.chain_id_prim ~range:v ()
-  let level () = Default.level ~range:v ()
-  let now () = Default.now ~range:v ()
+  let create_contract ~storage ~code ~delegate ~initial_balance ~initial_storage =
+    Default.create_contract ~range:v ~storage ~code ~delegate ~initial_balance ~initial_storage
+  let amount = Default.amount ~range:v
+  let balance = Default.balance ~range:v
+  let chain_id_prim = Default.chain_id_prim ~range:v
+  let level = Default.level ~range:v
+  let now = Default.now ~range:v
   let self str_opt contract_ty = Default.self ~range:v str_opt contract_ty
-  let self_address () = Default.self_address ~range:v ()
-  let sender () = Default.sender ~range:v ()
-  let source () = Default.source ~range:v ()
-  let total_voting_power () = Default.total_voting_power ~range:v ()
+  let self_address = Default.self_address ~range:v
+  let sender = Default.sender ~range:v
+  let source = Default.source ~range:v
+  let total_voting_power = Default.total_voting_power ~range:v
   let empty_bigmap key value = Default.empty_bigmap ~range:v key value
   let empty_map key value = Default.empty_map ~range:v key value
   let empty_set ty = Default.empty_set ~range:v ty
   let nil ty = Default.nil ~range:v ty
   let none ty = Default.none ~range:v ty
   let sapling_empty_state memo = Default.sapling_empty_state ~range:v memo
-  let unit_prim () = Default.unit_prim ~range:v ()
+  let unit_prim = Default.unit_prim ~range:v
   let car pair = Default.car ~range:v pair
   let cdr pair = Default.cdr ~range:v pair
   let left (opt1, opt2, ty) value = Default.left ~range:v (opt1, opt2, ty) value
@@ -945,14 +957,14 @@ module With_dummy = struct
   let int_prim value = Default.int_prim ~range:v value
   let bytes_prim value = Default.bytes_prim ~range:v value
   let is_nat value = Default.is_nat ~range:v value
-  let compare_ lhs rhs = Default.compare_ ~range:v lhs rhs
+  let compare lhs rhs = Default.compare ~range:v lhs rhs
   let eq lhs rhs = Default.eq ~range:v lhs rhs
   let neq lhs rhs = Default.neq ~range:v lhs rhs
   let le lhs rhs = Default.le ~range:v lhs rhs
   let lt lhs rhs = Default.lt ~range:v lhs rhs
   let ge lhs rhs = Default.ge ~range:v lhs rhs
   let gt lhs rhs = Default.gt ~range:v lhs rhs
-  let not_ value = Default.not_ ~range:v value
+  let not value = Default.not ~range:v value
   let size container = Default.size ~range:v container
   let address contract = Default.address ~range:v contract
   let implicit_account key_hash = Default.implicit_account ~range:v key_hash

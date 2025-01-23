@@ -9,7 +9,7 @@ homepage: "https://github.com/trilitech/lltz"
 bug-reports: "https://github.com/trilitech/lltz/issues"
 depends: [
   "ocaml" {= "4.14.2"}
-  "dune" {>= "3.15"}
+  "dune" {>= "3.7"}
   "core"
   "ppx_jane"
   "tezos-micheline"

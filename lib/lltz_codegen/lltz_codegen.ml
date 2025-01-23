@@ -764,9 +764,6 @@ let compile_contract_to_micheline  ?(optimize = true) ?(strip_annots = true) inp
   (*Michelson.Ast.pp Format.std_formatter micheline;*)
   if optimize then
     let optimised = Michelson_optimisations.Rewriter.optimise_micheline ~strip_annots micheline in
-    (*let optimised2 = Michelson_optimisations.Rewriter.optimise_micheline ~strip_annots optimised in*)
-    (*Printf.printf "Optimised: \n";
-    Michelson.Ast.pp Format.std_formatter optimised;*)
     optimised
   else
     micheline

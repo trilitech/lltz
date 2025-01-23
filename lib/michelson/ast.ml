@@ -850,7 +850,7 @@ module Instruction = struct
   let self opt = 
     match opt with
     | None -> prim (I Self)
-    | Some s -> prim ~arguments:[ string s ] (I Self)
+    | Some s -> prim ~annot:[ s ] (I Self)
   let self_address = prim (I Self_address)
   let sender = prim (I Sender)
   let set_delegate = prim (I Set_delegate)
