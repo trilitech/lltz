@@ -137,7 +137,7 @@ let remove n stack =
   | n -> I.[ dig_n n; drop ]
 
 (* prim m n instr stack: m elements are consumed from the stack, n elements are produced *)
-let prim ?(message = "nonexx") m n instr stack =
+let prim ?(message = "") m n instr stack =
   let stack =
     let left, right = List.split_n stack m in
     (* split stack into left and right at index m *)
@@ -243,18 +243,12 @@ module Slot = struct
     | _ -> 
       raise_s [%message "Instruction.Slot.def: slot not assignable" (stack : SlotStack.t) (slot : [< Slot.definable ])]
 
-  (* remove slot from stack, for example after it is used by let*)
-  (*let collect slot stack =
-    let found_slot = SlotStack.find_exn stack slot in
-    remove found_slot stack*)
-
-  (* remove slot from stack, for example after it is used by let*)
+  (* Remove slot from stack if not collected already, for example after it is used by let*)
   let collect slot stack =
     try
       let found_slot = SlotStack.find_exn stack slot in
       remove found_slot stack
-    with _ -> 
-      (*raise_s [%message "Instruction.Slot.collect: slot not found" (stack : SlotStack.t) (slot : [< Slot.definable ])]*)
+    with _ ->
       Config.ok stack []
 
   let collect_if_unused unused_set slot =
@@ -302,13 +296,13 @@ module Slot = struct
   let let_all slots ?(unused_set = String.Set.empty) ~in_ = 
     let collect_immediately = seq (List.map slots ~f:(collect_if_unused unused_set)) in
     seq [ def_all slots ~in_:(seq [collect_immediately; in_;]); collect_all slots ]
-  (* bind and remove after used*)
 
   let lookup slot ~in_ stack =
     try 
       let idx = SlotStack.find_exn stack slot in
       in_ idx stack
     with _ -> 
+      (* Instead of assertion, this produces a nicer error message. TBD *)
       Config.raise [ I.never ]
 
   let dup_or_dig slot condition =
@@ -319,22 +313,6 @@ module Slot = struct
   
   let dup slot = 
     lookup slot ~in_:(fun idx -> dup idx)
-
-  (*let set slot stack =
-    lookup slot stack ~in_:(fun idx stack ->
-      let instructions =
-        match idx with
-        | 0 -> assert false
-        | n -> I.[ dug_n n; dig_n (n - 1); drop ]
-      in
-      match List.split_n stack idx with
-      | _val_ :: left, nth :: right -> Config.ok (left @ (nth :: right)) instructions
-      | _ ->
-        raise_s
-          [%message
-            "Instruction.Slot.set: invalid stack"
-              (stack : SlotStack.t)
-              (slot : [< Slot.definable ])])*)
 
   let set (slot : [< Slot.definable ]) stack =
     match SlotStack.find stack slot with
@@ -517,7 +495,6 @@ let lambda_rec ~environment ~lam_var ~mu ~return_type ~partial_apps return stack
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-NEVER *)
 let never stack =
-  Printf.eprintf "WOO HOOO never\n";
   match stack with
   | `Value :: _ -> Config.raise [ I.never ]
   | _ -> raise_s [%message "Instruction.never: invalid stack" (stack : SlotStack.t)]

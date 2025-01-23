@@ -687,61 +687,6 @@ module Type = struct
   let tx_rollup_l2_address ?(annot=None) () = make ~annot (T Tx_rollup_l2_address)
 
   let chest_key ?(annot=None) () = make ~annot (T Chest_key)
-(*
-  let address = prim (T Address)
-  let big_map key value = prim ~arguments:[ key; value ] (T Big_map)
-  let bls12_381_fr = prim (T Bls12_381_fr)
-  let bls12_381_g1 = prim (T Bls12_381_g1)
-  let bls12_381_g2 = prim (T Bls12_381_g2)
-  let bool = prim (T Bool)
-  let bytes = prim (T Bytes)
-  let chain_id = prim (T Chain_id)
-  let contract type_ = prim ~arguments:[ type_ ] (T Contract)
-  let int : t = prim (T Int)
-  let key = prim (T Key)
-  let key_hash = prim (T Key_hash)
-  let lambda arg ret = prim ~arguments:[ arg; ret ] (T Lambda)
-  let list type_ = prim ~arguments:[ type_ ] (T List)
-  let map key value = prim ~arguments:[ key; value ] (T Map)
-  let mutez = prim (T Mutez)
-  let nat = prim (T Nat)
-  let never = prim (T Never)
-  let operation = prim (T Operation)
-  let option ty = prim ~arguments:[ ty ] (T Option)
-  let or_ ?(annot1 = None) ?(annot2 = None) t1 t2 =
-    match annot1, annot2 with
-    | None, None -> prim ~arguments:[ t1; t2 ] (T Or)
-    | Some a1, None -> prim ~annot:[ a1 ] ~arguments:[ t1; t2 ] (T Or)
-    | None, Some _ -> assert false
-    | Some a1, Some a2 -> prim ~annot:[ a1; a2 ] ~arguments:[ t1; t2 ] (T Or)
-  ;;
-
-  let pair ?(annot1 = None) ?(annot2 = None) t1 t2 =
-    match annot1, annot2 with
-    | None, None -> prim ~arguments:[ t1; t2 ] (T Pair)
-    | Some a1, None -> prim ~annot:[ a1 ] ~arguments:[ t1; t2 ] (T Pair)
-    | None, Some _ -> assert false
-    | Some a1, Some a2 -> prim ~annot:[ a1; a2 ] ~arguments:[ t1; t2 ] (T Pair)
-  ;;
-
-  let pair_n ts =
-    assert (List.length ts >= 2);
-    prim ~arguments:ts (T Pair)
-  ;;
-
-  let sampling_state n = prim ~arguments:[ n ] (T Sapling_state)
-  let sapling_transaction n = prim ~arguments:[ n ] (T Sapling_transaction)
-2  let set cty = prim ~arguments:[ cty ] (T Set)
-  let signature = prim (T Signature)
-  let string = prim (T String)
-  let ticket cty = prim ~arguments:[ cty ] (T Ticket)
-  let timestamp = prim (T Timestamp)
-  let unit = prim (T Unit)
-
-  let chest = prim (T Chest)
-  let tx_rollup_l2_address = prim (T Tx_rollup_l2_address)
-
-  let chest_key = prim (T Chest_key)*)
 end
 
 module Instruction = struct

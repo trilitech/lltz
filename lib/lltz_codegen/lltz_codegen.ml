@@ -38,13 +38,7 @@ let sanitize_label annot =
 let rec compile_row_types ?(annot = None) row =
   match row with
   | LLTZ.R.Node nodes ->
-    (*let annots =
-      List.map nodes ~f:(fun node ->
-        match node with
-        | LLTZ.R.Leaf (Some (LLTZ.R.Label value), _) -> Some value
-        | _ -> None)
-    in*)
-    Type.tuple ~annot:(sanitize_label annot) (List.map nodes ~f:(compile_row_types ~annot:None)) (*~annots*)
+    Type.tuple ~annot:(sanitize_label annot) (List.map nodes ~f:(compile_row_types ~annot:None))
   | LLTZ.R.Leaf (Some (LLTZ.R.Label annot), value) -> convert_type ~annot:(sanitize_label (Some annot)) value
   | LLTZ.R.Leaf (None, value) -> convert_type value
 
@@ -52,13 +46,7 @@ and compile_row_types_for_or ?(annot = None) row =
   match row with
   | LLTZ.R.Node nodes ->
     let converted_types = List.map nodes ~f:(compile_row_types_for_or ~annot:None) in
-    (*let annots =
-      List.map nodes ~f:(fun node ->
-        match node with
-        | LLTZ.R.Leaf (Some (LLTZ.R.Label value), _) -> Some value
-        | _ -> None)
-    in*)
-    Type.ors ~annot:(sanitize_label annot) converted_types (*~annots*)
+    Type.ors ~annot:(sanitize_label annot) converted_types
   | LLTZ.R.Leaf (Some (LLTZ.R.Label annot), value) -> convert_type ~annot:(sanitize_label (Some annot)) value
   | LLTZ.R.Leaf (None, value) -> convert_type value
 
@@ -166,14 +154,12 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Empty_set cty -> empty_set (convert_type cty)
   | Nil ty -> nil (convert_type ty)
   | None ty -> none (convert_type ty)
-  | Sapling_empty_state { memo } -> 
-    Printf.eprintf "Sapling empty state LLTZ\n";
-    sapling_empty_state (memo)
+  | Sapling_empty_state { memo } -> sapling_empty_state (memo)
   | Unit -> unit
   | Car -> car
   | Cdr -> cdr
-  | Left (opt1, opt2, ty) -> left (convert_type ty) (* TODO: resolve tag options *)
-  | Right (opt1, opt2, ty) -> right (convert_type ty) (* TODO: resolve tag options *)
+  | Left (opt1, opt2, ty) -> left (convert_type ty)
+  | Right (opt1, opt2, ty) -> right (convert_type ty)
   | Some -> some
   | Eq -> eq
   | Abs -> abs
@@ -191,7 +177,7 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Size -> size
   | Address -> address
   | Implicit_account -> implicit_account
-  | Contract (opt, ty) -> contract (convert_type ty) (* TODO: resolve tag option*)
+  | Contract (opt, ty) -> contract (convert_type ty)
   | Pack -> pack
   | Unpack ty -> unpack (convert_type ty)
   | Hash_key -> hash_key
@@ -207,7 +193,7 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Voting_power -> voting_power
   | Get_n n -> get_n n
   | Cast ty -> cast (convert_type ty)
-  | Rename opt -> failwith (* TODO: Check why the instruction does not exist. *)
+  | Rename opt -> failwith (* Instruction does not exist. *)
   | Emit (opt, ty_opt) -> emit opt (Option.map ~f:convert_type ty_opt)
   | Failwith -> assert false
   | Never -> assert false
@@ -352,9 +338,7 @@ and compile_prim primitive args =
   match primitive with
   | LLTZ.P.Failwith -> 
     seq (List.rev_append args_instrs [ Instruction.failwith ])
-  | LLTZ.P.Never -> 
-    Printf.eprintf "WOOHOO Never prim\n";
-    seq (List.rev_append args_instrs [ Instruction.never ])
+  | LLTZ.P.Never -> seq (List.rev_append args_instrs [ Instruction.never ])
   | LLTZ.P.Concat2 -> 
     (match args with
     | [arg1; arg2] -> seq [ 
@@ -420,7 +404,6 @@ and compile_if_cons subject if_empty (hd, tl, nonempty) =
 
 (* Compile an if-left expression by compiling the subject, then applying the if-left instruction to the subject and the left and right branches. *)
 and compile_if_left subject (left, l) (right, r) =
-  (*Print the elements*)
   seq
     [ compile  subject
     ; if_left
@@ -570,15 +553,7 @@ and compile_lambda_rec expr =
 
 (* Compile an application by compiling a lambda and argument, then applying the EXEC instruction. *)
 and compile_app abs arg =
-    let environment =
-      LLTZ.Free_vars.free_vars_with_types abs
-    in
-
-    (Instruction.seq ([ trace (compile  arg); trace  (compile  abs)] @
-    (*List.map (environment |> Map.to_alist) ~f:(fun (ident, var_ty) -> 
-      Printf.eprintf "ident: %s\n" ident;
-      seq [ Slot.dup_or_dig (`Ident ident) (LLTZ.T.is_duppable var_ty); apply ]) @*)
-    [dig 1; trace ~flag:"exec" exec ]))
+    (Instruction.seq ([ trace (compile  arg); trace  (compile  abs)] @ [dig 1; trace ~flag:"exec" exec ]))
 
 (* Compile contract creation expression by compiling the delegate, initial balance, and initial storage, applying CREATE_CONTRACT instruction. *)
 and compile_create_contract
@@ -740,28 +715,20 @@ and compile_global_constant hash args return_ty =
 (* Compile and additionally convert to a single micheline node *)
 let compile_to_micheline  ?(optimize = true) ?(strip_annots = true) expr stack=
   let expr = Last_vars.compute_last_vars expr in
-  (*Printf.eprintf "expr: %s\n" (Sexplib.Sexp.to_string_hum (LLTZ.E.sexp_of_t expr));*)
   let compiled = compile  expr in
   let micheline = Michelson.Ast.seq (compiled stack).instructions in
 
-  (*Michelson.Ast.pp Format.std_formatter micheline;*)
-
   if optimize then
     let optimised = Michelson_optimisations.Rewriter.optimise_micheline ~strip_annots micheline in
-    (*let optimised2 = Michelson_optimisations.Rewriter.optimise_micheline ~strip_annots optimised in*)
-    (*Printf.printf "Optimised: \n";
-    Michelson.Ast.pp Format.std_formatter optimised;*)
     optimised
   else
     micheline
 
 let compile_contract_to_micheline  ?(optimize = true) ?(strip_annots = true) input_var input_ty expr stack=
   let expr = Last_vars.compute_last_vars expr in
-  (*Printf.eprintf "expr: %s\n" (Sexplib.Sexp.to_string_hum (LLTZ.E.sexp_of_t expr));*)
   let compiled = compile_contract  input_var input_ty expr in
   let micheline = Michelson.Ast.seq (compiled stack).instructions in
 
-  (*Michelson.Ast.pp Format.std_formatter micheline;*)
   if optimize then
     let optimised = Michelson_optimisations.Rewriter.optimise_micheline ~strip_annots micheline in
     optimised

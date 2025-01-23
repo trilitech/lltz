@@ -6,60 +6,6 @@ module Control = Utils.Control
 module Big_int = Big_int
 open Michelson
 
-let rec oasis_micheline_to_micheline (t : Micheline.t) : (unit, string) Tezos_micheline.Micheline.node =
-  match t with
-  | Int s ->
-      Int ((), Z.of_string s)
-  | String s ->
-      String ((), s)
-  | Bytes s ->
-      (* Adjust based on whether 's' is raw bytes or hex-encoded *)
-      let bytes =
-        try
-          (* If 's' is hex-encoded *)
-          Hex.to_bytes (`Hex s)
-        with Invalid_argument _ ->
-          (* If 's' is raw bytes *)
-          Bytes.of_string s
-      in
-      Bytes ((), bytes)
-  | Primitive {name; annotations; arguments} ->
-      let prim = name in
-      let args = List.map ~f:(oasis_micheline_to_micheline) arguments in
-      Prim ((), prim, args, annotations)
-  | Sequence nodes ->
-      let compiled_nodes = List.map ~f:(oasis_micheline_to_micheline) nodes in
-      Seq ((), compiled_nodes)
-
-(* Oasis micheline pretty printer *)
-let rec pp_oasis_micheline (fmt : Format.formatter) (node : Micheline.t) : unit =
-  match node with
-  | Int s ->
-      Format.fprintf fmt "%s" s
-  | String s ->
-      Format.fprintf fmt "\"%s\"" s
-  | Bytes s ->
-      Format.fprintf fmt "0x%s" (Hex.show (`Hex s))
-  | Primitive {name; annotations; arguments} ->
-      Format.fprintf fmt "%s" name;
-      if List.length arguments > 0 then
-        Format.fprintf fmt "%a" (Format.pp_print_list pp_oasis_micheline) arguments;
-      Format.fprintf fmt ";";
-  | Sequence nodes ->
-      Format.fprintf fmt "{%a}" (Format.pp_print_list pp_oasis_micheline) nodes
-
-let pp ppf t =
-  let open Tezos_micheline.Micheline_printer in
-  t |> Tezos_micheline.Micheline.strip_locations |> printable (fun arg -> arg) |> print_expr ppf
-;;
-
-(* Micheline pretty printer *)
-let pp_micheline m =
-  let oasis_micheline = Micheline.Sequence (List.map ~f:(fun v -> Micheline.Sequence(Michelson.To_micheline.instruction {instr = v})) m) in
-  pp Format.err_formatter (oasis_micheline_to_micheline oasis_micheline)
-  (*Tezos_micheline.Micheline_printer.print_expr Format.err_formatter (Tezos_micheline.Micheline.strip_locations (oasis_micheline_to_micheline oasis_micheline))*)
-  (*pp_oasis_micheline Format.err_formatter oasis_micheline*)
-
 (* 
   Recursive function to determine if an instruction fails.
   It traverses the instruction tree and checks for failure points.
@@ -936,7 +882,6 @@ let main (expr : (instr, literal) instr_f list) : ((instr, literal) instr_f list
       then [MIdig (n2 + 1); MIdrop; MIdug (n1 - 1)] $ rest
       else [MIdig n2; MIdrop; MIdug n1] $ rest
   | bin :: MIdig n :: MIdrop :: rest when has_arity (2, 1) bin && n >= 1 ->
-      (*Printf.eprintf "binary\n";*)
       [MIdig (n + 1); MIdrop; bin] $ rest
   | i :: MIdig n :: MIdrop :: rest when has_arity (1, 2) i && n >= 2 ->
       [MIdig (n - 1); MIdrop; i] $ rest
@@ -966,7 +911,6 @@ let main (expr : (instr, literal) instr_f list) : ((instr, literal) instr_f list
     -> [MIdig (n + 2); MIdrop; ternary] $ rest
   | ternary :: MIdig n :: MIdrop :: rest when has_arity (3, 2) ternary && n >= 2
     -> 
-      (*Printf.eprintf "ternary\n";*)
       [MIdig (n + 1); MIdrop; ternary] $ rest
   | (MIcomment _ as comment) :: push :: MI1_fail Failwith :: rest
     when is_pure_push push -> [push; MI1_fail Failwith; comment] $ rest
@@ -1131,46 +1075,8 @@ let main (expr : (instr, literal) instr_f list) : ((instr, literal) instr_f list
   | MI0 (Self None) :: MI1 Address :: rest -> [MI0 Self_address] $ rest
   | _ -> rewrite_none)
   in
-  (*let _ = (match res with
-  | Some (before,after) -> 
-    Printf.eprintf "\nexpr: ";
-    pp_micheline expr;
-    Printf.eprintf "\nA: ";
-    pp_micheline before;
-    Printf.eprintf " B: ";
-    pp_micheline after;
-    Printf.eprintf "\n"
-  | None -> ())
-  in*)
   res
 
-(*let lltz_specific (expr : (instr, literal) instr_f list) : ((instr, literal) instr_f list * (instr, literal) instr_f list) option =
-  (*match expr with
-  | (MIdig 1 | MIswap) :: MIdrop :: (MIdig 1 | MIswap) :: MIdrop :: rest ->
-    [MIdip {instr = MIdropn 2}] $ rest
-  | (MIdig 1 | MIswap) :: MIdrop :: MIdip {instr = MIdropn n} :: rest ->
-    [MIdip {instr = MIdropn (n+1)}] $ rest
-  | _ -> rewrite_none*)
-  (match expr with
-  | (MIdig 1 | MIswap) :: MIdrop :: (MIdig 1 | MIswap) :: MIdrop :: rest -> [MIdug 2; MIdropn 2 ] $ rest
-  | (MIdig 1 | MIswap) :: MIdrop :: MIdig n :: MIdropn n' :: rest when n=n' -> [MIdug (n+1);MIdropn (n+1)] $ rest
-  (*| MIdig n  :: MIdrop :: (MIdig 1 | MIswap) :: MIdrop :: rest when n = n' -> [ MIdig n; MIdig n'; MIdrop 2] $ rest*)
-  | MIdig n  :: MIdrop :: MIdig n' :: MIdrop :: rest when n = n' -> [ MIdig n; ] $ (MIdig (n'+1):: MIdropn 2 ::rest)
-  | MIdig n  :: MIdropn m  :: MIdig n' :: MIdrop :: rest -> [ MIdig n; ] $ (MIdig (n'+m):: MIdropn (m+1)::rest) (*TODO: +-1 error, needs condition*)
-  | _ -> rewrite_none
-  )*)
-(*let lltz_specific (expr : (instr, literal) instr_f list) : ((instr, literal) instr_f list * (instr, literal) instr_f list) option =
-  let rec count_swap_drop_pairs lst n =
-    match lst with
-    | (MIdug 1 | MIdig 1 | MIswap) :: (MIdrop | MIdropn 1) :: rest -> count_swap_drop_pairs rest (n + 1)
-    | _ -> (n, lst)
-  in
-  let (n, rest) = count_swap_drop_pairs expr 0 in
-  if n > 1 then
-    (let _ = (Printf.eprintf "reduced n: %d\n" n) in
-    Some ([MIdug n ; MIdropn n], rest))
-  else
-    rewrite_none*)
 let lltz_specific (expr : (instr, literal) instr_f list) : ((instr, literal) instr_f list * (instr, literal) instr_f list) option =
   let rec all_dig_k k n xs =
     match n, xs with
@@ -1285,37 +1191,6 @@ let unpair : rule = function
         [MIunpair (drop_field n fields)] $ rest
   | MIunpair [true; true] :: MIdig 1 :: MIdrop :: rest -> [MIfield [A]] $ rest
   | _ -> rewrite_none
-
-(*let normalize f =
-  let rec norm instr =
-    let instr' = map_instr_f norm Control.id instr.instr in
-    let instr_with_normed_sub_instrs = {instr = instr'} in
-    match instr_with_normed_sub_instrs.instr with
-    | MIseq xs ->
-        let xs' = norm_seq xs in
-        {instr = MIseq xs'}
-    | _ ->
-        (* Apply the rule f to the instruction *)
-        match f [instr_with_normed_sub_instrs.instr] with
-        | Some (result, rest) ->
-            assert (rest = []); (* Since we have only one instruction *)
-            {instr = List.hd result}
-        | None -> instr_with_normed_sub_instrs
-  and norm_seq xs =
-    let xs' = List.map norm xs in
-    let rec aux acc = function
-      | [] -> List.rev acc
-      | i :: is ->
-          let acc' = i :: acc in
-          match f (List.map (fun x -> x.instr) (List.rev acc')) with
-          | Some (result, rest) ->
-              let rest_instrs = List.map (fun x -> {instr = x}) rest in
-              aux [] (List.rev_append rest_instrs is)
-          | None -> aux acc' is
-    in
-    aux [] xs'
-  in
-  norm*)
 
 let normalize f =
   let rec norm = function

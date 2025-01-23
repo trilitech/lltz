@@ -11,14 +11,6 @@ let tuple ?(annot = None) types =
     | type_ :: types -> T.pair ~annot type_ (loop types)
   in
   loop types ~annot
-;;
-
-(*let rec tuple_left types =
-  (* Left-comb encoding of tuple-types *)
-  match types with
-  | [] -> T.unit
-  | [ type_ ] -> type_
-  | a::b::types -> tuple_left ((T.pair [a;b])::types)*)
 
 let ors ?(annot = None) types =
   (* Right-comb encoding of or-types (not efficient, but cheap) *)

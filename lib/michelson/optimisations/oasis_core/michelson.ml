@@ -818,7 +818,6 @@ let mi_loop_left =
                    && unifiable_ok_stacks tail tail' ->
                 Some (tinstr, Ok (Stack_ok (b :: tail)))
             | _ -> 
-              (*Printf.eprintf "WOOHOO LOOP_LEFT: incompatible body\n";*)
               Some (tinstr, Error "LOOP_LEFT: incompatible body"))
         | _ -> None)
     | _ -> assert false
@@ -1899,7 +1898,6 @@ module Of_micheline = struct
 
   and instruction x =
     let err () =
-      (*Printf.eprintf "WOO Cannot parse instruction %S\n" (Micheline.show x) ;*)
       MIerror (sprintf "Cannot parse instruction %S" (Micheline.show x))
     in
     let cmp instr = MIseq [{instr = MI2 Compare}; {instr}] in
@@ -1976,10 +1974,8 @@ module Of_micheline = struct
           match l with
           | Some l -> MIfield (List.rev l)
           | None -> 
-            (*Printf.eprintf "WOO here1 Cannot parse instruction %S\n" (Micheline.show x) ;*)
             err ())
       | _ -> 
-        (*Printf.eprintf "WOO here2 Cannot parse instruction %S\n" (Micheline.show x) ;*)
         err ()
     in
     let instr =
@@ -2066,7 +2062,6 @@ module Of_micheline = struct
               | [], [t] -> MI1 (Emit (None, Some (mtype t)))
               | [annot], [t] -> MI1 (Emit (Some annot, Some (mtype t)))
               | _ -> 
-                (*Printf.eprintf "WOO here5 Cannot parse instruction %S\n" (Micheline.show x) ;*)
                 err ())
           | "CREATE_CONTRACT", [x] ->
               let tparameter, tstorage, code =
@@ -2103,9 +2098,6 @@ module Of_micheline = struct
           | "SAPLING_EMPTY_STATE", [Int memo] ->
               MI0 (Sapling_empty_state {memo = int_of_string memo})
           | "SAPLING_EMPTY_STATE", [Primitive {name = "int"; annotations = annots; arguments = args}] -> 
-            (*Printf.eprintf "WOO here6 Cannot parse instruction %S\n" (Micheline.show x) ;
-            Printf.eprintf "args length: %d\n" (List.length args);
-            Printf.eprintf "annots length: %d\n" (List.length annots);*)
             err ()
           | "SAPLING_VERIFY_UPDATE", [] -> MI2 Sapling_verify_update
           | "NEVER", [] -> MI1_fail Never
@@ -2184,10 +2176,8 @@ module Of_micheline = struct
           (*Global constant*)
           | "constant", [hash] -> MIConstant (literal hash)
           | _ -> 
-            (*Printf.eprintf "WOO here3 Cannot parse instruction %S\n" (Micheline.show x) ;*)
             err ())
       | _ -> 
-        (*Printf.eprintf "WOO here4 Cannot parse instruction %S\n" (Micheline.show x) ;*)
         err ()
     in
     {instr}
@@ -2588,12 +2578,7 @@ let profile  =
         let* d = same d1 d2 in
         return (max p1 p2, d)
     | MIif_cons ((p1, d1), (p2, d2)) ->
-      (*Printf.eprintf "p1: %s, d1: %s, p2: %s, d2: %s\n"
-      (string_of_int p1)
-      (match d1 with None -> "None" | Some x -> string_of_int x)
-      (string_of_int p2)
-      (match d2 with None -> "None" | Some x -> string_of_int x);*)
-        let* d = same (succ d1) (pred d2) in (*// nonempty: *+n->**+n + d1 =p1   empty: *+n ->n + d2=p2*)
+        let* d = same (succ d1) (pred d2) in
         return (max (p1 - 1) (p2 + 1), d)
     | MIseq xs ->
         let f = function
