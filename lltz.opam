@@ -12,7 +12,7 @@ depends: [
   "dune" {>= "3.7"}
   "core"
   "ppx_jane"
-  "tezos-micheline"
+  "octez-libs"
   "ppxlib"
   "grace"
   "odoc" {with-doc}

@@ -23,6 +23,6 @@
   dune
   core
   ppx_jane
-  tezos-micheline
+  octez-libs
   ppxlib
   grace))
