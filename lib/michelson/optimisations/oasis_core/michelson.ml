@@ -1596,7 +1596,13 @@ let spec_of_instr  = function
   | MIcomment _ -> mi_comment
   | MIerror s -> mi_error s
 
-let is_commutative  instr = (spec_of_instr  instr).commutative
+let is_constant {instr} =
+  match instr with
+  | MIConstant _ -> true
+  | _ -> false
+
+let is_commutative  instr = 
+  if is_constant {instr} then false else (spec_of_instr instr).commutative
 
 let name_of_instr  instr = (spec_of_instr  instr).name
 
@@ -2597,7 +2603,7 @@ let profile  =
     | MIlambda _ -> return (0, Some 1)
     | MIlambda_rec _ -> return (0, Some 1)
     | MIconcat_unresolved -> failwith "profile: CONCAT arity undetermined"
-    | MIConstant _ -> assert false
+    | MIConstant _ -> assert false (* We don't need to profile constants as in that case has_arity returns false *)
     | MIerror _ -> return (0, Some 0)
     | i -> (
         match spec_of_instr  i with
@@ -2609,4 +2615,5 @@ let profile  =
 let has_profile  pr instr = Ok pr = profile  {instr}
 
 let has_arity  a instr =
-  has_profile  (profile_of_arity a) instr
+  if is_constant {instr} then false
+  else has_profile  (profile_of_arity a) instr
