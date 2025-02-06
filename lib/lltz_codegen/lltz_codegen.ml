@@ -7,6 +7,7 @@ module Stack = Stack
 module Type = Type
 module Instruction = Instruction
 module Slot = Slot
+module Last_vars = Last_vars
 
 open Core
 
@@ -195,8 +196,8 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Cast ty -> cast (convert_type ty)
   | Rename opt -> failwith (* Instruction does not exist. *)
   | Emit (opt, ty_opt) -> emit opt (Option.map ~f:convert_type ty_opt)
-  | Failwith -> assert false
-  | Never -> assert false
+  | Failwith -> assert false (* Resolved in compile_prim *)
+  | Never -> assert false (* Resolved in compile_prim *)
   | Pair (opt1, opt2) -> pair ~left_annot:opt1 ~right_annot:opt2 ()
   | Add -> add
   | Mul -> mul
@@ -234,7 +235,7 @@ let rec compile  : LLTZ.E.t -> t =
   fun expr ->
     seq
     [ (match expr.desc with
-       | Variable (Var name) -> compile_variable expr
+       | Variable (Var name) -> compile_variable name expr.type_ expr.annotations
        | Let_in { let_var = Var var; rhs; in_ } -> compile_let_in expr
        | Lambda { lam_var = Var var, lam_var_type; body } ->
          compile_lambda expr
@@ -245,7 +246,7 @@ let rec compile  : LLTZ.E.t -> t =
        | Const constant -> compile_const constant
        | Prim (primitive, args) -> compile_prim primitive args
        | Let_mut_in { let_var = Mut_var var; rhs; in_ } -> compile_mut_let_in expr
-       | Deref (Mut_var var) -> compile_deref expr
+       | Deref (Mut_var var) -> compile_deref var expr.type_ expr.annotations
        | Assign (Mut_var var, value) -> compile_assign expr
        | If_bool { condition; if_true; if_false } ->
          compile_if_bool condition if_true if_false
@@ -300,12 +301,10 @@ and compile_contract  (input_var: string) (input_ty: LLTZ.T.t) (code: LLTZ.E.t) 
   seq [ Slot.mock_value; Slot.let_ (`Ident input_var) ~unused_set ~in_:code_instr; ]
 
 (* Compile a variable by duplicating its value on the stack. *)
-and compile_variable expr = 
-  match expr.desc with
-    | Variable (Var name) -> trace ~flag:(String.append "var " name) (
-      Slot.dup_or_dig (`Ident name) (LLTZ.T.is_duppable expr.type_ && (Pervasives.not (Set.mem expr.annotations.last_used_vars name)))
-    )
-    | _ -> assert false
+and compile_variable name type_ annotations = 
+  trace ~flag:(String.append "var " name) (
+    Slot.dup_or_dig (`Ident name) (LLTZ.T.is_duppable type_ && (Pervasives.not (Set.mem annotations.last_used_vars name)))
+  )
 
 (* Compile a let-in expression by compiling the right-hand side, then binding the result to the variable in the inner expression. *)
 and compile_let_in expr =
@@ -358,19 +357,17 @@ and compile_prim primitive args =
   )
 
 (* Compile a dereference by duplicating the value of the mutable variable on the stack. *)
-and compile_deref expr = 
-  match expr.desc with
-    | Deref (Mut_var name) -> trace ~flag:(String.append "mut_var " name)  (
-      Slot.dup_or_dig (`Ident name) ((LLTZ.T.is_duppable expr.type_) && (Pervasives.not (Set.mem expr.annotations.last_used_vars name)))
-    )
-    | _ -> assert false
+and compile_deref name type_ annotations = 
+  trace ~flag:(String.append "mut_var " name)  (
+    Slot.dup_or_dig (`Ident name) ((LLTZ.T.is_duppable type_) && (Pervasives.not (Set.mem annotations.last_used_vars name)))
+  )
 
 (* Compile an assignment by compiling the value to be assigned, then assigning it to the slot corresponding to the mutable variable. *)
 and compile_assign expr = (*TODO merge with last used opt, do also for lets*)
   let Assign (Mut_var var, value) = expr.desc in
   if ((Set.mem expr.annotations.last_used_vars var) || 
     (Set.mem expr.annotations.remove_never_used_vars var)) then
-    trace ~flag:"assign" (seq [ Slot.collect (`Ident var); compile  value; drop 1; unit ])
+    trace ~flag:"assign" (seq [  compile  value; Slot.collect (`Ident var); drop 1; unit ])
   else
     trace ~flag:"assign" (seq [ trace (compile  value); Slot.set (`Ident var); unit])
 
@@ -526,7 +523,14 @@ and compile_lambda expr =
     LLTZ.Free_vars.free_vars_with_types expr
   in
 
-  let partial_apps = seq (List.map (environment |> Map.to_alist) ~f:(fun (ident, var_ty) -> seq [ Slot.dup_or_dig (`Ident ident) (LLTZ.T.is_duppable var_ty && (Pervasives.not (Set.mem expr.annotations.last_used_vars ident))); apply ])) in
+  let partial_apps = seq (
+    List.map (environment |> Map.to_alist) 
+    ~f:(fun (ident, var_ty) -> 
+      seq [ 
+        Slot.dup_or_dig (`Ident ident) (LLTZ.T.is_duppable var_ty && (Pervasives.not (Set.mem expr.annotations.last_used_vars ident))); 
+        apply ]
+      )
+    ) in
 
   seq
     ([ lambda ~environment:(environment |> Map.map ~f:convert_type |> Map.to_alist) ~lam_var ~return_type (compile  body) ]
@@ -544,7 +548,15 @@ and compile_lambda_rec expr =
     LLTZ.Free_vars.free_vars_with_types expr
   in
 
-  let partial_apps = seq (List.map (environment |> Map.to_alist) ~f:(fun (ident, var_ty) -> seq [ Slot.dup_or_dig (`Ident ident) (LLTZ.T.is_duppable var_ty && (Pervasives.not (Set.mem expr.annotations.last_used_vars ident))); apply ])) in
+  let partial_apps = seq (
+    List.map (environment |> Map.to_alist) 
+    ~f:(fun (ident, var_ty) -> 
+      seq [ 
+        Slot.dup_or_dig (`Ident ident) (LLTZ.T.is_duppable var_ty && (Pervasives.not (Set.mem expr.annotations.last_used_vars ident))); 
+        apply ]
+      )
+    ) 
+  in
 
   seq
     ([ lambda_rec ~environment:(environment |> Map.map ~f:convert_type |> Map.to_alist) ~lam_var ~mu ~return_type ~partial_apps (compile  body) ]
@@ -682,7 +694,7 @@ and compile_match subject cases =
   (* subject is a result of Inj *)
   let subject_instr = compile  subject in
   (* Compile subject, then unwrap it and apply corresponding lambda *)
-  trace ~flag:"match" (seq ([ subject_instr ] @ [ compile_matching cases ]))
+  trace ~flag:"match" (seq ([ subject_instr; compile_matching cases ]))
 
 and compile_matching cases =
   match cases with
@@ -704,12 +716,13 @@ and compile_raw_michelson michelson args =
 
 and compile_global_constant hash args return_ty =
   let args_instrs = List.map ~f:(compile ) args in
-  if List.length (args) = 0 then
+  match args with
+  | [] ->
     match return_ty with
     | {desc = LLTZ.T.Function (parameter_type, return_type); _ } ->
       seq [ lambda_raw ~parameter_type:(convert_type parameter_type) ~return_type:(convert_type return_type) (seq [global_constant hash []]) ]
     | _ -> (global_constant hash [])
-  else
+  | _ ->
     seq (List.rev_append (args_instrs) [ global_constant hash args ])
 
 (* Compile and additionally convert to a single micheline node *)
@@ -719,8 +732,7 @@ let compile_to_micheline  ?(optimize = true) ?(strip_annots = true) expr stack=
   let micheline = Michelson.Ast.seq (compiled stack).instructions in
 
   if optimize then
-    let optimised = Michelson_optimisations.Rewriter.optimise_micheline ~strip_annots micheline in
-    optimised
+    Michelson_optimisations.Rewriter.optimise_micheline ~strip_annots micheline
   else
     micheline
 
@@ -730,8 +742,7 @@ let compile_contract_to_micheline  ?(optimize = true) ?(strip_annots = true) inp
   let micheline = Michelson.Ast.seq (compiled stack).instructions in
 
   if optimize then
-    let optimised = Michelson_optimisations.Rewriter.optimise_micheline ~strip_annots micheline in
-    optimised
+    Michelson_optimisations.Rewriter.optimise_micheline ~strip_annots micheline
   else
     micheline
 

@@ -65,7 +65,8 @@ module T = struct
     | Leaf (_, x) ->
         is_duppable x
 
-  and equal_types t1 t2 = (*check equality of types without considering ranges*)
+  (* Check equality of types without considering ranges and optimization annotations *)
+  and equal_types t1 t2 = 
     match t1.desc, t2.desc with
     | Tuple row1, Tuple row2
     | Or row1, Or row2 ->

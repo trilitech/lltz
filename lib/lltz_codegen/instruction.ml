@@ -44,7 +44,7 @@ let dig n stack =
   (* brings element at index n to the top *)
   let stack =
     match rev_prefix n stack with
-    | rev_slots1, nth :: slots2 -> nth::(List.rev_append rev_slots1 (slots2))
+    | rev_slots1, nth :: slots2 -> nth::List.rev_append rev_slots1 (slots2)
     | _ ->
       raise_s [%message "Instruction.dig: invalid stack" (stack : SlotStack.t) (n : int)]
   in
@@ -231,8 +231,6 @@ let if_none ~none ~some stack =
       ~f:(fun instrs1 instrs2 -> [ I.if_none ~then_:instrs1 ~else_:instrs2 ])
   | _ -> raise_s [%message "Instruction.if_none" (stack : SlotStack.t)]
 
-exception LookupError of string
-
 module Slot = struct
   let def (slot : [< Slot.definable ]) ~in_ stack =
     match stack with
@@ -245,11 +243,9 @@ module Slot = struct
 
   (* Remove slot from stack if not collected already, for example after it is used by let*)
   let collect slot stack =
-    try
-      let found_slot = SlotStack.find_exn stack slot in
-      remove found_slot stack
-    with _ ->
-      Config.ok stack []
+    match SlotStack.find stack slot with
+    | Some idx -> remove idx stack
+    | None -> Config.ok stack []
 
   let collect_if_unused unused_set slot =
     match slot with
@@ -298,12 +294,10 @@ module Slot = struct
     seq [ def_all slots ~in_:(seq [collect_immediately; in_;]); collect_all slots ]
 
   let lookup slot ~in_ stack =
-    try 
-      let idx = SlotStack.find_exn stack slot in
-      in_ idx stack
-    with _ -> 
-      (* Instead of assertion, this produces a nicer error message. TBD *)
-      Config.raise [ I.never ]
+    match SlotStack.find stack slot with
+    | Some idx -> in_ idx stack
+    | None ->
+      raise_s [%message "Instruction.Slot.lookup: slot not found" (stack : SlotStack.t) (slot : [< Slot.definable ])]
 
   let dup_or_dig slot condition =
     lookup slot ~in_:(fun idx->
@@ -457,7 +451,8 @@ let lambda_raw ~parameter_type ~return_type return stack =
 (* https://tezos.gitlab.io/michelson-reference/#instr-LAMBDA_REC *)
 (* Recursive version of lambda, mu is the name of the recursive variable *)
 
-(*Temporarily makes top a value*) 
+(* Temporarily makes top of the stack a value *)
+(* This is done so that we can modify Lambda_rec's mu which is present on the stack as an ident (partial_apps are applied to both an Ident and a Value). *)
 let make_top_value in_ stack =
   match stack with
   | `Ident name :: stack -> 
@@ -473,7 +468,7 @@ let lambda_rec ~environment ~lam_var ~mu ~return_type ~partial_apps return stack
 
   let lambda_stack = [ `Value; `Value ] in
   let { Config.stack = _; instructions } =
-    let defined_slots = environment_slots @ [parameter_slot] @ [`Ident mu] in
+    let defined_slots = environment_slots @ [parameter_slot; `Ident mu] in
     seq
       [ 
       unpair_n n
@@ -570,7 +565,8 @@ let rec micheline_fails (node : (unit, Michelson.Ast.Prim.t) Tezos_micheline.Mic
       micheline_fails l && micheline_fails r
   | Prim (_, I Map, [x], _) | Prim (_, I Iter, [x], _) | Prim (_, I Loop, [x], _) | Prim (_, I Dip, [x], _) | Prim (_, I Dip, [_;x], _) ->
       micheline_fails x
-  | _ -> false
+  | Prim (_, _, _, _) -> false
+  | Int (_, _) | String (_, _) | Bytes (_, _) | Seq (_, []) -> false
 
 let raw_michelson michelson args stack =
   let n = List.length args in

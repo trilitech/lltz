@@ -669,9 +669,13 @@ module Type = struct
   let pair ?(annot=None) t1 t2 = make ~annot ~args:[ t1; t2 ] (T Pair)
 
   let pair_n ?(annot=None) ts =
-    assert (List.length ts >= 2);
-    let annot_list = match annot with None -> [] | Some a -> [a] in
-    prim ~annot:annot_list ~arguments:ts (T Pair)
+    match ts with
+    | _ :: _ :: _  -> 
+      (
+        let annot_list = match annot with None -> [] | Some a -> [a] in
+        prim ~annot:annot_list ~arguments:ts (T Pair)
+      )
+    | _ -> assert false
   ;;
 
   let sampling_state ?(annot=None) n = make ~annot ~args:[ n ] (T Sapling_state)
@@ -790,7 +794,6 @@ module Instruction = struct
   let right ty1 = prim ~arguments:[ ty1 ] (I Right)
   let sapling_verify_update = prim (I Sapling_verify_update)
   let sapling_empty_state ms = 
-    Printf.eprintf "ms: %d\n" ms;
     prim ~arguments:[ int ms ] (I Sapling_empty_state)
   let self opt = 
     match opt with

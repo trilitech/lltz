@@ -1721,8 +1721,7 @@ let name_of_instr_exn  = function
     | MIsetField _
     | MIconcat1
     | MIconcat2
-    | MIconcat_unresolved
-    | MIConstant _ ) as instr -> name_of_instr  instr
+    | MIconcat_unresolved) as instr -> name_of_instr  instr
   | MIdip _ -> "DIP"
   | MIdipn _ -> "DIPN"
   | MIloop _ -> "LOOP"
@@ -1740,6 +1739,7 @@ let name_of_instr_exn  = function
   | MIerror _ -> failwith "name_of_instr_exn: MIerror"
   | MIcomment _ -> failwith "name_of_instr_exn: MIcomment"
   | MIseq _ -> failwith "name_of_instr_exn: MIseq"
+  | MIConstant _ -> failwith "name_of_instr_exn: MIConstant"
   | MIcreate_contract _ -> "CREATE_CONTRACT"
   | MI2 Sapling_verify_update -> "SAPLING_VERIFY_UPDATE"
 
@@ -2348,7 +2348,9 @@ module To_micheline = struct
     let primn ?annotations n l = [primitive ?annotations n l] in
     let rec_instruction instr = Micheline.sequence (instruction instr) in
     match the_instruction.instr with
-    | MIerror s -> primn "ERROR" [string s]
+    | MIerror s -> 
+      Printf.eprintf "ERROR: %s\n" s;
+      primn "ERROR" [string s]
     | MIcomment _comment ->
         []
         (*

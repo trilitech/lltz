@@ -69,13 +69,8 @@ let free_vars_with_types (expr : LLTZ.E.t) : LLTZ.T.t String.Map.t =
       else
         String.Map.singleton var expr.type_
 
-    | Assign (Mut_var var, value) -> (* Needs to be used not just assigned*)
-      let value_fvs = loop value bound_vars in
-      value_fvs
-      (*if List.mem bound_vars var ~equal:String.equal then
-        value_fvs
-      else
-        merge value_fvs (String.Map.singleton var value.type_)*)
+    | Assign (Mut_var var, value) -> 
+      loop value bound_vars
 
     | If_bool { condition; if_true; if_false } ->
       merge_all [loop condition bound_vars; loop if_true bound_vars; loop if_false bound_vars]

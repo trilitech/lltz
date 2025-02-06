@@ -22,6 +22,7 @@ let rec fails {instr} =
   | MImap x | MIiter x | MIloop x | MIdip x | MIdipn (_, x) -> fails x
   | _ -> false
 
+(* Debug assertion checks that during the rewrite of sequences we correctly keep the non-rewritten part.*)
 let check_rest_invariant = false
 
 let mk_instr instr = Michelson.{instr}
@@ -1147,7 +1148,7 @@ let lltz_specific_pre (expr : (instr, literal) instr_f list) : ((instr, literal)
     | _ -> rewrite_none
 
 
-
+(* DIG n; DIG n; ... ; DIG n; -> DUG n or DUG n; DUG n; ... ; DUG n; -> DIG n *)
 let digdug_cycles (expr : (instr, literal) instr_f list) : ((instr, literal) instr_f list * (instr, literal) instr_f list) option =
   let rec all_dig_k k n xs =
     match n, xs with
@@ -1192,6 +1193,7 @@ let unpair : rule = function
   | MIunpair [true; true] :: MIdig 1 :: MIdrop :: rest -> [MIfield [A]] $ rest
   | _ -> rewrite_none
 
+(* First optimises the inner most instruction blocks (e.g. branches) and then outer sequences. *)
 let normalize f =
   let rec norm = function
     | {instr = Michelson.MIseq xs} -> norm_seq xs
