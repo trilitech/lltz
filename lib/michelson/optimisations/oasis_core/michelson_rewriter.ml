@@ -63,9 +63,11 @@ let of_seq = function
   - pipeline: A list of groups that are executed sequentially.
 *)
 
+type instr_list = (instr, literal) instr_f list
+
 type rule =
-     (instr, literal) instr_f list
-  -> ((instr, literal) instr_f list * (instr, literal) instr_f list) option
+     instr_list
+  -> (instr_list * instr_list) option
 
 type group = rule list
 (** All rules in a group are tried in order until a normal form has been reached. *)
@@ -716,7 +718,7 @@ let is_iter_cons = function
   | MIiter {instr = Michelson.MIseq [{instr = MIcomment _}; {instr = MI2 Cons}]} -> true
   | _ -> false
 
-let main (expr : (instr, literal) instr_f list) : ((instr, literal) instr_f list * (instr, literal) instr_f list) option =
+let main (expr : instr_list) : (instr_list * instr_list) option =
   let has_arity = has_arity  in
   let is_commutative = is_commutative  in
 
@@ -1078,7 +1080,7 @@ let main (expr : (instr, literal) instr_f list) : ((instr, literal) instr_f list
   in
   res
 
-let lltz_specific (expr : (instr, literal) instr_f list) : ((instr, literal) instr_f list * (instr, literal) instr_f list) option =
+let lltz_specific (expr : instr_list) : (instr_list * instr_list) option =
   let rec all_dig_k k n xs =
     match n, xs with
     | 0, _ -> true
@@ -1141,7 +1143,7 @@ let lltz_specific (expr : (instr, literal) instr_f list) : ((instr, literal) ins
   | MIif_cons (x, y) :: rest -> condition_same_suffix  (fun x y -> MIif_cons (x, y)) x y rest*)
   | _ -> rewrite_none
 
-let lltz_specific_pre (expr : (instr, literal) instr_f list) : ((instr, literal) instr_f list * (instr, literal) instr_f list) option =
+let lltz_specific_pre (expr : instr_list) : (instr_list * instr_list) option =
   match expr with
     | MIdig n :: MIdropn m :: rest when n < m -> [MIdropn m] $ rest
     | MIdug n :: MIdropn m :: rest when n < m -> [MIdropn m] $ rest
@@ -1149,7 +1151,7 @@ let lltz_specific_pre (expr : (instr, literal) instr_f list) : ((instr, literal)
 
 
 (* DIG n; DIG n; ... ; DIG n; -> DUG n or DUG n; DUG n; ... ; DUG n; -> DIG n *)
-let digdug_cycles (expr : (instr, literal) instr_f list) : ((instr, literal) instr_f list * (instr, literal) instr_f list) option =
+let digdug_cycles (expr : instr_list) : (instr_list * instr_list) option =
   let rec all_dig_k k n xs =
     match n, xs with
     | 0, _ -> true
