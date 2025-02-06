@@ -676,10 +676,12 @@ and compile_inj context expr =
       ([ compile  expr; (* Left *) left mid_ty ]
        (* Rights - traverses all right_instrs_types in reverse order except last and makes right*)
        @
-       if List.length right_instrs_types = 0
-       then []
-       else
-         List.map (List.rev (List.tl_exn right_instrs_types)) ~f:(fun ty -> right ty)
+       (
+        match right_instrs_types with
+        | [] -> []
+        | hd :: tl ->
+          List.map (List.rev tl) ~f:(fun ty -> right ty)
+       )
       ))
 
 and compile_row_of_lambdas row =
