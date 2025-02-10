@@ -1034,7 +1034,7 @@ let mi_ediv =
     | _ -> None)
 
 let mi_not :_ =
-  mk_spec_basic "NOT" ~commutative:() ~arities:(1, 1) (function
+  mk_spec_basic "NOT" ~arities:(1, 1) (function
     | {mt = MT0 Bool} :: _ -> Some [mt_bool]
     | {mt = MT0 Nat} :: _ -> Some [mt_int]
     | {mt = MT0 Int} :: _ -> Some [mt_int]
@@ -2035,8 +2035,14 @@ module Of_micheline = struct
           | "SOME", [] -> MI1 Some_
           | "PAIR", [] -> MI2 (Pair (None, None))
           | "PAIR", [Int n] -> MIpairn (int_of_string n)
-          | "LEFT", [t] -> MI1 (Left (None, None, mtype t))
-          | "RIGHT", [t] -> MI1 (Right (None, None, mtype t))
+          | "LEFT", [t] -> 
+            (match annotations with
+            | [] -> MI1 (Left (None, None, mtype t))
+            | [annot] -> MI1 (Left (None, Some annot, mtype t)))
+          | "RIGHT", [t] -> 
+            (match annotations with
+            | [] -> MI1 (Right (None, None, mtype t))
+            | [annot] -> MI1 (Right (Some annot, None, mtype t)))
           | "PUSH", [t; l] -> MIpush (mtype t, literal l)
           | "SWAP", [] -> MIswap
           | "UNPAIR", [] -> MIunpair [true; true]
