@@ -720,10 +720,10 @@ and compile_global_constant hash args return_ty =
   let args_instrs = List.map ~f:(compile ) args in
   match args with
   | [] ->
-    match return_ty with
+    (match return_ty with
     | {desc = LLTZ.T.Function (parameter_type, return_type); _ } ->
       seq [ lambda_raw ~parameter_type:(convert_type parameter_type) ~return_type:(convert_type return_type) (seq [global_constant hash []]) ]
-    | _ -> (global_constant hash [])
+    | _ -> (global_constant hash []))
   | _ ->
     seq (List.rev_append (args_instrs) [ global_constant hash args ])
 
