@@ -21,6 +21,15 @@ module T = struct
   ;;
 
   let map = `Define_using_bind
+
+  let equal_types f t1 t2 =
+    let rec equal_types t1 t2 =
+      match t1, t2 with
+      | Node ts1, Node ts2 -> List.equal equal_types ts1 ts2
+      | Leaf (_, x1), Leaf (_, x2) -> f x1 x2
+      | _ -> false
+    in
+    equal_types t1 t2
 end
 
 include T

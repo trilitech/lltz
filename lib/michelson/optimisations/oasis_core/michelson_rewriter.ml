@@ -6,15 +6,41 @@ module Control = Utils.Control
 module Big_int = Big_int
 open Michelson
 
+(* 
+  Recursive function to determine if an instruction fails.
+  It traverses the instruction tree and checks for failure points.
+*)
+let rec fails {instr} =
+  match instr with
+  | MI1_fail _ -> true
+  | Michelson.MIseq xs -> (
+      match Base.List.last xs with
+      | Some x -> fails x
+      | None -> false)
+  | MIif (l, r) | MIif_left (l, r) | MIif_none (l, r) | MIif_cons (l, r) ->
+      fails l && fails r
+  | MImap x | MIiter x | MIloop x | MIdip x | MIdipn (_, x) -> fails x
+  | _ -> false
+
+(* Debug assertion checks that during the rewrite of sequences we correctly keep the non-rewritten part.*)
 let check_rest_invariant = false
 
 let mk_instr instr = Michelson.{instr}
 
 let un_instr Michelson.{instr} = instr
 
-let seq xs = Michelson.MIseq xs
+let unfailing_prefix xs = 
+  let rec take_until_fail acc = function
+    | [] -> List.rev acc
+    | x :: xs ->
+      if fails x then List.rev (x :: acc) (* Include the first failing element and stop *)
+      else take_until_fail (x :: acc) xs
+  in
+  take_until_fail [] xs
 
-let seqi xs = Michelson.MIseq (Core.List.map xs ~f:mk_instr)
+let seq xs = Michelson.MIseq (unfailing_prefix xs)
+
+let seqi xs = Michelson.MIseq (unfailing_prefix (Core.List.map xs ~f:mk_instr))
 
 let iseq xs = mk_instr (seq xs)
 
@@ -37,9 +63,11 @@ let of_seq = function
   - pipeline: A list of groups that are executed sequentially.
 *)
 
+type instr_list = (instr, literal) instr_f list
+
 type rule =
-     (instr, literal) instr_f list
-  -> ((instr, literal) instr_f list * (instr, literal) instr_f list) option
+     instr_list
+  -> (instr_list * instr_list) option
 
 type group = rule list
 (** All rules in a group are tried in order until a normal form has been reached. *)
@@ -58,22 +86,6 @@ let cAr = MIfield [A]
 let cDr = MIfield [D]
 
 (** {1 Our concrete rule sets} *)
-(* 
-  Recursive function to determine if an instruction fails.
-  It traverses the instruction tree and checks for failure points.
-*)
-let rec fails {instr} =
-  match instr with
-  | MI1_fail _ -> true
-  | Michelson.MIseq xs -> (
-      match Base.List.last xs with
-      | Some x -> fails x
-      | None -> false)
-  | MIif (l, r) | MIif_left (l, r) | MIif_none (l, r) | MIif_cons (l, r) ->
-      fails l && fails r
-  | MImap x | MIiter x | MIloop x | MIdip x | MIdipn (_, x) -> fails x
-  | _ -> false
-
 (** Does the instruction push something on top of the stack, without
    modifying or looking at anything beneath? *)
 let is_pure_push = function
@@ -91,7 +103,13 @@ let is_pure_push = function
       | Source
       | Balance
       | Self _
-      | Self_address )
+      | Self_address 
+      | Chain_id
+      | Total_voting_power
+      | Sapling_empty_state _ 
+      | Level 
+      | Min_block_time
+      )
   | MI1_fail Never -> true
   | _ -> false
 
@@ -498,6 +516,11 @@ let conditionals xs =
   | MIif_left (MIdrop, MIdrop) :: rest
   | MIif_cons (Michelson.MIseq [{instr = MIdrop}; {instr = MIdrop}], Michelson.MIseq []) :: rest ->
       [MIdrop] $ rest
+  | MIif_left (
+    Michelson.MIseq ({instr = MIdrop} :: {instr = MIdig n} :: {instr = MIdrop} :: i1), 
+    Michelson.MIseq ({instr = MIdrop} :: {instr = MIdig m} :: {instr = MIdrop} :: i2)) :: rest
+    when n > 0 && n=m ->
+      [MIdig (n+1); MIdrop; MIif_left (seq ({instr = MIdrop} ::i1), seq ({instr = MIdrop} ::i2))] $ rest
   | MI1 Not :: MIif (a, b) :: rest -> [MIif (b, a)] $ rest
   | MIif
       ( MIpush ({mt = MT0 Bool}, {literal = Bool true})
@@ -695,11 +718,27 @@ let is_iter_cons = function
   | MIiter {instr = Michelson.MIseq [{instr = MIcomment _}; {instr = MI2 Cons}]} -> true
   | _ -> false
 
-let main  : rule =
+let main (expr : instr_list) : (instr_list * instr_list) option =
   let has_arity = has_arity  in
   let is_commutative = is_commutative  in
+
+  (* Update list of map elements with a new value, if the key exists already update the value *)
+  let update_map_list xs (key, value) =
+    let rec aux acc = function
+      | [] ->  List.rev ((key, value) :: acc)
+      | (k', v') :: tl ->
+          if MLiteral.compare k' key = 0 then
+            List.rev_append ((k', value) :: acc) tl
+          else
+            aux ((k', v') :: acc) tl
+    in
+    aux [] xs
+  in
+
   let open Big_int in
-  function
+  (*Convert list to micheline*)
+  let res =
+  (match expr with
   | MIcomment a :: MIcomment b :: rest ->
       let remove_double =
         let rec aux acc = function
@@ -735,8 +774,8 @@ let main  : rule =
   | MIdup 1 :: MIdip {instr} :: rest when has_arity (1, 1) instr ->
       [MIdup 1; instr; MIdig 1] $ rest
   (* Push literals: *)
-  (*| MIpush (t, l) :: MI1 Some_ :: rest ->
-      [MIpush (mt_option t, MLiteral.some l)] $ rest*)
+  | MIpush (t, l) :: MI1 Some_ :: rest ->
+      [MIpush (mt_option t, MLiteral.some l)] $ rest
   | MIpush (tl, x) :: MI1 (Left (annot_left, annot_right, tr)) :: rest ->
       [MIpush (mt_or ?annot_left ?annot_right tl tr, MLiteral.left x)] $ rest
   | MIpush (tr, x) :: MI1 (Right (annot_left, annot_right, tl)) :: rest ->
@@ -775,6 +814,8 @@ let main  : rule =
     :: MIpush ({mt = MT0 Bool}, {literal = Bool b1})
     :: MI2 Or
     :: rest -> [MIpush (mt_bool, MLiteral.bool (b1 || b2))] $ rest
+  (* GET_AND_UPDATE; DROP; -> UPDATE; *)
+  | MI3 (Get_and_update) :: MIdrop :: rest -> [MI3 Update] $ rest
   (* Pairs *)
   | MI2 (Pair _) :: MIfield (D :: l) :: rest -> [MIdrop; MIfield l] $ rest
   | MI2 (Pair _) :: (MIcomment _ as com) :: MIfield [D] :: rest ->
@@ -859,6 +900,8 @@ let main  : rule =
   | i :: MIdig n :: MIdrop :: rest when has_arity (1, 2) i && n >= 2 ->
       [MIdig (n - 1); MIdrop; i] $ rest
   | MI2 (Pair _) :: MIunpair [true; true] :: rest -> [] $ rest
+  | MIpairn n :: MIunpair field :: rest when n = List.length field && List.for_all ~f:((=) true) field ->
+      [] $ rest
   | MI2 (Pair _) :: (MIcomment _ as c) :: MIunpair [true; true] :: rest ->
       [c] $ rest
   | MIunpair [true; true] :: MI2 (Pair _) :: rest -> [] $ rest
@@ -870,12 +913,14 @@ let main  : rule =
   | ternary :: MIdig n :: MIdrop :: rest when has_arity (3, 1) ternary && n >= 1
     -> [MIdig (n + 2); MIdrop; ternary] $ rest
   | ternary :: MIdig n :: MIdrop :: rest when has_arity (3, 2) ternary && n >= 2
-    -> [MIdig (n + 1); MIdrop; ternary] $ rest
+    -> 
+      [MIdig (n + 1); MIdrop; ternary] $ rest
   | (MIcomment _ as comment) :: push :: MI1_fail Failwith :: rest
     when is_pure_push push -> [push; MI1_fail Failwith; comment] $ rest
   (* | MIdrop :: push :: MIfailwith :: rest when is_pure_push push ->
    *     [push :: MIfailwith] $ rest *)
-  | MIdup 1 :: MI1_fail Never :: rest -> [MI1_fail Never] $ rest
+  | MIdup 1 :: MI1_fail Never :: rest -> 
+    [MI1_fail Never] $ rest
   | MIdup 1 :: MI1_fail Failwith :: rest -> [MI1_fail Failwith] $ rest
   | MIdug n :: (MI2 (Pair _) as pair) :: MI2 Exec :: MI1_fail Failwith :: rest
     when n > 2 (* for lazy errors *) ->
@@ -957,7 +1002,7 @@ let main  : rule =
     :: MIpush (_, {literal = Some_ value})
     :: MIpush (_, key)
     :: MI3 Update
-    :: rest -> [MIpush (t, MLiteral.mk_map ((key, value) :: xs))] $ rest
+    :: rest -> [MIpush (t, MLiteral.mk_map (update_map_list xs (key, value)))] $ rest
   | MIpush (t, {literal = Seq xs})
     :: MIpush (_, {literal = Bool true})
     :: MIpush (_, x)
@@ -979,6 +1024,10 @@ let main  : rule =
     :: rest ->
       [MIpush (mt_int, {literal = Int (Big_int.mult_big_int x y)})] $ rest
   | MIpush ({mt = MT0 Int}, {literal = Int x}) :: MI1 Neg :: rest ->
+      [MIpush (mt_int, {literal = Int (Big_int.minus_big_int x)})] $ rest
+  | MIpush ({mt = MT0 Nat}, {literal = Int x}) :: MI1 Neg :: rest ->
+      [MIpush (mt_int, {literal = Int (Big_int.minus_big_int x)})] $ rest
+  | MIpush ({mt = MT0 Nat}, {literal = Int x}) :: MI1 Int :: MI1 Neg :: rest ->
       [MIpush (mt_int, {literal = Int (Big_int.minus_big_int x)})] $ rest
   (* Rules involving subtraction: *)
   | MIpush ({mt = MT0 (Int | Nat)}, {literal = Int y})
@@ -1027,7 +1076,99 @@ let main  : rule =
     when has_arity (1, 1) f && is_pure_push push ->
       [MIdup 1; MIdup 1; f; push; MIdup 3] $ rest
   | MI0 (Self None) :: MI1 Address :: rest -> [MI0 Self_address] $ rest
+  | _ -> rewrite_none)
+  in
+  res
+
+let lltz_specific (expr : instr_list) : (instr_list * instr_list) option =
+  let rec all_dig_k k n xs =
+    match n, xs with
+    | 0, _ -> true
+    | _, MIdig k' :: tl when k' = k -> all_dig_k k (n - 1) tl
+    | _ -> false
+  in
+  let rec all_dug_k k n xs =
+    match n, xs with
+    | 0, _ -> true
+    | _, MIdug k' :: tl when k' = k -> all_dug_k k (n - 1) tl
+    | _ -> false
+  in
+  let push_instr t x = 
+    match t with
+    | {mt = MT0 Unit} -> MI0 Unit_
+    | _ -> MIpush (t, x)
+  in
+  let condition_same_suffix cond x y rest =
+    match (List.rev (to_seq x.instr), List.rev (to_seq y.instr)) with
+    | i1 :: xs, i2 :: ys when equal_instr {instr = i1} {instr = i2} ->
+      let x' = iseqi (List.rev xs) in
+      let y' = iseqi (List.rev ys) in
+      [ cond x' y'; i1 ] $ rest
+    | _ -> rewrite_none
+  in
+  match expr with
+  (*| MIpush (t, l) :: MI1 Some_ :: rest ->
+    [MIpush (mt_option t, MLiteral.some l)] $ rest*)
+  | MIpush ({mt = MT1 (Option, t)}, {literal = Some_ x}) :: rest ->
+    [push_instr t x; MI1 Some_] $ rest
+  | MIpush ({mt = MT1 (Option, t)}, {literal = None_}) :: rest ->
+    [MI0 (None_ t)] $ rest
+  | MIpush ({mt = MT2 (Or {annot_left; annot_right}, tl, tr)}, {literal = Left x}) :: rest ->
+    [push_instr tl x; MI1 (Left (annot_left, annot_right, tr))] $ rest
+  | MIpush ({mt = MT2 (Or {annot_left; annot_right}, tl, tr)}, {literal = Right x}) :: rest ->
+    [push_instr tr x; MI1 (Right (annot_left, annot_right, tl))] $ rest
+    (*| MIpush (t2, l2)
+    :: MIpush (t1, l1)
+    :: MI2 (Pair (annot_fst, annot_snd))
+    :: rest ->
+      [MIpush (mt_pair ?annot_fst ?annot_snd t1 t2, MLiteral.pair l1 l2)] $ rest*)
+  | MIpush ({mt = MT2 (Pair {annot_fst; annot_snd}, tl, tr)}, {literal = Pair (x, y)}) :: rest ->
+    [push_instr tr y; push_instr tl x; MI2 (Pair (annot_fst, annot_snd))] $ rest
+  | (MIdug 1 | MIdig 1 | MIswap) :: (MIdrop | MIdropn 1) :: (MIdug 1 | MIdig 1 | MIswap) :: (MIdrop | MIdropn 1) :: rest -> 
+    [MIdug 2; MIdropn 2 ] $ rest
+  | (MIdug 1 | MIdig 1 | MIswap) :: (MIdrop | MIdropn 1) :: MIdug n :: MIdropn n' :: rest when n = n' -> 
+    [MIdug (n+1);MIdropn (n+1)] $ rest
+  | MIdig 2 :: MIdrop :: MIdug n :: MIdug n' :: MIdropn m :: rest when (n = n' && n = (m+1)) -> 
+    [MIdug (n+1); MIdug (n+1); MIdropn (m+1)] $ rest
+  | MIdig 3 :: MIdrop :: MIdug n :: MIdug n' :: MIdug n'' :: MIdropn m :: rest when (n = n' && n = n'' && n = (m+2)) -> 
+    [MIdug (n+1); MIdug (n+1); MIdug (n+1); MIdropn (m+1)] $ rest
+  | (MIdig 2) :: MIdrop :: rest -> [MIdug 2; MIdug 2; MIdropn 1] $ rest
+  | (MIdig 3) :: MIdrop :: rest -> [MIdug 3; MIdug 3; MIdug 3; MIdropn 1] $ rest
+  | MIpairn n :: MIunpair field :: rest when n = List.length field && List.for_all ~f:((=) true) field ->
+    [] $ rest
+  | MIdropn 1 :: rest -> [MIdrop] $ rest
+  (*| MIif (x, y) :: rest -> condition_same_suffix  (fun x y -> MIif (x, y)) x y rest
+  | MIif_none (x, y) :: rest -> condition_same_suffix  (fun x y -> MIif_none (x, y)) x y rest
+  | MIif_left (x, y) :: rest -> condition_same_suffix  (fun x y -> MIif_left (x, y)) x y rest
+  | MIif_cons (x, y) :: rest -> condition_same_suffix  (fun x y -> MIif_cons (x, y)) x y rest*)
   | _ -> rewrite_none
+
+let lltz_specific_pre (expr : instr_list) : (instr_list * instr_list) option =
+  match expr with
+    | MIdig n :: MIdropn m :: rest when n < m -> [MIdropn m] $ rest
+    | MIdug n :: MIdropn m :: rest when n < m -> [MIdropn m] $ rest
+    | _ -> rewrite_none
+
+
+(* DIG n; DIG n; ... ; DIG n; -> DUG n or DUG n; DUG n; ... ; DUG n; -> DIG n *)
+let digdug_cycles (expr : instr_list) : (instr_list * instr_list) option =
+  let rec all_dig_k k n xs =
+    match n, xs with
+    | 0, _ -> true
+    | _, MIdig k' :: tl when k' = k -> all_dig_k k (n - 1) tl
+    | _ -> false
+  in
+  let rec all_dug_k k n xs =
+    match n, xs with
+    | 0, _ -> true
+    | _, MIdug k' :: tl when k' = k -> all_dug_k k (n - 1) tl
+    | _ -> false
+  in
+  match expr with
+  | MIdig k :: rest when k > 1 && all_dig_k k (k - 1) rest -> [MIdug k] $ (List.drop rest (k-1))
+  | MIdug k :: rest when k > 1 && all_dug_k k (k - 1) rest -> [MIdig k] $ (List.drop rest (k-1))  
+  | _ -> rewrite_none
+
 
 let unpair : rule = function
   | MIunpair [] :: rest -> [] $ rest
@@ -1054,9 +1195,23 @@ let unpair : rule = function
   | MIunpair [true; true] :: MIdig 1 :: MIdrop :: rest -> [MIfield [A]] $ rest
   | _ -> rewrite_none
 
+(* First optimises the inner most instruction blocks (e.g. branches) and then outer sequences. *)
 let normalize f =
   let rec norm = function
     | {instr = Michelson.MIseq xs} -> norm_seq xs
+    | {instr = MIif (l, r) } -> {instr = MIif (norm1 l, norm1 r) }
+    | {instr = MIif_left (l, r) } -> {instr = MIif_left (norm1 l, norm1 r) }
+    | {instr = MIif_none (l, r) } -> {instr = MIif_none (norm1 l, norm1 r) }
+    | {instr = MIif_cons (l, r) } -> {instr = MIif_cons (norm1 l, norm1 r) }
+    | {instr = MImap x } -> {instr = MImap (norm1 x) }
+    | {instr = MIiter x } -> {instr = MIiter (norm1 x) }
+    | {instr = MIloop x } -> {instr = MIloop (norm1 x) }
+    | {instr = MIdip x } -> {instr = MIdip (norm1 x) }
+    | {instr = MIdipn (n, x) } -> {instr = MIdipn (n, norm1 x) }
+    | {instr = MIloop_left x } -> {instr = MIloop_left (norm1 x) }
+    | {instr = MIlambda (t1,t2,x) } -> {instr = MIlambda (t1,t2,norm1 x) }
+    | {instr = MIlambda_rec (t1,t2,x) } -> {instr = MIlambda_rec (t1,t2,norm1 x) }
+    | {instr = MIcreate_contract {tparameter; tstorage; code; views} } -> {instr = MIcreate_contract {tparameter; tstorage; code = norm1 code; views} }
     | {instr} -> mk_instr (map_instr_f norm1 Control.id instr)
   and norm1 {instr} = norm_seq (List.map ~f:mk_instr (to_seq instr))
   and norm_seq xs = norm_seq_aux [] (List.rev xs)
@@ -1098,9 +1253,10 @@ let simplify  =
     ; instr_to_push
     ; unfold_dropn
     ]
-  ; [main ; unpair; conditionals]
+  ; [main ; unpair; conditionals;]
   ; [
-      unfold_selective_unpair
+      lltz_specific_pre
+    ; unfold_selective_unpair
     ; fold_dropn
     ; push_push
     ; unfold_mifield
@@ -1109,6 +1265,8 @@ let simplify  =
     ; push_to_instr
     ; dig1_to_swap
     ]
+  ; [lltz_specific]
+  ; [digdug_cycles]
   ]
 
 let collapse_drops =

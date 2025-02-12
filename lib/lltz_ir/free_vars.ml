@@ -15,7 +15,7 @@ let free_vars_with_types (expr : LLTZ.E.t) : LLTZ.T.t String.Map.t =
   (* Merge two maps, ensuring consistent types for identical variables *)
   let merge fvs1 fvs2 =
     Map.merge_skewed fvs1 fvs2 ~combine:(fun ~key:ident type1 type2 ->
-        if LLTZ.T.equal type1 type2 then
+        if LLTZ.T.equal_types type1 type2 then
           type1
         else
           raise_s
@@ -69,12 +69,8 @@ let free_vars_with_types (expr : LLTZ.E.t) : LLTZ.T.t String.Map.t =
       else
         String.Map.singleton var expr.type_
 
-    | Assign (Mut_var var, value) ->
-      let value_fvs = loop value bound_vars in
-      if List.mem bound_vars var ~equal:String.equal then
-        value_fvs
-      else
-        merge value_fvs (String.Map.singleton var expr.type_)
+    | Assign (Mut_var var, value) -> 
+      loop value bound_vars
 
     | If_bool { condition; if_true; if_false } ->
       merge_all [loop condition bound_vars; loop if_true bound_vars; loop if_false bound_vars]
@@ -162,6 +158,9 @@ let free_vars_with_types (expr : LLTZ.E.t) : LLTZ.T.t String.Map.t =
       let initial_balance_fvs = loop initial_balance bound_vars in
       let initial_storage_fvs = loop initial_storage bound_vars in
       merge_all [code_body_fvs; delegate_fvs; initial_balance_fvs; initial_storage_fvs]
+
+    | Global_constant {hash; args} ->
+      merge_all (List.map args ~f:(fun arg -> loop arg bound_vars))
 
   and compile_row_free_vars_with_types row bound_vars =
     match row with

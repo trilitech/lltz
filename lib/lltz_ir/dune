@@ -2,6 +2,6 @@
  (name lltz_ir)
  (public_name lltz.ir)
  (libraries core octez-libs.micheline grace ppxlib.traverse_builtins)
- (modules dsl expr import lltz_ir primitive row type name free_vars)
+ (modules ast_builder expr import lltz_ir primitive row type name free_vars annotations)
  (preprocess
   (pps ppx_jane ppxlib.traverse)))

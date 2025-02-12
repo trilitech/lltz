@@ -1,7 +1,8 @@
 (library
   (name lltz_codegen)
   (public_name lltz.codegen)
-  (libraries core lltz.michelson lltz.ir fmt lltz.michelson.optimisations)
+  (libraries core lltz.michelson lltz.ir fmt lltz.michelson.optimisations octez-libs.micheline ptime)
+  (modules config ident instruction last_vars lltz_codegen slot stack type)
   (inline_tests)
   (preprocess (pps ppx_jane))
 )

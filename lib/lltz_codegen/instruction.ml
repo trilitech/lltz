@@ -44,7 +44,7 @@ let dig n stack =
   (* brings element at index n to the top *)
   let stack =
     match rev_prefix n stack with
-    | rev_slots1, nth :: slots2 -> List.rev_append rev_slots1 (nth :: slots2)
+    | rev_slots1, nth :: slots2 -> nth::List.rev_append rev_slots1 (slots2)
     | _ ->
       raise_s [%message "Instruction.dig: invalid stack" (stack : SlotStack.t) (n : int)]
   in
@@ -55,6 +55,21 @@ let dig n stack =
   | 1 -> [ I.swap ]
   | n -> [ I.dig_n n ]
 
+let dig_and_keep n stack = 
+  (* brings element at index n to the top *)
+  let stack =
+    match rev_prefix n stack with
+    | rev_slots1, nth :: slots2 -> `Value::(List.rev_append rev_slots1 slots2)
+    | _ ->
+      raise_s [%message "Instruction.dig_and_keep: invalid stack" (stack : SlotStack.t) (n : int)]
+  in
+  Config.ok stack
+  @@
+  match n with
+  | 0 -> []
+  | 1 -> [ I.swap; ]
+  | n -> [ I.dig_n n;]
+
 (* https://tezos.gitlab.io/michelson-reference/#instr-DUG *)
 let dug n stack =
   (* n is a index into the stack, tos will be at index n after instr *)
@@ -62,7 +77,7 @@ let dug n stack =
     match List.split_n stack (n + 1) with
     | nth :: slots1, slots2 -> slots1 @ (nth :: slots2)
     | _ ->
-      raise_s [%message "Instruction.dig: invalid stack" (stack : SlotStack.t) (n : int)]
+      raise_s [%message "Instruction.dug: invalid stack" (stack : SlotStack.t) (n : int)]
   in
   Config.ok stack
   @@
@@ -122,7 +137,7 @@ let remove n stack =
   | n -> I.[ dig_n n; drop ]
 
 (* prim m n instr stack: m elements are consumed from the stack, n elements are produced *)
-let prim m n instr stack =
+let prim ?(message = "") m n instr stack =
   let stack =
     let left, right = List.split_n stack m in
     (* split stack into left and right at index m *)
@@ -133,7 +148,7 @@ let prim m n instr stack =
     then
       raise_s
         [%message
-          "Instruction.prim: invalid stack" (stack : SlotStack.t) (m : int) (n : int)];
+          "Instruction.prim: invalid stack" (stack : SlotStack.t) (m : int) (n : int) (message : string)];
     List.init n ~f:(fun _ -> `Value) @ right
   in
   Config.ok stack [ instr ]
@@ -226,12 +241,20 @@ module Slot = struct
     | _ -> 
       raise_s [%message "Instruction.Slot.def: slot not assignable" (stack : SlotStack.t) (slot : [< Slot.definable ])]
 
-  (* remove slot from stack, for example after it is used by let*)
+  (* Remove slot from stack if not collected already, for example after it is used by let*)
   let collect slot stack =
-    let found_slot = SlotStack.find_exn stack slot in
-    remove found_slot stack
+    match SlotStack.find stack slot with
+    | Some idx -> remove idx stack
+    | None -> Config.ok stack []
 
-  let let_ slot ~in_ = seq [ def slot ~in_; collect slot ] (* bind and remove after used*)
+  let collect_if_unused unused_set slot =
+    match slot with
+      | `Ident name -> (if Set.mem unused_set name then (collect slot) else noop)
+      | _ -> noop
+
+  let let_ slot ?(unused_set = String.Set.empty) ~in_  = 
+    let collect_immediately = collect_if_unused unused_set slot in
+    seq [ def slot ~in_:(seq [collect_immediately; in_;]); collect slot ] (* bind and remove after used*)
 
   let def_all slots' ~in_ stack =
     let stack =
@@ -265,30 +288,64 @@ module Slot = struct
     in_ stack
 
   let collect_all slots = seq (List.map slots ~f:collect)
-  let let_all slots ~in_ = seq [ def_all slots ~in_; collect_all slots ]
-  (* bind and remove after used*)
+
+  let let_all slots ?(unused_set = String.Set.empty) ~in_ = 
+    let collect_immediately = seq (List.map slots ~f:(collect_if_unused unused_set)) in
+    seq [ def_all slots ~in_:(seq [collect_immediately; in_;]); collect_all slots ]
 
   let lookup slot ~in_ stack =
-    let idx = SlotStack.find_exn stack slot in
-    in_ idx stack
+    match SlotStack.find stack slot with
+    | Some idx -> in_ idx stack
+    | None ->
+      raise_s [%message "Instruction.Slot.lookup: slot not found" (stack : SlotStack.t) (slot : [< Slot.definable ])]
 
-  let dup slot = lookup slot ~in_:(fun idx -> dup idx)
+  let dup_or_dig slot condition =
+    lookup slot ~in_:(fun idx->
+      if condition
+      then dup idx
+      else dig_and_keep idx )
+  
+  let dup slot = 
+    lookup slot ~in_:(fun idx -> dup idx)
 
-  let set slot stack =
-    lookup slot stack ~in_:(fun idx stack ->
-      let instructions =
+  let set (slot : [< Slot.definable ]) stack =
+    match SlotStack.find stack slot with
+    | Some idx ->
+      (* If [slot] is found at position [idx], replace its value *)
+      begin
         match idx with
         | 0 -> assert false
-        | n -> I.[ dug_n n; dig_n (n - 1); drop ]
-      in
-      match List.split_n stack idx with
-      | _val_ :: left, nth :: right -> Config.ok (left @ (nth :: right)) instructions
-      | _ ->
+        | n ->
+          let instructions = I.[ dug_n n; dig_n (n - 1); drop ] in
+          match List.split_n stack idx with
+          | _val_ :: left, nth :: right ->
+            Config.ok (left @ (nth :: right)) instructions
+          | _ ->
+            raise_s
+              [%message
+                "Instruction.Slot.set: invalid stack"
+                  (stack : SlotStack.t)
+                  (slot : [< Slot.definable ])]
+      end
+  
+    | None ->
+      (* If [slot] is not found, treat the *top of the stack* as the new [slot] *)
+      match stack with
+      | top :: rest ->
+        if Slot.is_assignable top ~to_:slot then
+          Config.ok ((slot :> Slot.t) :: rest) []
+        else
+          raise_s
+            [%message
+              "Instruction.Slot.set: top of stack not assignable to slot"
+                (top : Slot.t)
+                (slot : [< Slot.definable ])]
+      | [] ->
         raise_s
           [%message
-            "Instruction.Slot.set: invalid stack"
-              (stack : SlotStack.t)
-              (slot : [< Slot.definable ])])
+            "Instruction.Slot.set: stack empty, cannot assign slot"
+              (slot : [< Slot.definable ])]
+              
   
   let mock_value stack =
     Config.ok (`Value :: stack) []
@@ -330,7 +387,7 @@ let pair_n n =
   match n with
   | 0 -> prim 0 1 I.unit
   | 1 -> noop
-  | 2 -> prim 2 1 I.pair
+  | 2 -> prim ~message:"pair_n" 2 1 (I.pair ())
   | n -> prim n 1 (I.pair_n n)
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-GET *)
@@ -360,7 +417,7 @@ let update_n idx ~length:n =
     remove 1
   | n ->
     let k = if idx = n - 1 then 2 * idx else (2 * idx) + 1 in
-    prim 2 1 (I.update_n k)
+    prim ~message:"update_n" 2 1 (I.update_n k)
 
 (* https://tezos.gitlab.io/michelson-reference/#instr-LAMBDA *)
 (*  Lambdas used in LLTZ-IR do not use heaps. *)
@@ -386,20 +443,42 @@ let lambda ~environment ~lam_var ~return_type return stack =
   in
   Config.ok (`Value :: stack) [ I.lambda parameter_type return_type instructions ]
 
+let lambda_raw ~parameter_type ~return_type return stack =
+  let lambda_stack = [ `Value ] in
+  let { Config.stack = _; instructions } = return lambda_stack in
+  Config.ok (`Value :: stack) [ I.lambda parameter_type return_type instructions ]
+
 (* https://tezos.gitlab.io/michelson-reference/#instr-LAMBDA_REC *)
 (* Recursive version of lambda, mu is the name of the recursive variable *)
-let lambda_rec ~environment ~lam_var ~mu ~return_type return stack =
+
+(* Temporarily makes top of the stack a value *)
+(* This is done so that we can modify Lambda_rec's mu which is present on the stack as an ident (partial_apps are applied to both an Ident and a Value). *)
+let make_top_value in_ stack =
+  match stack with
+  | `Ident name :: stack -> 
+    let { Config.stack = _; instructions } = in_ (`Value :: stack) in
+    Config.ok ((`Ident name) :: stack) instructions
+  | _ -> 
+    raise_s [%message "Instruction.make_top_value: invalid stack" (stack : SlotStack.t)]
+
+let lambda_rec ~environment ~lam_var ~mu ~return_type ~partial_apps return stack =
   let n = (List.length environment) + 1 in
   let environment_slots = List.map environment ~f:(fun (ident, _) -> `Ident ident) in
   let parameter_slot = `Ident (fst lam_var) in
 
   let lambda_stack = [ `Value; `Value ] in
   let { Config.stack = _; instructions } =
-    let defined_slots = environment_slots @ [parameter_slot] @ [`Ident mu] in
+    let defined_slots = environment_slots @ [parameter_slot; `Ident mu] in
     seq
       [ 
-        unpair_n n
-      ; Slot.def_all (defined_slots) ~in_:return
+      unpair_n n
+      ; Slot.def_all (defined_slots) ~in_:
+        (seq [
+          dig n
+          ; make_top_value partial_apps
+          ; dug n
+          ; return
+        ])
       ; Slot.collect_all (defined_slots)
       ]
       lambda_stack
@@ -425,7 +504,7 @@ let failwith stack =
 let create_contract ~storage ~parameter ~code stack =
   match stack with
   | `Value :: `Value :: `Value :: stack -> 
-    Config.ok stack [ I.create_contract storage parameter (code (`Value :: stack)) ]
+    Config.ok (`Value :: `Value :: stack) [ I.create_contract parameter storage (code (`Value :: stack)) ]
   | _ ->
     raise_s
       [%message "Instruction.create_contract: invalid stack" (stack : SlotStack.t)]
@@ -433,33 +512,33 @@ let create_contract ~storage ~parameter ~code stack =
 let is_nat = prim 1 1 I.is_nat (* https://tezos.gitlab.io/michelson-reference/#instr-ISNAT *)
 let unit = prim 0 1 I.unit (* https://tezos.gitlab.io/michelson-reference/#instr-UNIT *)
 let push type_ lit = prim 0 1 (I.push type_ lit) (* https://tezos.gitlab.io/michelson-reference/#instr-PUSH *)
-let apply = prim 2 1 I.apply (* https://tezos.gitlab.io/michelson-reference/#instr-APPLY *)
-let exec = prim 2 1 I.exec (* https://tezos.gitlab.io/michelson-reference/#instr-EXEC *)
+let apply = prim ~message:"apply" 2 1 I.apply (* https://tezos.gitlab.io/michelson-reference/#instr-APPLY *)
+let exec = prim ~message:"exec" 2 1 I.exec (* https://tezos.gitlab.io/michelson-reference/#instr-EXEC *)
 let unpair = prim 1 2 I.unpair (* https://tezos.gitlab.io/michelson-reference/#instr-UNPAIR *)
 let pack = prim 1 1 I.pack (* https://tezos.gitlab.io/michelson-reference/#instr-PACK *)
 let some = prim 1 1 I.some (* https://tezos.gitlab.io/michelson-reference/#instr-SOME *)
 let update = prim 3 1 I.update (* https://tezos.gitlab.io/michelson-reference/#instr-UPDATE *)
-let add = prim 2 1 I.add (* https://tezos.gitlab.io/michelson-reference/#instr-ADD *)
-let sub = prim 2 1 I.sub (* https://tezos.gitlab.io/michelson-reference/#instr-SUB *)
-let mul = prim 2 1 I.mul (* https://tezos.gitlab.io/michelson-reference/#instr-MUL *)
-let pair = prim 2 1 I.pair (* https://tezos.gitlab.io/michelson-reference/#instr-PAIR *)
+let add = prim ~message:"add" 2 1 I.add (* https://tezos.gitlab.io/michelson-reference/#instr-ADD *)
+let sub = prim ~message:"sub" 2 1 I.sub (* https://tezos.gitlab.io/michelson-reference/#instr-SUB *)
+let mul = prim ~message:"mul" 2 1 I.mul (* https://tezos.gitlab.io/michelson-reference/#instr-MUL *)
+let pair = prim ~message:"pair" 2 1 (I.pair ()) (* https://tezos.gitlab.io/michelson-reference/#instr-PAIR *)
 let car = prim 1 1 I.car (* https://tezos.gitlab.io/michelson-reference/#instr-CAR *)
 let cdr = prim 1 1 I.cdr (* https://tezos.gitlab.io/michelson-reference/#instr-CDR *)
-let get = prim 2 1 I.get (* https://tezos.gitlab.io/michelson-reference/#instr-GET *)
+let get = prim ~message:"get" 2 1 I.get (* https://tezos.gitlab.io/michelson-reference/#instr-GET *)
 let unpack type_ = prim 1 1 (I.unpack type_) (* https://tezos.gitlab.io/michelson-reference/#instr-UNPACK *)
 let neg = prim 1 1 I.neg (* https://tezos.gitlab.io/michelson-reference/#instr-NEG *)
-let ediv = prim 2 1 I.ediv (* https://tezos.gitlab.io/michelson-reference/#instr-EDIV *)
+let ediv = prim ~message:"ediv" 2 1 I.ediv (* https://tezos.gitlab.io/michelson-reference/#instr-EDIV *)
 
 let failwithf fmt =
-  Fmt.kstr (fun msg -> seq [ push T.string (M.string msg); failwith ]) fmt
+  Fmt.kstr (fun msg -> seq [ push (T.string ()) (M.string msg); failwith ]) fmt
 
-let and_ = prim 2 1 I.and_ (* https://tezos.gitlab.io/michelson-reference/#instr-AND *)
-let or_ = prim 2 1 I.or_ (* https://tezos.gitlab.io/michelson-reference/#instr-OR *)
+let and_ = prim ~message:"and_" 2 1 I.and_ (* https://tezos.gitlab.io/michelson-reference/#instr-AND *)
+let or_ = prim ~message:"or_" 2 1 I.or_ (* https://tezos.gitlab.io/michelson-reference/#instr-OR *)
 let not = prim 1 1 I.not  (* https://tezos.gitlab.io/michelson-reference/#instr-NOT *)
 let left type_ = prim 1 1 (I.left type_) (* https://tezos.gitlab.io/michelson-reference/#instr-LEFT *)
 let right type_ = prim 1 1 (I.right type_) (* https://tezos.gitlab.io/michelson-reference/#instr-RIGHT *)
 let empty_map key_type val_type = prim 0 1 (I.empty_map key_type val_type) (* https://tezos.gitlab.io/michelson-reference/#instr-EMPTY_MAP *)
-let compare = prim 2 1 I.compare (* https://tezos.gitlab.io/michelson-reference/#instr-COMPARE *)
+let compare = prim ~message:"compare" 2 1 I.compare (* https://tezos.gitlab.io/michelson-reference/#instr-COMPARE *)
 let eq = prim 1 1 I.eq (* https://tezos.gitlab.io/michelson-reference/#instr-EQ *)
 let neq = prim 1 1 I.neq (* https://tezos.gitlab.io/michelson-reference/#instr-NEQ *)
 let lt = prim 1 1 I.lt (* https://tezos.gitlab.io/michelson-reference/#instr-LT *)
@@ -468,11 +547,27 @@ let gt = prim 1 1 I.gt (* https://tezos.gitlab.io/michelson-reference/#instr-GT 
 let ge = prim 1 1 I.ge (* https://tezos.gitlab.io/michelson-reference/#instr-GE *)
 let int = prim 1 1 I.int (* https://tezos.gitlab.io/michelson-reference/#instr-INT *)
 let nil type_ = prim 0 1 (I.nil type_) (* https://tezos.gitlab.io/michelson-reference/#instr-NIL *)
-let cons = prim 2 1 I.cons (* https://tezos.gitlab.io/michelson-reference/#instr-CONS *)
-let debug = ref true
+let cons = prim ~message:"cons" 2 1 I.cons (* https://tezos.gitlab.io/michelson-reference/#instr-CONS *)
+
+let debug = ref false
 let next_trace_point = ref (-1)
 
 (* Directly using michelson specified via micheline. Can take arbitrary number of args and return a single value. *)
+let rec micheline_fails (node : (unit, Michelson.Ast.Prim.t) Tezos_micheline.Micheline.node) =
+  match node with
+  | Prim (_, I Failwith, _, _) -> true
+  | Prim (_, I Never, _, _ ) -> true
+  | Seq (_, xs) -> (
+      match List.last xs with
+      | Some x -> micheline_fails x
+      | None -> false)
+  | Prim (_, I If, [l; r], _) | Prim (_, I If_none, [l; r], _) | Prim (_, I If_left, [l; r], _) | Prim (_, I If_cons, [l; r], _) ->
+      micheline_fails l && micheline_fails r
+  | Prim (_, I Map, [x], _) | Prim (_, I Iter, [x], _) | Prim (_, I Loop, [x], _) | Prim (_, I Dip, [x], _) | Prim (_, I Dip, [_;x], _) ->
+      micheline_fails x
+  | Prim (_, _, _, _) -> false
+  | Int (_, _) | String (_, _) | Bytes (_, _) | Seq (_, []) -> false
+
 let raw_michelson michelson args stack =
   let n = List.length args in
   if List.length stack < n then
@@ -481,9 +576,16 @@ let raw_michelson michelson args stack =
     let top_elements = List.take stack n in
     if List.for_all top_elements ~f:(function `Value -> true | _ -> false) then
       let new_stack = `Value :: (List.drop stack n) in
-      Config.ok new_stack michelson
+      if micheline_fails michelson then
+        Config.raise [michelson]
+      else
+        let result_val = Config.ok new_stack [michelson] in 
+        result_val
     else
       raise_s [%message "Instruction.raw_michelson: invalid stack" (stack : SlotStack.t) (n : int)]
+
+let global_constant hash args stack =
+  raw_michelson (I.global_constant hash) args stack
 
 let set_debug next in_ =
   let curr = !debug in

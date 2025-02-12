@@ -165,6 +165,7 @@ type ('i, 'literal) instr_f =
   | MIconcat1
   | MIconcat2
   | MIconcat_unresolved
+  | MIConstant of 'literal
 [@@deriving eq, ord, show {with_path = false}, map, fold]
 
 type ('instr, 'literal) literal_f =
@@ -229,6 +230,7 @@ let sequence_instr_f =
       MIcreate_contract {tparameter; tstorage; code; views}
   | MIseq is -> map (fun is -> MIseq is) (sequence_list is)
   | MIpush (t, l) -> map (fun l -> MIpush (t, l)) l
+  | MIConstant l -> map (fun l -> MIConstant l) l
   | ( MI0 _ | MI1 _ | MI1_fail _ | MI2 _
     | MI3
         ( Slice
@@ -252,7 +254,7 @@ let sequence_instr_f =
     | MIsetField _
     | MIconcat1
     | MIconcat2
-    | MIconcat_unresolved ) as instr -> return instr
+    | MIconcat_unresolved) as instr -> return instr
 
 type instr = {instr : (instr, literal) instr_f}
 
@@ -811,11 +813,12 @@ let mi_loop_left =
             let body = body (Ok (Stack_ok (a :: tail))) in
             let tinstr = MIloop_left body in
             match body.stack_out with
-            | Ok (Stack_ok ({mt = MT2 (Pair _, a', b')} :: tail'))
+            | Ok (Stack_ok ({mt = MT2 (Or _, a', b')} :: tail'))
               when unifiable_types a a' && unifiable_types b b'
                    && unifiable_ok_stacks tail tail' ->
                 Some (tinstr, Ok (Stack_ok (b :: tail)))
-            | _ -> Some (tinstr, Error "LOOP_LEFT: incompatible body"))
+            | _ -> 
+              Some (tinstr, Error "LOOP_LEFT: incompatible body"))
         | _ -> None)
     | _ -> assert false
   in
@@ -1031,7 +1034,7 @@ let mi_ediv =
     | _ -> None)
 
 let mi_not :_ =
-  mk_spec_basic "NOT" ~commutative:() ~arities:(1, 1) (function
+  mk_spec_basic "NOT" ~arities:(1, 1) (function
     | {mt = MT0 Bool} :: _ -> Some [mt_bool]
     | {mt = MT0 Nat} :: _ -> Some [mt_int]
     | {mt = MT0 Int} :: _ -> Some [mt_int]
@@ -1218,6 +1221,9 @@ let mi_mem =
     | k :: {mt = MT2 (Big_map, k', _)} :: _ when unifiable_types k k' ->
         Some [mt_bool]
     | _ -> None)
+
+let mi_min_block_time =
+  mk_spec_const "MIN_BLOCK_TIME" mt_nat
 
 let mi_exec =
   mk_spec_basic "EXEC" ~arities:(2, 1) (function
@@ -1430,6 +1436,7 @@ let spec_of_prim0 p =
   | None_ t -> mi_none t
   | Unit_ -> mi_unit
   | Self _ -> mi_self
+  | Min_block_time -> mi_min_block_time
 
 let spec_of_prim1  p =
   let mk name =
@@ -1559,6 +1566,7 @@ let spec_of_instr  = function
   | MIconcat1 -> mi_concat1
   | MIconcat2 -> mi_concat2
   | MIconcat_unresolved -> mi_concat_unresolved
+  | MIConstant _ -> assert false
   | MIswap -> mi_swap
   | MIdrop -> mi_drop
   | MIdropn n -> mi_dropn n
@@ -1588,7 +1596,13 @@ let spec_of_instr  = function
   | MIcomment _ -> mi_comment
   | MIerror s -> mi_error s
 
-let is_commutative  instr = (spec_of_instr  instr).commutative
+let is_constant {instr} =
+  match instr with
+  | MIConstant _ -> true
+  | _ -> false
+
+let is_commutative  instr = 
+  if is_constant {instr} then false else (spec_of_instr instr).commutative
 
 let name_of_instr  instr = (spec_of_instr  instr).name
 
@@ -1627,7 +1641,8 @@ let name_of_instr_exn  = function
         | Nil _
         | Empty_set _
         | Empty_map _
-        | Empty_bigmap _ )
+        | Empty_bigmap _
+        | Min_block_time )
     | MI1
         ( Car
         | Cdr
@@ -1712,7 +1727,7 @@ let name_of_instr_exn  = function
     | MIsetField _
     | MIconcat1
     | MIconcat2
-    | MIconcat_unresolved ) as instr -> name_of_instr  instr
+    | MIconcat_unresolved) as instr -> name_of_instr  instr
   | MIdip _ -> "DIP"
   | MIdipn _ -> "DIPN"
   | MIloop _ -> "LOOP"
@@ -1730,6 +1745,7 @@ let name_of_instr_exn  = function
   | MIerror _ -> failwith "name_of_instr_exn: MIerror"
   | MIcomment _ -> failwith "name_of_instr_exn: MIcomment"
   | MIseq _ -> failwith "name_of_instr_exn: MIseq"
+  | MIConstant _ -> failwith "name_of_instr_exn: MIConstant"
   | MIcreate_contract _ -> "CREATE_CONTRACT"
   | MI2 Sapling_verify_update -> "SAPLING_VERIFY_UPDATE"
 
@@ -1882,6 +1898,7 @@ module Of_micheline = struct
         | "Right", [x] -> MLiteral.right (literal x)
         | "Elt", [k; v] -> MLiteral.elt (literal k) (literal v)
         | "Lambda_rec", [x] -> MLiteral.lambda_rec (instruction x)
+        | "constant", [String hash] -> MLiteral.constant hash
         | _ -> MLiteral.instr (instruction x))
     | Sequence xs -> MLiteral.seq (List.map ~f:literal xs)
 
@@ -1962,8 +1979,10 @@ module Of_micheline = struct
           in
           match l with
           | Some l -> MIfield (List.rev l)
-          | None -> err ())
-      | _ -> err ()
+          | None -> 
+            err ())
+      | _ -> 
+        err ()
     in
     let instr =
       match x with
@@ -2016,8 +2035,14 @@ module Of_micheline = struct
           | "SOME", [] -> MI1 Some_
           | "PAIR", [] -> MI2 (Pair (None, None))
           | "PAIR", [Int n] -> MIpairn (int_of_string n)
-          | "LEFT", [t] -> MI1 (Left (None, None, mtype t))
-          | "RIGHT", [t] -> MI1 (Right (None, None, mtype t))
+          | "LEFT", [t] -> 
+            (match annotations with
+            | [] -> MI1 (Left (None, None, mtype t))
+            | [annot] -> MI1 (Left (None, Some annot, mtype t)))
+          | "RIGHT", [t] -> 
+            (match annotations with
+            | [] -> MI1 (Right (None, None, mtype t))
+            | [annot] -> MI1 (Right (Some annot, None, mtype t)))
           | "PUSH", [t; l] -> MIpush (mtype t, literal l)
           | "SWAP", [] -> MIswap
           | "UNPAIR", [] -> MIunpair [true; true]
@@ -2048,7 +2073,8 @@ module Of_micheline = struct
               | [annot], [] -> MI1 (Emit (Some annot, None))
               | [], [t] -> MI1 (Emit (None, Some (mtype t)))
               | [annot], [t] -> MI1 (Emit (Some annot, Some (mtype t)))
-              | _ -> err ())
+              | _ -> 
+                err ())
           | "CREATE_CONTRACT", [x] ->
               let tparameter, tstorage, code =
                 if false then failwith (Micheline.show x);
@@ -2083,6 +2109,8 @@ module Of_micheline = struct
           | "SET_DELEGATE", [] -> MI1 Set_delegate
           | "SAPLING_EMPTY_STATE", [Int memo] ->
               MI0 (Sapling_empty_state {memo = int_of_string memo})
+          | "SAPLING_EMPTY_STATE", [Primitive {name = "int"; annotations = annots; arguments = args}] -> 
+            err ()
           | "SAPLING_VERIFY_UPDATE", [] -> MI2 Sapling_verify_update
           | "NEVER", [] -> MI1_fail Never
           | "READ_TICKET", [] -> MI1 Read_ticket
@@ -2128,6 +2156,7 @@ module Of_micheline = struct
           | "LEVEL", [] -> MI0 Level
           | "CHAIN_ID", [] -> MI0 Chain_id
           | "MEM", [] -> MI2 Mem
+          | "MIN_BLOCK_TIME", [] -> MI0 Min_block_time
           | "HASH_KEY", [] -> MI1 Hash_key
           | "BLAKE2B", [] -> MI1 Blake2b
           | "SHA256", [] -> MI1 Sha256
@@ -2156,8 +2185,12 @@ module Of_micheline = struct
           | "IFCMPLE", [x; y] -> ifcmp_op (MI1 Le) x y
           | "IFCMPGE", [x; y] -> ifcmp_op (MI1 Ge) x y
           (* TODO Macros: ASSERT_SOME, ASSERT_LEFT, ASSERT_RIGHT *)
-          | _ -> err ())
-      | _ -> err ()
+          (*Global constant*)
+          | "constant", [hash] -> MIConstant (literal hash)
+          | _ -> 
+            err ())
+      | _ -> 
+        err ()
     in
     {instr}
 
@@ -2327,7 +2360,9 @@ module To_micheline = struct
     let primn ?annotations n l = [primitive ?annotations n l] in
     let rec_instruction instr = Micheline.sequence (instruction instr) in
     match the_instruction.instr with
-    | MIerror s -> primn "ERROR" [string s]
+    | MIerror s -> 
+      Printf.eprintf "ERROR: %s\n" s;
+      primn "ERROR" [string s]
     | MIcomment _comment ->
         []
         (*
@@ -2407,6 +2442,7 @@ module To_micheline = struct
           ]
     | MI0 (Sapling_empty_state {memo}) ->
         primn "SAPLING_EMPTY_STATE" [int (string_of_int memo)]
+    | MIConstant hash -> primn "constant" [literal hash]
     | ( MI0
           ( Sender
           | Source
@@ -2418,7 +2454,8 @@ module To_micheline = struct
           | Self_address
           | Chain_id
           | Total_voting_power
-          | Unit_ )
+          | Unit_ 
+          | Min_block_time)
       | MI1
           ( Car
           | Cdr
@@ -2556,7 +2593,7 @@ let profile  =
         return (max p1 p2, d)
     | MIif_cons ((p1, d1), (p2, d2)) ->
         let* d = same (succ d1) (pred d2) in
-        return (max (p1 + 1) (p2 - 1), d)
+        return (max (p1 - 1) (p2 + 1), d)
     | MIseq xs ->
         let f = function
           | _, Error e -> Error e
@@ -2572,6 +2609,7 @@ let profile  =
     | MIlambda _ -> return (0, Some 1)
     | MIlambda_rec _ -> return (0, Some 1)
     | MIconcat_unresolved -> failwith "profile: CONCAT arity undetermined"
+    | MIConstant _ -> assert false (* We don't need to profile constants as in that case has_arity returns false *)
     | MIerror _ -> return (0, Some 0)
     | i -> (
         match spec_of_instr  i with
@@ -2583,4 +2621,5 @@ let profile  =
 let has_profile  pr instr = Ok pr = profile  {instr}
 
 let has_arity  a instr =
-  has_profile  (profile_of_arity a) instr
+  if is_constant {instr} then false
+  else has_profile  (profile_of_arity a) instr

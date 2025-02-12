@@ -29,6 +29,7 @@ module T = struct
     { desc : desc
     ; range : Range.t
     ; type_ : Type.t
+    ; annotations : Annotations.t
     }
   
   and binder = var * Type.t
@@ -145,7 +146,7 @@ module T = struct
     | Match of t * lambda Row.t
     (* tezos specific *)
     | Raw_michelson of { michelson: (micheline[@sexp.opaque] [@equal.ignore] [@compare.ignore]); args: t list }
-    | Global_constant of  { hash: string }
+    | Global_constant of  { hash: string; args: t list }
     | Create_contract of
         { storage : Type.t
         ; code : lambda

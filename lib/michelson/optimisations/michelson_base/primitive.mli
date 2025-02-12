@@ -19,6 +19,7 @@ type 'ty prim0 =
   | None_ of 'ty  (** Push None.*)
   | Sapling_empty_state of {memo : int}  (** Push an Empty Sapling State.*)
   | Unit_  (** Push unit.*)
+  | Min_block_time (** Push the current minimal block time in seconds. *)
 [@@deriving eq, ord, show, map, fold, sexp_of]
 
 (** Michelson Unary Primitives *)
