@@ -804,7 +804,7 @@ module Default = struct
     in
     LLTZ.R.Node converted_row_leaves
 
-  let gen_name = Name.create ()
+  let gen_name () = Name.create ()
 
   let annon_function var_name var_ty ~body : LLTZ.E.lambda =
     { lam_var = (Var var_name, var_ty); body }
