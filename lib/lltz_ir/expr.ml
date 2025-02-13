@@ -170,7 +170,8 @@ module T = struct
     | Lambda_rec of lambda_rec
     | App of app
     | Const of constant
-    | Prim of Primitive.t * t list (* mutability *)
+    | Prim of Primitive.t * t list
+    (* mutability *)
     | Let_mut_in of let_mut_in
     | Deref of mut_var
     | Assign of mut_var * t
@@ -178,21 +179,25 @@ module T = struct
     | If_bool of if_bool
     | If_none of if_none
     | If_cons of if_cons
-    | If_left of if_left (* low-level control flow (iterative) *)
+    | If_left of if_left
+    (* low-level control flow (iterative) *)
     | While of while_
     | While_left of while_left
     | For of for_
-    | For_each of for_each (* high-level control flow (iterative) *)
+    | For_each of for_each
+    (* high-level control flow (iterative) *)
     | Map of map_
     | Fold_left of fold_left
-    | Fold_right of fold_right (* tuples *)
+    | Fold_right of fold_right
+    (* tuples *)
     | Let_tuple_in of let_tuple_in
     | Tuple of t Row.t
     | Proj of t * Row.Path.t
     | Update of update
     (* sums *)
     | Inj of Type.t Row.Context.t * t
-    | Match of t * lambda_typed Row.t (* tezos specific *)
+    | Match of t * lambda_typed Row.t
+    (* tezos specific *)
     | Raw_michelson of raw_michelson
     | Global_constant of global_constant
     | Create_contract of create_contract
