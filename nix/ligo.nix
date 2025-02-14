@@ -2,14 +2,10 @@
   stdenv,
   lib,
   pkgs,
-  tezos-ligo = {
-      url = "gitlab:ligolang/tezos-ligo/v21-ligo";
-      flake = false;
-    },
-  grace = {
-    url = "github:johnyob/grace";
-    flake = false;
-  },
+  tezos-ligo,
+  tree-sitter,
+  tree-sitter-typescript,
+  grace,
   libiconv,
 }: let
   inherit (pkgs) darwin ocamlPackages python3Packages coq_8_13 rustc cargo rustPlatform;
@@ -19,6 +15,9 @@ in
       pname = "ligo";
       version = "dev";
       src = ./..;
+
+      TREE_SITTER = "${tree-sitter}";
+      TREE_SITTER_TYPESCRIPT = "${tree-sitter-typescript}";
 
       # TODO: needed due to racing condition on inline_tests
       enableParallelBuilding = false;
@@ -54,6 +53,8 @@ in
 
       propagatedBuildInputs =
         [
+          tree-sitter
+          tree-sitter-typescript
           libiconv
           core
           core_unix

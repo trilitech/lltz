@@ -1,81 +1,173 @@
 {
+  description = "LIGO Nix Flake";
+
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
-
-    opam-repository = {
-      flake = false;
-      url = "github:ocaml/opam-repository";
-    };
-    opam2nix = {
-      url = "github:vapourismo/opam-nix-integration";
+    treefmt = {
+      url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-utils.follows = "flake-utils";
-      inputs.opam-repository.follows = "opam-repository";
+    };
+    build-yarn-package = {
+      url = "github:serokell/nix-npm-buildpackage";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # haskell
+    stackage = {
+      url = "github:input-output-hk/stackage.nix";
+      flake = false;
+    };
+    hackage = {
+      url = "github:input-output-hk/hackage.nix";
+      flake = false;
+    };
+    haskell-nix = {
+      url = "github:input-output-hk/haskell.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.hackage.follows = "hackage";
+      inputs.stackage.follows = "stackage";
+    };
+    ocaml-overlay = {
+      url = "github:nix-ocaml/nix-overlays";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Also doesn't belong here, but required to avoid nix's bad UX with submodules
+    tezos-ligo = {
+      url = "gitlab:ligolang/tezos-ligo/v21-ligo";
+      flake = false;
+    };
+
+    grace = {
+      url = "github:johnyob/grace";
+      flake = false;
     };
   };
-
   outputs = inputs:
     with inputs;
-      flake-utils.lib.eachDefaultSystem (system: let
-        pkgs = import nixpkgs {
-          inherit system;
-          overlays = [opam2nix.overlays.default];
-        };
+      flake-utils.lib.eachDefaultSystem (
+        system: let
+          lib = nixpkgs.legacyPackages.${system}.lib;
 
-        opamPackages = pkgs.opamPackages.overrideScope (
-          pkgs.lib.composeManyExtensions [
-            (final: prev: {
-              repository = prev.repository.override {src = opam-repository;};
-            })
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [
+              ocaml-overlay.overlays.default
+              (import ./nix/overlay.nix)
+              (_: prev:
+                with prev; {
+                  ocamlPackages = ocaml-ng.ocamlPackages_4_14;
+                  coqPackages = coqPackages_8_13;
+                  ocamlformat = ocaml-ng.ocamlPackages_4_14.ocamlformat_0_21_0;
+                })
+            ];
+          };
 
-            (
-              final: prev:
-                prev.repository.select {
-                  opams = [
-                    {
-                      name = "lltz";
-                      src = ./.;
-                      opam = ./lltz.opam;
-                    }
-                  ];
+          tree-sitter-typescript = pkgs.callPackage ./nix/tree-sitter-typescript.nix {};
+          ligo = pkgs.callPackage ./nix/ligo.nix {inherit tezos-ligo tree-sitter-typescript grace;};
 
-                  packageConstraints = ["fmt" "utop" "ocamlformat" "ocamlformat-rpc" "ocaml-lsp-server"];
-                }
-            )
+          pkgs-extended = pkgs.extend (lib.composeManyExtensions [
+            build-yarn-package.overlays.default
+            haskell-nix.overlay
+            (import ./nix/haskell-overlay.nix)
+          ]);
+          ligo-syntaxes = ./tools/vscode/syntaxes;
+          ligo-webide = pkgs-extended.callPackage ./nix/webide.nix {inherit ligo-syntaxes;};
+          ligo-debugger = pkgs-extended.callPackage ./nix/debugger.nix {};
 
-            # An override that patches opam packages that are missing dependencies from their opam files
-            (
-              final: prev: {
-                # Add ocp-indent to ocamlformat-lib
-                ocamlformat-lib = prev.ocamlformat-lib.overrideAttrs (old: {
-                  propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [prev.ocp-indent];
-                });
+          fmt = treefmt.lib.evalModule pkgs {
+            projectRootFile = "dune-project";
 
-                # Add fmt to logs
-                logs = prev.logs.overrideAttrs (old: {
-                  buildInputs = (old.buildInputs or []) ++ [prev.fmt];
-                });
+            programs.ocamlformat.enable = true;
+            programs.alejandra.enable = true;
 
-                # zarith = prev.zarith.overrideAttrs (old: {
-                #  buildInputs = (old.buildInputs or []) ++ [pkgs.gmp];
-                # });
+            settings.global.excludes = ["_build" "result" ".direnv" "vendors/*" "vendored-dune/*"];
+          };
 
-                conf-gmp = final.lib.overrideNativeDepends prev.conf-gmp [pkgs.gmp];
-                conf-pkg-config = final.lib.overrideNativeDepends prev.conf-pkg-config [pkg-config];
-              }
-            )
-          ]
-        );
-      in {
-        packages.default = opamPackages.lltz;
+          # Wrap stack to work with our haskell.nix integration.
+          # - no-nix: we don't want stack's nix integration
+          # --system-ghc: use the existing GHC on PATH (provided by haskell.nix)
+          # --no-install-ghc : don't try to install GHC if no matching GHC found on PATH
+          stack-wrapped = pkgs.symlinkJoin {
+            name = "stack"; # will be available as the usual `stack` in terminal
+            paths = [pkgs.stack];
+            buildInputs = [pkgs.makeWrapper];
+            postBuild = ''
+              wrapProgram $out/bin/stack \
+                --add-flags "\
+                  --no-nix \
+                  --system-ghc \
+                  --no-install-ghc \
+                "
+            '';
+          };
 
-        devShells.default = pkgs.mkShell {
-          name = "lltz-shell";
+          haskellShell = name: drv:
+            drv.passthru.project.shellFor {
+              inherit name;
 
-          inputsFrom = [opamPackages.lltz];
+              # FIXME: https://github.com/input-output-hk/haskell.nix/issues/1885
+              # Adding [exactDeps = true] to avoid the build failure, this ensures
+              # that cabal doesn't choose alternate plans, so that *all* dependencies
+              # are provided by nix.
+              exactDeps = true;
 
-          buildInputs = with pkgs; [alejandra gmp pkg-config] ++ (with opamPackages; [utop ocamlformat ocamlformat-rpc ocaml-lsp-server]);
-        };
-      });
+              buildInputs = [stack-wrapped];
+            };
+        in {
+          packages = {
+            inherit (ligo-webide) ligo-webide-backend ligo-webide-frontend;
+            inherit ligo-debugger;
+            ligo = ligo;
+            default = ligo;
+          };
+
+          devShells = with ligo-webide; rec {
+            default = pkgs.mkShell {
+              name = "ligo-dev-shell";
+
+              inputsFrom = [ligo];
+
+              buildInputs = with pkgs; [
+                alejandra
+                shellcheck
+                ocamlformat
+                ocamlPackages.utop
+                ocamlPackages.ocaml-lsp
+                ocamlPackages.merlin
+              ];
+
+              shellHook = ''
+                # This is a hack to work around the hack used in the dune files
+                export TREE_SITTER="${ligo.TREE_SITTER}";
+                export TREE_SITTER_TYPESCRIPT="${ligo.TREE_SITTER_TYPESCRIPT}";
+                export MERLIN_PATH="${pkgs.ocamlPackages.merlin}";
+              '';
+            };
+
+            webide-frontend = pkgs.mkShell {
+              name = "ligo-webide-frontend-shell";
+
+              inputsFrom = [ligo-webide-frontend];
+
+              NODE_OPTIONS = "--openssl-legacy-provider";
+            };
+
+            webide-backend = haskellShell "ligo-webide-backend-shell" ligo-webide-backend;
+
+            webide = pkgs.mkShell {
+              name = "ligo-webide-shell";
+
+              inputsFrom = [webide-frontend webide-backend];
+
+              NODE_OPTIONS = "--openssl-legacy-provider";
+            };
+
+            debugger = haskellShell "ligo-debugger-shell" ligo-debugger;
+          };
+
+          formatter = fmt.config.build.wrapper;
+        }
+      );
 }
