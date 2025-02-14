@@ -1,0 +1,4 @@
+[submodule "vendors/tezos-ligo"]
+	path = vendors/tezos-ligo
+	url = https://gitlab.com/ligolang/tezos-ligo.git
+	branch = master
