@@ -1,7 +1,7 @@
 (library
  (name test_dsl)
  (libraries core lltz.codegen fmt octez-libs.micheline lltz.michelson)
- (modules test_nodes)
+ (modules test_nodes test_free_vars)
  (inline_tests)
  (preprocess (pps ppx_jane))
  (flags (:standard -verbose -ccopt --verbose))
