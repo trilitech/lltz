@@ -2,3 +2,6 @@
 	path = vendors/tezos-ligo
 	url = https://gitlab.com/ligolang/tezos-ligo.git
 	branch = master
+[submodule "vendors/grace"]
+	path = vendors/grace
+	url = https://github.com/johnyob/grace.git
