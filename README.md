@@ -1,4 +1,4 @@
-# LLTZ request for comments
+# LLTZ
 This is an implementation of the new shared backend for all Tezos languages.
 
 ## Contributing
