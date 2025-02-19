@@ -8,25 +8,9 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    build-yarn-package = {
-      url = "github:serokell/nix-npm-buildpackage";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    # haskell
-    stackage = {
-      url = "github:input-output-hk/stackage.nix";
-      flake = false;
-    };
     hackage = {
       url = "github:input-output-hk/hackage.nix";
       flake = false;
-    };
-    haskell-nix = {
-      url = "github:input-output-hk/haskell.nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.hackage.follows = "hackage";
-      inputs.stackage.follows = "stackage";
     };
     ocaml-overlay = {
       url = "github:nix-ocaml/nix-overlays";
@@ -59,22 +43,13 @@
                 with prev; {
                   ocamlPackages = ocaml-ng.ocamlPackages_4_14;
                   coqPackages = coqPackages_8_13;
-                  ocamlformat = ocaml-ng.ocamlPackages_4_14.ocamlformat_0_21_0;
+                  # ocamlformat = ocaml-ng.ocamlPackages_4_14.ocamlformat_0_21_0;
                 })
             ];
           };
 
-          tree-sitter-typescript = pkgs.callPackage ./nix/tree-sitter-typescript.nix {};
-          ligo = pkgs.callPackage ./nix/ligo.nix {inherit tezos-ligo tree-sitter-typescript grace;};
-
-          pkgs-extended = pkgs.extend (lib.composeManyExtensions [
-            build-yarn-package.overlays.default
-            haskell-nix.overlay
-            (import ./nix/haskell-overlay.nix)
-          ]);
+          ligo = pkgs.callPackage ./nix/ligo.nix {inherit tezos-ligo grace;};
           ligo-syntaxes = ./tools/vscode/syntaxes;
-          ligo-webide = pkgs-extended.callPackage ./nix/webide.nix {inherit ligo-syntaxes;};
-          ligo-debugger = pkgs-extended.callPackage ./nix/debugger.nix {};
 
           fmt = treefmt.lib.evalModule pkgs {
             projectRootFile = "dune-project";
@@ -84,41 +59,8 @@
 
             settings.global.excludes = ["_build" "result" ".direnv" "vendors/*" "vendored-dune/*"];
           };
-
-          # Wrap stack to work with our haskell.nix integration.
-          # - no-nix: we don't want stack's nix integration
-          # --system-ghc: use the existing GHC on PATH (provided by haskell.nix)
-          # --no-install-ghc : don't try to install GHC if no matching GHC found on PATH
-          stack-wrapped = pkgs.symlinkJoin {
-            name = "stack"; # will be available as the usual `stack` in terminal
-            paths = [pkgs.stack];
-            buildInputs = [pkgs.makeWrapper];
-            postBuild = ''
-              wrapProgram $out/bin/stack \
-                --add-flags "\
-                  --no-nix \
-                  --system-ghc \
-                  --no-install-ghc \
-                "
-            '';
-          };
-
-          haskellShell = name: drv:
-            drv.passthru.project.shellFor {
-              inherit name;
-
-              # FIXME: https://github.com/input-output-hk/haskell.nix/issues/1885
-              # Adding [exactDeps = true] to avoid the build failure, this ensures
-              # that cabal doesn't choose alternate plans, so that *all* dependencies
-              # are provided by nix.
-              exactDeps = true;
-
-              buildInputs = [stack-wrapped];
-            };
         in {
           packages = {
-            inherit (ligo-webide) ligo-webide-backend ligo-webide-frontend;
-            inherit ligo-debugger;
             ligo = ligo;
             default = ligo;
           };
@@ -139,32 +81,9 @@
               ];
 
               shellHook = ''
-                # This is a hack to work around the hack used in the dune files
-                export TREE_SITTER="${ligo.TREE_SITTER}";
-                export TREE_SITTER_TYPESCRIPT="${ligo.TREE_SITTER_TYPESCRIPT}";
                 export MERLIN_PATH="${pkgs.ocamlPackages.merlin}";
               '';
             };
-
-            webide-frontend = pkgs.mkShell {
-              name = "ligo-webide-frontend-shell";
-
-              inputsFrom = [ligo-webide-frontend];
-
-              NODE_OPTIONS = "--openssl-legacy-provider";
-            };
-
-            webide-backend = haskellShell "ligo-webide-backend-shell" ligo-webide-backend;
-
-            webide = pkgs.mkShell {
-              name = "ligo-webide-shell";
-
-              inputsFrom = [webide-frontend webide-backend];
-
-              NODE_OPTIONS = "--openssl-legacy-provider";
-            };
-
-            debugger = haskellShell "ligo-debugger-shell" ligo-debugger;
           };
 
           formatter = fmt.config.build.wrapper;

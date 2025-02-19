@@ -3,8 +3,6 @@
   lib,
   pkgs,
   tezos-ligo,
-  tree-sitter,
-  tree-sitter-typescript,
   grace,
   libiconv,
 }: let
@@ -15,9 +13,6 @@ in
       pname = "ligo";
       version = "dev";
       src = ./..;
-
-      TREE_SITTER = "${tree-sitter}";
-      TREE_SITTER_TYPESCRIPT = "${tree-sitter-typescript}";
 
       # TODO: needed due to racing condition on inline_tests
       enableParallelBuilding = false;
@@ -53,8 +48,6 @@ in
 
       propagatedBuildInputs =
         [
-          tree-sitter
-          tree-sitter-typescript
           libiconv
           core
           core_unix
@@ -113,8 +106,7 @@ in
           fileutils
           conduit
           ocaml-recovery-parser
-          linol
-          linol-lwt
+
           dune-configurator # ???
           coq_8_13 # ???
           alcotest # with-test

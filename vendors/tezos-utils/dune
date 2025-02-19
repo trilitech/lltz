@@ -1,0 +1,10 @@
+(library
+ (name tezos_utils)
+ (public_name lltz.tezos-utils)
+ (libraries
+  octez-libs.micheline
+  octez-libs.base
+  octez-libs.data-encoding
+  core
+  yojson
+  base))

@@ -23,11 +23,11 @@ let is_injective : string -> bool = function
 
 (* If pre_type is Some, we skip injectivity checks and allow all instructions,
    otherwise we require is_injective = true for merges. *)
-let filter_instr ~pre_type (instr : string) : bool = is_injective instr
+let filter_instr (instr : string) : bool = is_injective instr
   
 (** The sets “force_nil”, “force_z”, “no_force”. 
     If a given instruction name is in these sets, we consider it for merging. **)
-let build_force_sets ~pre_type =
+let build_force_sets =
   let f = is_injective in
   let force_nil = 
     List.filter f
@@ -90,7 +90,7 @@ let build_force_sets ~pre_type =
 (** Finding the last instruction, removing the last instruction. **)
 let rec last_instruction = function
   | Seq (_, []) -> None
-  | Seq (l, [x]) -> last_instruction x
+  | Seq (_, [x]) -> last_instruction x
   | Seq (l, _ :: xs) -> last_instruction (Seq (l, xs))
   | prim -> Some prim
 
@@ -146,24 +146,24 @@ let mk_pred (force_nil, force_z, no_force) =
    - If it’s in `force_z` with an [Int (_, n)] => unify if same name + same int + eq_type 
    - else false
 *)
-let mk_eq (force_nil, force_z, no_force) ~pre_type =
+let mk_eq (force_nil, force_z, no_force) =
   fun m1 m2 ->
     match m1, m2 with
     (* force_nil, no sub-args, same name => eq_type => true *)
-    | Prim (ll, l, [], _), Prim (lr, r, [], _)
+    | Prim (_, l, [], _), Prim (_, r, [], _)
       when List.mem l force_nil && String.equal l r ->
       true
 
     (* no_force, any sub-args, same name => eq_type => true *)
-    | Prim (ll, l, subl, _), Prim (lr, r, subr, _)
+    | Prim (_, l, subl, _), Prim (_, r, subr, _)
       when List.mem l no_force && String.equal l r ->
       (match subl, subr with
        | [], [] -> true
        | _ -> true) 
     
     (* force_z with [Int (_, n)] => unify if same name + same int + eq_type *)
-    | Prim (ll, l, [ Int (_, n) ], _),
-      Prim (lr, r, [ Int (_, m) ], _)
+    | Prim (_, l, [ Int (_, n) ], _),
+      Prim (_, r, [ Int (_, m) ], _)
       when List.mem l force_z
            && String.equal l r
            && Z.equal n m ->
@@ -194,9 +194,8 @@ let rec opt_cond_one_pass ?pre_type (node : 'l michelson)
     let cb2, bf = opt_cond_one_pass ?pre_type bf in
     let branch_changed = cb || cb2 in
 
-    let (force_nil, force_z, no_force) = build_force_sets ~pre_type in
-    let eq_fun = mk_eq (force_nil, force_z, no_force) ~pre_type in
-    let pred_fun = mk_pred (force_nil, force_z, no_force) in
+    let (force_nil, force_z, no_force) = build_force_sets in
+    let eq_fun = mk_eq (force_nil, force_z, no_force) in
 
     (* last_instruction on each branch *)
     let last_bt = last_instruction bt in

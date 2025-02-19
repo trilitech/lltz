@@ -55,7 +55,7 @@ let map2 ?err f xs ys =
   else
     List.map2_exn xs ys ~f
 
-let replicate i x = List.init i (fun _ -> x)
+let replicate i x = List.init i ~f:(fun _ -> x)
 
 let rec is_prefix eq xs ys =
   match (xs, ys) with
@@ -1043,25 +1043,25 @@ let mi_not :_ =
 
 let mi_and :_ =
   mk_spec_basic "AND" ~commutative:() ~arities:(2, 1) (function
-    | {mt = MT0 Bool} :: {mt = MT0 Bool} :: _ -> Some [mt_bool]
-    | {mt = MT0 Nat} :: {mt = MT0 Nat} :: _ -> Some [mt_nat]
-    | {mt = MT0 Int} :: {mt = MT0 Nat} :: _ -> Some [mt_nat]
-    | {mt = MT0 Bytes} :: {mt = MT0 Bytes} :: _ -> Some [mt_bytes]
+    | {mt = MT0 Bool; _} :: {mt = MT0 Bool; _} :: _ -> Some [mt_bool]
+    | {mt = MT0 Nat; _} :: {mt = MT0 Nat; _} :: _ -> Some [mt_nat]
+    | {mt = MT0 Int; _} :: {mt = MT0 Nat; _} :: _ -> Some [mt_nat]
+    | {mt = MT0 Bytes; _} :: {mt = MT0 Bytes; _} :: _ -> Some [mt_bytes]
     | _ -> None)
 
 let mi_or :_ =
   mk_spec_basic "OR" ~commutative:() ~arities:(2, 1) (function
-    | {mt = MT0 Bool} :: {mt = MT0 Bool} :: _ -> Some [mt_bool]
-    | {mt = MT0 Nat} :: {mt = MT0 Nat} :: _ -> Some [mt_nat]
-    | {mt = MT0 Bytes} :: {mt = MT0 Bytes} :: _ -> Some [mt_bytes]
+    | {mt = MT0 Bool; _} :: {mt = MT0 Bool; _} :: _ -> Some [mt_bool]
+    | {mt = MT0 Nat; _} :: {mt = MT0 Nat; _} :: _ -> Some [mt_nat]
+    | {mt = MT0 Bytes; _} :: {mt = MT0 Bytes; _} :: _ -> Some [mt_bytes]
     | _ -> None)
 
 let mi_xor  = {(mi_or ) with name = "XOR"}
 
 let mi_shift_left :_ =
   mk_spec_basic "LSL" ~arities:(2, 1) (function
-    | {mt = MT0 Nat} :: {mt = MT0 Nat} :: _ -> Some [mt_nat]
-    | {mt = MT0 Bytes} :: {mt = MT0 Nat} :: _ -> Some [mt_bytes]
+    | {mt = MT0 Nat; _} :: {mt = MT0 Nat; _} :: _ -> Some [mt_nat]
+    | {mt = MT0 Bytes; _} :: {mt = MT0 Nat; _} :: _ -> Some [mt_bytes]
     | _ -> None)
 
 let mi_shift_right  = {(mi_shift_left ) with name = "LSR"}
@@ -1151,8 +1151,8 @@ let mi_right ?annot_left ?annot_right a =
 let rec ad_path_in_type ops t =
   match (ops, t) with
   | [], _ -> Some t
-  | A :: p, {mt = MT2 (Pair _, fst, _)} -> ad_path_in_type p fst
-  | D :: p, {mt = MT2 (Pair _, _, snd)} -> ad_path_in_type p snd
+  | A :: p, {mt = MT2 (Pair _, fst, _); _} -> ad_path_in_type p fst
+  | D :: p, {mt = MT2 (Pair _, _, snd); _} -> ad_path_in_type p snd
   | _ :: _, _ -> None
 
 let mi_field steps =
@@ -1177,16 +1177,16 @@ let mi_set_field steps =
 
 let mi_update =
   mk_spec_basic "UPDATE" ~arities:(3, 1) (function
-    | k :: {mt = MT0 Bool} :: {mt = MT1 (Set, k')} :: _ ->
+    | k :: {mt = MT0 Bool; _} :: {mt = MT1 (Set, k'); _} :: _ ->
         Option.map
           ~f:(fun k -> [mt_set k])
           (Result.get_ok (unify_types ~tolerant:() k k'))
-    | k :: {mt = MT1 (Option, v)} :: {mt = MT2 (Map, k', v')} :: _ ->
+    | k :: {mt = MT1 (Option, v); _} :: {mt = MT2 (Map, k', v'); _} :: _ ->
         Option.map2
           ~f:(fun k v -> [mt_map k v])
           (Result.get_ok (unify_types ~tolerant:() k k'))
           (Result.get_ok (unify_types ~tolerant:() v v'))
-    | k :: {mt = MT1 (Option, v)} :: {mt = MT2 (Big_map, k', v')} :: _ ->
+    | k :: {mt = MT1 (Option, v); _} :: {mt = MT2 (Big_map, k', v'); _} :: _ ->
         Option.map2
           ~f:(fun k v -> [mt_big_map k v])
           (Result.get_ok (unify_types ~tolerant:() k k'))
@@ -1195,12 +1195,12 @@ let mi_update =
 
 let mi_get_and_update =
   mk_spec_basic "GET_AND_UPDATE" ~arities:(3, 2) (function
-    | k :: {mt = MT1 (Option, v)} :: {mt = MT2 (Map, k', v')} :: _ ->
+    | k :: {mt = MT1 (Option, v); _} :: {mt = MT2 (Map, k', v'); _} :: _ ->
         Option.map2
           ~f:(fun k v -> [mt_option v; mt_map k v])
           (Result.get_ok (unify_types ~tolerant:() k k'))
           (Result.get_ok (unify_types ~tolerant:() v v'))
-    | k :: {mt = MT1 (Option, v)} :: {mt = MT2 (Big_map, k', v')} :: _ ->
+    | k :: {mt = MT1 (Option, v); _} :: {mt = MT2 (Big_map, k', v'); _} :: _ ->
         Option.map2
           ~f:(fun k v -> [mt_option v; mt_big_map k v])
           (Result.get_ok (unify_types ~tolerant:() k k'))
@@ -1209,16 +1209,16 @@ let mi_get_and_update =
 
 let mi_open_chest =
   mk_spec_basic "OPEN_CHEST" ~arities:(3, 1) (function
-    | {mt = MT0 Chest_key} :: {mt = MT0 Chest} :: {mt = MT0 Nat} :: _ ->
+    | {mt = MT0 Chest_key; _} :: {mt = MT0 Chest; _} :: {mt = MT0 Nat; _} :: _ ->
         Some [mt_or mt_bytes mt_bool]
     | _ -> None)
 
 let mi_mem =
   mk_spec_basic "MEM" ~arities:(2, 1) (function
-    | k :: {mt = MT1 (Set, k')} :: _ when unifiable_types k k' -> Some [mt_bool]
-    | k :: {mt = MT2 (Map, k', _)} :: _ when unifiable_types k k' ->
+    | k :: {mt = MT1 (Set, k'); _} :: _ when unifiable_types k k' -> Some [mt_bool]
+    | k :: {mt = MT2 (Map, k', _); _} :: _ when unifiable_types k k' ->
         Some [mt_bool]
-    | k :: {mt = MT2 (Big_map, k', _)} :: _ when unifiable_types k k' ->
+    | k :: {mt = MT2 (Big_map, k', _); _} :: _ when unifiable_types k k' ->
         Some [mt_bool]
     | _ -> None)
 
@@ -1227,24 +1227,24 @@ let mi_min_block_time =
 
 let mi_exec =
   mk_spec_basic "EXEC" ~arities:(2, 1) (function
-    | k :: {mt = MT2 (Lambda, k', v)} :: _ ->
+    | k :: {mt = MT2 (Lambda, k', v); _} :: _ ->
         if unifiable_types k k' then Some [v] else None
     | _ -> None)
 
 let mi_apply =
   mk_spec_basic "APPLY" ~arities:(2, 1) (function
-    | k :: {mt = MT2 (Lambda, {mt = MT2 (Pair _, k', k'')}, v)} :: _
+    | k :: {mt = MT2 (Lambda, {mt = MT2 (Pair _, k', k''); _}, v); _} :: _
       when unifiable_types k k' -> Some [mt_lambda k'' v]
     | _ -> None)
 
 let mi_contract t =
   mk_spec_basic "CONTRACT" ~arities:(1, 1) (function
-    | {mt = MT0 Address} :: _ -> Some [mt_option (mt_contract t)]
+    | {mt = MT0 Address; _} :: _ -> Some [mt_option (mt_contract t)]
     | _ -> None)
 
 let mi_view t =
   mk_spec_basic "VIEW" ~arities:(2, 1) (function
-    | _ :: {mt = MT0 Address} :: _ -> Some [mt_option t]
+    | _ :: {mt = MT0 Address; _} :: _ -> Some [mt_option t]
     | _ -> None)
 
 let mi_cast t =
@@ -1269,19 +1269,19 @@ let mi_rename annot_variable =
 
 let mi_transfer_tokens =
   mk_spec_basic "TRANSFER_TOKENS" ~arities:(3, 1) (function
-    | p :: {mt = MT0 Mutez} :: {mt = MT1 (Contract, p')} :: _
+    | p :: {mt = MT0 Mutez; _} :: {mt = MT1 (Contract, p'); _} :: _
       when unifiable_types p p' -> Some [mt_operation]
     | _ -> None)
 
 let mi_set_delegate =
   mk_spec_basic "SET_DELEGATE" ~arities:(1, 1) (function
-    | {mt = MT1 (Option, {mt = MT0 Key_hash})} :: _ -> Some [mt_operation]
+    | {mt = MT1 (Option, {mt = MT0 Key_hash; _}); _} :: _ -> Some [mt_operation]
     | _ -> None)
 
 let mi_sapling_verify_update =
   mk_spec_basic "SAPLING_VERIFY_UPDATE" ~arities:(2, 1) (function
-    | {mt = MT0 (Sapling_transaction {memo = m1})}
-      :: {mt = MT0 (Sapling_state {memo = m2})}
+    | {mt = MT0 (Sapling_transaction {memo = m1}); _}
+      :: {mt = MT0 (Sapling_state {memo = m2}); _}
       :: _
       when m1 = m2 ->
         Some
@@ -1290,14 +1290,14 @@ let mi_sapling_verify_update =
 
 let mi_concat1 =
   mk_spec_basic "CONCAT" ~arities:(1, 1) (function
-    | {mt = MT1 (List, {mt = MT0 (String | Bytes) as mt})} :: _ ->
+    | {mt = MT1 (List, {mt = MT0 (String | Bytes) as mt; _}); _} :: _ ->
         Some [mk_mtype mt]
     | _ -> None)
 
 let mi_concat2 =
   mk_spec_basic "CONCAT" ~arities:(2, 1) (function
-    | {mt = MT0 String as mt} :: {mt = MT0 String} :: _
-    | {mt = MT0 Bytes as mt} :: {mt = MT0 Bytes} :: _ -> Some [mk_mtype mt]
+    | {mt = MT0 String as mt; _} :: {mt = MT0 String; _} :: _
+    | {mt = MT0 Bytes as mt; _} :: {mt = MT0 Bytes; _} :: _ -> Some [mk_mtype mt]
     | _ -> None)
 
 let mi_concat_unresolved =
@@ -1318,14 +1318,14 @@ let mi_pack =
 
 let mi_unpack t =
   mk_spec_basic "UNPACK" ~arities:(1, 1) (function
-    | {mt = MT0 Bytes} :: _ when is_packable t -> Some [mt_option t]
+    | {mt = MT0 Bytes; _} :: _ when is_packable t -> Some [mt_option t]
     | _ -> None)
 
 let mi_slice =
   mk_spec_basic "SLICE" ~arities:(3, 1) (function
-    | {mt = MT0 Nat} :: {mt = MT0 Nat} :: {mt = MT0 String} :: _ ->
+    | {mt = MT0 Nat; _} :: {mt = MT0 Nat; _} :: {mt = MT0 String; _} :: _ ->
         Some [mt_option mt_string]
-    | {mt = MT0 Nat} :: {mt = MT0 Nat} :: {mt = MT0 Bytes} :: _ ->
+    | {mt = MT0 Nat; _} :: {mt = MT0 Nat; _} :: {mt = MT0 Bytes; _} :: _ ->
         Some [mt_option mt_bytes]
     | _ -> None)
 
@@ -1336,7 +1336,8 @@ let mi_size =
           ( MT0 String
           | MT0 Bytes
           | MT1 ((Set | List), _)
-          | MT2 ((Map | Big_map), _, _) )
+          | MT2 ((Map | Big_map), _, _) );
+        _
       }
       :: _ -> Some [mt_nat]
     | _ -> None)
@@ -1376,25 +1377,25 @@ let mi_self =
 
 let mi_address =
   mk_spec_basic "ADDRESS" ~arities:(1, 1) (function
-    | {mt = MT1 (Contract, _)} :: _ -> Some [mt_address]
+    | {mt = MT1 (Contract, _); _} :: _ -> Some [mt_address]
     | _ -> None)
 
 let mi_implicit_account =
   mk_spec_basic "IMPLICIT_ACCOUNT" ~arities:(1, 1) (function
-    | {mt = MT0 Key_hash} :: _ -> Some [mt_contract mt_unit]
+    | {mt = MT0 Key_hash; _} :: _ -> Some [mt_contract mt_unit]
     | _ -> None)
 
 let mi_voting_power =
   mk_spec_basic "VOTING_POWER" ~arities:(1, 1) (function
-    | {mt = MT0 Key_hash} :: _ -> Some [mt_nat]
+    | {mt = MT0 Key_hash; _} :: _ -> Some [mt_nat]
     | _ -> None)
 
 let mi_create_contract =
   let rule ~tparameter:_ stack = function
-    | MIcreate_contract {tparameter; tstorage; code; views} -> (
+    | MIcreate_contract {tparameter; tstorage; code; _} -> (
         match stack with
-        | {mt = MT1 (Option, {mt = MT0 Key_hash})}
-          :: {mt = MT0 Mutez}
+        | {mt = MT1 (Option, {mt = MT0 Key_hash; _}); _}
+          :: {mt = MT0 Mutez; _}
           :: storage :: tail ->
             let code =
               code (Ok (initial_stack ~tparameter:(fst tparameter) ~tstorage))
@@ -1576,7 +1577,7 @@ let spec_of_instr  = function
   | MIsetField steps -> mi_set_field steps
   | MIdup i -> mi_dup i
   | MIcreate_contract _ -> mi_create_contract
-  | MImich {name; typesIn; typesOut} ->
+  | MImich {name; typesIn; typesOut; _} ->
       mi_mich ~name ~types_in:typesIn ~types_out:typesOut
   | MIdip _ -> mi_dip
   | MIdipn _ -> mi_dipn
@@ -1757,13 +1758,13 @@ let two_field_annots = function
 
 let seq_snoc xs x =
   match xs with
-  | {tinstr = MIseq xs; stack_in} ->
+  | {tinstr = MIseq xs; stack_in; _} ->
       {tinstr = MIseq (xs @ [x]); stack_in; stack_out = x.stack_out}
   | xs ->
       {tinstr = MIseq [xs; x]; stack_in = xs.stack_in; stack_out = x.stack_out}
 
 let wrap_in_seq = function
-  | {tinstr = MIseq _} as i -> i
+  | {tinstr = MIseq _; _} as i -> i
   | i -> {tinstr = MIseq [i]; stack_in = i.stack_in; stack_out = i.stack_out}
 
 let insert_subsequences =
@@ -2038,16 +2039,18 @@ module Of_micheline = struct
           | "LEFT", [t] -> 
             (match annotations with
             | [] -> MI1 (Left (None, None, mtype t))
-            | [annot] -> MI1 (Left (None, Some annot, mtype t)))
+            | [annot] -> MI1 (Left (None, Some annot, mtype t))
+            | _ -> assert false)
           | "RIGHT", [t] -> 
             (match annotations with
             | [] -> MI1 (Right (None, None, mtype t))
-            | [annot] -> MI1 (Right (Some annot, None, mtype t)))
+            | [annot] -> MI1 (Right (Some annot, None, mtype t))
+            | _ -> assert false)
           | "PUSH", [t; l] -> MIpush (mtype t, literal l)
           | "SWAP", [] -> MIswap
           | "UNPAIR", [] -> MIunpair [true; true]
           | "UNPAIR", [Int n] ->
-              MIunpair (List.init (int_of_string n) (fun _ -> true))
+              MIunpair (List.init (int_of_string n) ~f:(fun _ -> true))
           | "CAR", [] -> MIfield [A]
           | "CDR", [] -> MIfield [D]
           | "CONTRACT", [t] ->
@@ -2081,9 +2084,9 @@ module Of_micheline = struct
                 match x with
                 | Sequence
                     [
-                      Primitive {name = "parameter"; arguments = [tparameter]}
-                    ; Primitive {name = "storage"; arguments = [tstorage]}
-                    ; Primitive {name = "code"; arguments = [code]}
+                      Primitive {name = "parameter"; arguments = [tparameter]; _}
+                    ; Primitive {name = "storage"; arguments = [tstorage]; _}
+                    ; Primitive {name = "code"; arguments = [code]; _}
                     ] ->
                     ( ( mtype tparameter
                       , None (* TODO single entrypoint annotation *) )
@@ -2109,7 +2112,7 @@ module Of_micheline = struct
           | "SET_DELEGATE", [] -> MI1 Set_delegate
           | "SAPLING_EMPTY_STATE", [Int memo] ->
               MI0 (Sapling_empty_state {memo = int_of_string memo})
-          | "SAPLING_EMPTY_STATE", [Primitive {name = "int"; annotations = annots; arguments = args}] -> 
+          | "SAPLING_EMPTY_STATE", [Primitive {name = "int"; _}] -> 
             err ()
           | "SAPLING_VERIFY_UPDATE", [] -> MI2 Sapling_verify_update
           | "NEVER", [] -> MI1_fail Never
@@ -2196,28 +2199,28 @@ module Of_micheline = struct
 
   let contract =
     let read_element (p, s, c, vs) = function
-      | Micheline.Primitive {name = "parameter"; arguments} -> (
+      | Micheline.Primitive {name = "parameter"; arguments; _} -> (
           match (p, arguments) with
           | None, [parameter] ->
               let parameter = mtype_annotated parameter in
               (Some parameter, s, c, vs)
           | None, _ -> failwith "ill-formed 'parameter'"
           | Some _, _ -> failwith "'parameter' defined twice")
-      | Primitive {name = "storage"; arguments} -> (
+      | Primitive {name = "storage"; arguments; _} -> (
           match (s, arguments) with
           | None, [storage] ->
               let storage = mtype storage in
               (p, Some storage, c, vs)
           | None, _ -> failwith "ill-formed 'storage'"
           | Some _, _ -> failwith "'storage' defined twice")
-      | Primitive {name = "code"; arguments} -> (
+      | Primitive {name = "code"; arguments; _} -> (
           match (c, arguments) with
           | None, [code] ->
               let code = instruction code in
               (p, s, Some code, vs)
           | None, _ -> failwith "ill-formed 'code'"
           | Some _, _ -> failwith "'code' defined twice")
-      | Primitive {name = "view"; arguments} -> (
+      | Primitive {name = "view"; arguments; _} -> (
           match arguments with
           | [String name; tin; tout; code] ->
               let tin = mtype tin in
@@ -2236,7 +2239,7 @@ module Of_micheline = struct
               in
               (p, s, c, view :: vs)
           | _ -> failwith "ill-formed 'view'")
-      | Primitive {name} ->
+      | Primitive {name; _} ->
           failwith ("ill-formed contract: unexpected '" ^ name ^ "'")
       | _ -> failwith "ill-formed contract: expected primitive"
     in
@@ -2523,7 +2526,7 @@ module To_micheline = struct
         try prim0 (name_of_instr_exn  simple)
         with _ -> [sequence [primitive "ERROR-NOT-SIMPLE" []]])
 
-  and view  {name; tparameter; treturn; onchain_code} =
+  and view  {name; tparameter; treturn; onchain_code; _} =
     let open Micheline in
     match onchain_code with
     | None -> []
@@ -2613,7 +2616,7 @@ let profile  =
     | MIerror _ -> return (0, Some 0)
     | i -> (
         match spec_of_instr  i with
-        | {arities = Some a} -> return (profile_of_arity a)
+        | {arities = Some a; _} -> return (profile_of_arity a)
         | _ -> assert false)
   in
   cata_instr {f_instr; f_literal = (fun _ -> return ())}

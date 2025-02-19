@@ -3,5 +3,6 @@
  (public_name lltz.ir)
  (libraries core octez-libs.micheline grace ppxlib.traverse_builtins)
  (modules ast_builder expr import lltz_ir primitive row type name free_vars annotations)
+ (flags (:standard -w -27-30))
  (preprocess
   (pps ppx_jane ppxlib.traverse)))
