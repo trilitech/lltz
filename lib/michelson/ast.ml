@@ -713,7 +713,10 @@ module Instruction = struct
   let compare = prim (I Compare)
   let concat = prim (I Concat)
   let cons = prim (I Cons)
-  let contract ty = prim ~arguments:[ ty ] (I Contract)
+  let contract ?(annot = None) ty = 
+    match annot with
+    | None -> prim ~arguments:[ ty ] (I Contract)
+    | Some annot -> prim ~annot:[annot] ~arguments:[ ty ] (I Contract)
   let create_contract parameter_ty storage_ty code = 
     prim ~arguments: ([
       seq [ prim ~arguments:[ parameter_ty ] (K Parameter)

@@ -78,6 +78,7 @@ let type_prim0 = function
   | Nil _ -> assert false
   | None_ _ -> assert false
   | Unit_ -> assert false
+  | Min_block_time -> assert false
 
 let type_prim1 = function
   | IsNat -> (mt_int, mt_option mt_nat)
