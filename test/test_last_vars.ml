@@ -1,3 +1,5 @@
+(* In this file we test the computation of the set of last used variables and the set of to-be-removed unused variables for different node types and cases *)
+
 open Core
 open Lltz_ir
 open Ast_builder.With_dummy
@@ -315,7 +317,9 @@ let%expect_test "assign same var multiple branches" =
       UNIT } |}]
 
 let%expect_test "test_variable" =
-  let expr = variable (var "x") int_ty in
+  let expr = 
+    let_in (var "x") ~rhs:(int 10) ~in_:
+    (variable (var "x") int_ty) in
   test_and_print "test_variable" expr;
   [%expect
     {|
@@ -331,14 +335,16 @@ let%expect_test "test_variable" =
 
 let%expect_test "test_let_in" =
   let expr =
-    let_in
+    let_in (var "unused") ~rhs:(int 10) ~in_:(
+    let_in (var "x") ~rhs:(int 20) ~in_:(
+    (let_in
       (var "x")
       ~rhs:(int 10)
       ~in_:
         (let_in
            (var "x")
            ~rhs:(add (variable (var "x") int_ty) (int 1))
-           ~in_:(add (variable (var "x") int_ty) (variable (var "unused") int_ty)))
+           ~in_:(add (variable (var "x") int_ty) (variable (var "unused") int_ty))))))
   in
   test_and_print "test_let_in" expr;
   [%expect
@@ -783,7 +789,10 @@ let%expect_test "test_app" =
       ~body:(add (variable (var "z") int_ty) (variable (var "unusedArg") int_ty))
   in
   let arg = let_in (var "z") ~rhs:(int 999) ~in_:(int 5) in
-  let expr = app lam arg in
+  let expr = 
+    let_in (var "unusedArg") ~rhs:(int 7) ~in_:(
+    let_in (var "z") ~rhs:(int 10) ~in_:(
+    app lam arg)) in
   test_and_print "test_app" expr;
   [%expect
     {|
@@ -1254,7 +1263,10 @@ let%expect_test "test_const" =
 let%expect_test "test_prim_add" =
   let lhs = let_in (var "x") ~rhs:(int 10) ~in_:(variable (var "x") int_ty) in
   let rhs = variable (var "y") int_ty in
-  let expr = add lhs rhs in
+  let expr = 
+    let_in (var "x") ~rhs:(int 20) ~in_:(
+    let_in (var "y") ~rhs:(int 30) ~in_:(
+    add lhs rhs)) in
   test_and_print "test_prim_add" expr;
   [%expect
     {|
@@ -1323,14 +1335,15 @@ let%expect_test "let_mut_in basic multiple assignment" =
   let assign1 = assign mutM (add (deref mutM int_ty) (int 1)) in
   let assign2 = assign mutM (add (deref mutM int_ty) (variable (var "varX") int_ty)) in
   let expr =
-    let_mut_in
+    let_in (var "varX") ~rhs:(int 1) ~in_:
+    (let_mut_in
       mutM
       ~rhs:(int 0)
       ~in_:
         (let_in
            (var "temp1")
            ~rhs:assign1
-           ~in_:(let_in (var "temp2") ~rhs:assign2 ~in_:(deref mutM int_ty)))
+           ~in_:(let_in (var "temp2") ~rhs:assign2 ~in_:(deref mutM int_ty))))
   in
   test_and_print "let_mut_in basic multiple assignment" expr;
   [%expect
@@ -1435,13 +1448,15 @@ let%expect_test "test_deref" =
 (* -------------------------------------------------------------------- *)
 let%expect_test "test_assign" =
   let expr =
+    let_in (var "unused") ~rhs:(int 1) ~in_:
+    (
     let_mut_in
       (mut_var "m")
       ~rhs:(int 0)
       ~in_:
         (assign
            (mut_var "m")
-           (add (variable (var "unused") int_ty) (deref (mut_var "m") int_ty)))
+           (add (variable (var "unused") int_ty) (deref (mut_var "m") int_ty))))
   in
   test_and_print "test_assign" expr;
   [%expect
@@ -1477,9 +1492,9 @@ let%expect_test "nested assigns inside assigns" =
   let mut_x = mut_var "x" in
   let nested_assign =
     let_mut_in
-      (mut_var "x")
+      (mut_var "y")
       ~rhs:(int 999)
-      ~in_:(assign (mut_var "x") (add (deref (mut_var "x") int_ty) (int 1)))
+      ~in_:(assign (mut_var "x") (add (deref (mut_var "y") int_ty) (int 1)))
   in
   let first_assign =
     assign
@@ -1587,7 +1602,11 @@ let%expect_test "test_if_bool" =
   let cond = lt (variable (var "c") int_ty) (int 10) in
   let then_ = variable (var "x") int_ty in
   let else_ = variable (var "y") int_ty in
-  let expr = if_bool cond ~then_ ~else_ in
+  let expr = 
+    let_in (var "c") ~rhs:(bool false) ~in_:
+    (let_in (var "x") ~rhs:(int 10) ~in_:
+    (let_in (var "y") ~rhs:(int 20) ~in_:
+    (if_bool cond ~then_ ~else_))) in
   test_and_print "test_if_bool" expr;
   [%expect
     {|
@@ -1629,7 +1648,11 @@ let%expect_test "if_bool distinct var usage, no overshadow" =
   let condition = eq (variable (var "condVar") int_ty) (int 0) in
   let then_ = add (variable (var "thenVar") int_ty) (int 100) in
   let else_ = add (variable (var "elseVar") int_ty) (int 200) in
-  let expr = if_bool condition ~then_ ~else_ in
+  let expr = 
+    let_in (var "condVar") ~rhs:(int 0) ~in_:
+    (let_in (var "thenVar") ~rhs:(int 10) ~in_:
+    (let_in (var "elseVar") ~rhs:(int 20) ~in_:
+    (if_bool condition ~then_ ~else_))) in
   test_and_print "if_bool distinct var usage, no overshadow" expr;
   [%expect
     {|
@@ -1954,17 +1977,18 @@ let%expect_test "complicated if_bool + while + deref + overshadow" =
 (* -------------------------------------------------------------------- *)
 let%expect_test "test_if_none" =
   let subject = variable (var "maybeVal") (option_ty int_ty) in
-  let none_ = let_in (var "maybeVal") ~rhs:(int 999) ~in_:(int 1) in
+  let none_ = let_in (var "tmpVal") ~rhs:(int 999) ~in_:(int 1) in
   let some_body = add (variable (var "outer") int_ty) (variable (var "v") int_ty) in
   let expr =
-    let_in
+    let_in (var "maybeVal") ~rhs:(int 0) ~in_:
+    (let_in
       (var "outer")
       ~rhs:(int 100)
       ~in_:
         (if_none
            subject
            ~none:none_
-           ~some:{ lam_var = var "v", int_ty; body = some_body })
+           ~some:{ lam_var = var "v", int_ty; body = some_body }))
   in
   test_and_print "test_if_none" expr;
   [%expect
@@ -2018,6 +2042,10 @@ let%expect_test "test_if_cons" =
   let empty_expr = int 999 in
   let nonempty_body = add (variable (var "hd") nat_ty) (variable (var "hd2") nat_ty) in
   let expr =
+    let_in (var "lst") ~rhs:(cons (int 0) (nil nat_ty)) ~in_:
+    (let_in (var "hd") ~rhs:(int 1) ~in_:
+    (let_in (var "hd2") ~rhs:(int 2) ~in_:
+    (
     if_cons
       lst
       ~empty:empty_expr
@@ -2025,7 +2053,7 @@ let%expect_test "test_if_cons" =
         { lam_var1 = var "hd", nat_ty
         ; lam_var2 = var "hd2", list_ty nat_ty
         ; body = nonempty_body
-        }
+        })))
   in
   test_and_print "test_if_cons" expr;
   [%expect
@@ -2066,13 +2094,14 @@ let%expect_test "test_if_left" =
       (var "s")
       (or_ty (mk_row [ Row.Leaf (None, int_ty); Row.Leaf (None, nat_ty) ]))
   in
-  let left_body = let_in (var "s") ~rhs:(int 999) ~in_:(variable (var "l") int_ty) in
+  let left_body = let_in (var "t") ~rhs:(int 999) ~in_:(variable (var "l") int_ty) in
   let right_body = add (variable (var "r") nat_ty) (int 1) in
   let expr =
-    if_left
+    let_in (var "s") ~rhs:(left (None, None, nat_ty) (int 0)) ~in_:
+    (if_left
       or_val
       ~left:{ lam_var = var "l", int_ty; body = left_body }
-      ~right:{ lam_var = var "r", nat_ty; body = right_body }
+      ~right:{ lam_var = var "r", nat_ty; body = right_body })
   in
   test_and_print "test_if_left" expr;
   [%expect
@@ -2209,10 +2238,13 @@ let%expect_test "while referencing outside variables" =
   let stepVar = variable (var "step") int_ty in
   let body_expr = assign mutI (add (deref mutI int_ty) stepVar) in
   let expr =
+    let_in (var "limit") ~rhs:(int 10) ~in_:
+    (let_in (var "step") ~rhs:(int 2) ~in_:
+    (
     let_mut_in
       mutI
       ~rhs:(int 0)
-      ~in_:(while_ (lt (deref mutI int_ty) limitVar) ~body:body_expr)
+      ~in_:(while_ (lt (deref mutI int_ty) limitVar) ~body:body_expr)))
   in
   test_and_print "while referencing outside variables" expr;
   [%expect
@@ -2317,11 +2349,7 @@ let%expect_test "test_while_left" =
 (* -------------------------------------------------------------------- *)
 let%expect_test "test_for" =
   let idx = mut_var "i" in
-  let body_expr =
-    let_in
-      (var "i")
-      ~rhs:(int 999)
-      ~in_:(assign (mut_var "acc") (variable (var "i") int_ty))
+  let body_expr = (assign (mut_var "acc") (variable (var "i") int_ty))
   in
   let expr =
     let_mut_in
@@ -3529,11 +3557,12 @@ let%expect_test "let_tuple_in referencing multiple times, plus an unused" =
 (* -------------------------------------------------------------------- *)
 let%expect_test "test_tuple" =
   let expr =
-    tuple
+    let_in (var "unused") ~rhs:(int 999) ~in_:
+    (tuple
       (Row.Node
          [ Row.Leaf (None, let_in (var "x") ~rhs:(int 10) ~in_:(variable (var "x") int_ty))
-         ; Row.Leaf (None, variable (var "unused2") int_ty)
-         ])
+         ; Row.Leaf (None, variable (var "unused") int_ty)
+         ]))
   in
   test_and_print "test_tuple" expr;
   [%expect
@@ -3567,12 +3596,14 @@ let%expect_test "test_tuple" =
 (* -------------------------------------------------------------------- *)
 let%expect_test "test_proj" =
   let triple =
+    let_in (var "alpha") ~rhs:(int 999) ~in_:
+    (
     tuple
       (Row.Node
          [ Row.Leaf (None, variable (var "alpha") int_ty)
          ; Row.Leaf (None, int 999)
          ; Row.Leaf (None, int 123)
-         ])
+         ]))
   in
   let expr = proj triple ~path:(Row.Path.Here [ 0 ]) in
   test_and_print "test_proj" expr;
@@ -3746,7 +3777,9 @@ let%expect_test "test_raw_michelson" =
   in
   let arg1 = let_in (var "unusedR") ~rhs:(int 7) ~in_:(variable (var "unusedR") int_ty) in
   let arg2 = variable (var "x") int_ty in
-  let expr = raw_michelson code_ast [ arg1; arg2 ] int_ty in
+  let expr = 
+    let_in (var "x") ~rhs:(int 10) ~in_:
+    (raw_michelson code_ast [ arg1; arg2 ] int_ty) in
   test_and_print "test_raw_michelson" expr;
   [%expect
     {|
@@ -3831,6 +3864,10 @@ let%expect_test "test_create_contract" =
       ~in_:(add (variable (var "p") nat_ty) (variable (var "s") nat_ty))
   in
   let expr =
+    let_in (var "args") ~rhs:(tuple (Row.Node [ Row.Leaf (None, int 1); Row.Leaf (None, int 2) ])) ~in_:
+    (let_in (var "bal") ~rhs:(mutez 100) ~in_:
+    (let_in (var "del") ~rhs:(none key_hash_ty) ~in_:
+    (
     let_in
       (var "unusedCC")
       ~rhs:(string "no use") (* overshadow or never used var *)
@@ -3840,7 +3877,7 @@ let%expect_test "test_create_contract" =
            ~code:{ lam_var = var "args", param_storage_ty; body = code_body }
            ~delegate:(variable (var "del") (option_ty key_hash_ty))
            ~initial_balance:(variable (var "bal") mutez_ty)
-           ~initial_storage:(let_in (var "args") ~rhs:(nat 99) ~in_:(nat 100)))
+           ~initial_storage:(let_in (var "args") ~rhs:(nat 99) ~in_:(nat 100))))))
   in
   test_and_print "test_create_contract" expr;
   [%expect
