@@ -895,19 +895,17 @@ module Default = struct
     create ~range (LLTZ.E.Prim (LLTZ.P.Cons, [ head; tail ])) tail.LLTZ.E.type_
   ;;
 
-  let concat1 ~range val1 str2 =
-    create
-      ~range
-      (LLTZ.E.Prim (LLTZ.P.Concat1, [ val1; str2 ]))
-      (mk_type ~range LLTZ.T.String)
-  ;;
+  let concat1 ~range val_list =
+    create ~range (LLTZ.E.Prim (LLTZ.P.Concat1, [val_list]))
+      (
+        match val_list.LLTZ.E.type_.LLTZ.T.desc with
+         | LLTZ.T.List ty -> ty
+         | _ -> raise_s [%message "Expected list or bytes type"]
+      )
 
-  let concat2 ~range val1 bytes2 =
-    create
-      ~range
-      (LLTZ.E.Prim (LLTZ.P.Concat2, [ val1; bytes2 ]))
-      (mk_type ~range LLTZ.T.Bytes)
-  ;;
+  let concat2 ~range val1 val2 =
+    create ~range (LLTZ.E.Prim (LLTZ.P.Concat2, [val1; val2]))
+      val1.LLTZ.E.type_
 
   let get ~range key collection =
     create
@@ -1269,8 +1267,8 @@ module With_dummy = struct
   let and_ lhs rhs = Default.and_ ~range:v lhs rhs
   let or_ lhs rhs = Default.or_ ~range:v lhs rhs
   let cons head tail = Default.cons ~range:v head tail
-  let concat1 val1 str2 = Default.concat1 ~range:v val1 str2
-  let concat2 val1 bytes2 = Default.concat2 ~range:v val1 bytes2
+  let concat1 val_list = Default.concat1 ~range:v val_list
+  let concat2 val1 val2 = Default.concat2 ~range:v val1 val2
   let get key collection = Default.get ~range:v key collection
   let mem key collection = Default.mem ~range:v key collection
   let exec value lambda = Default.exec ~range:v value lambda

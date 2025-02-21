@@ -415,7 +415,7 @@ let%expect_test "vars map referencing outer var inside lam" =
            ~map:
              { lam_var = var "v", string_ty
              ; body =
-                 concat1 (variable (var "v") string_ty) (variable (var "outer") string_ty)
+                 concat2 (variable (var "v") string_ty) (variable (var "outer") string_ty)
              })
   in
   print_vars expr;
