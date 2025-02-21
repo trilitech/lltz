@@ -632,7 +632,7 @@ let%expect_test "fv map overshadowing var (no free var)" =
            ~map:
              { lam_var = var "s", string_ty
              ; body =
-                 concat1 (variable (var "s") string_ty) (variable (var "s") string_ty)
+                 concat2 (variable (var "s") string_ty) (variable (var "s") string_ty)
              })
   in
   print_free_vars expr;
