@@ -48,7 +48,9 @@ module Prim = struct
       | Chain_id
       | Check_signature
       | Compare
-      | Concat
+      | Concat1
+      | Concat2
+      | Concat_unresolved
       | Cons
       | Create_account
       | Create_contract
@@ -159,7 +161,9 @@ module Prim = struct
       | Chain_id -> "CHAIN_ID"
       | Check_signature -> "CHECK_SIGNATURE"
       | Compare -> "COMPARE"
-      | Concat -> "CONCAT"
+      | Concat1 -> "CONCAT1"
+      | Concat2 -> "CONCAT2"
+      | Concat_unresolved -> "CONCAT"
       | Cons -> "CONS"
       | Create_account -> "CREATE_ACCOUNT"
       | Create_contract -> "CREATE_CONTRACT"
@@ -270,7 +274,9 @@ module Prim = struct
       | "CHAIN_ID" -> Chain_id
       | "CHECK_SIGNATURE" -> Check_signature
       | "COMPARE" -> Compare
-      | "CONCAT" -> Concat
+      | "CONCAT1" -> Concat1
+      | "CONCAT2" -> Concat2
+      | "CONCAT" -> Concat_unresolved
       | "CONS" -> Cons
       | "CREATE_ACCOUNT" -> Create_account
       | "CREATE_CONTRACT" -> Create_contract
@@ -718,7 +724,8 @@ module Instruction = struct
   let chain_id = prim (I Chain_id)
   let check_signature = prim (I Check_signature)
   let compare = prim (I Compare)
-  let concat = prim (I Concat)
+  let concat1 = prim (I Concat1)
+  let concat2 = prim (I Concat2)
   let cons = prim (I Cons)
 
   let contract ?(annot = None) ty =
