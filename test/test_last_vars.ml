@@ -324,14 +324,21 @@ let%expect_test "test_variable" =
   [%expect
     {|
     --- test_variable ---
-    Node: Variable
+    Node: Let_in
       luv = {x} nuv = {}
-      var=x
+      let_var=x
+      rhs:
+      Node: Const
+        luv = {} nuv = {}
+      in_:
+      Node: Variable
+        luv = {x} nuv = {}
+        var=x
 
-    { NEVER }
+    { PUSH int 10 }
 
     Optimised:
-    { NEVER } |}]
+    { PUSH int 10 } |}]
 
 let%expect_test "test_let_in" =
   let expr =
@@ -352,7 +359,7 @@ let%expect_test "test_let_in" =
     --- test_let_in ---
     Node: Let_in
       luv = {unused, x} nuv = {}
-      let_var=x
+      let_var=unused
       rhs:
       Node: Const
         luv = {} nuv = {}
@@ -361,29 +368,55 @@ let%expect_test "test_let_in" =
         luv = {unused, x} nuv = {}
         let_var=x
         rhs:
-        Node: Prim
+        Node: Const
           luv = {} nuv = {}
-          args:
-          Node: Variable
-            luv = {} nuv = {}
-            var=x
+        in_:
+        Node: Let_in
+          luv = {unused, x} nuv = {}
+          let_var=x
+          rhs:
           Node: Const
             luv = {} nuv = {}
-        in_:
-        Node: Prim
-          luv = {unused, x} nuv = {}
-          args:
-          Node: Variable
-            luv = {x} nuv = {}
-            var=x
-          Node: Variable
-            luv = {unused} nuv = {}
-            var=unused
+          in_:
+          Node: Let_in
+            luv = {unused, x} nuv = {}
+            let_var=x
+            rhs:
+            Node: Prim
+              luv = {} nuv = {}
+              args:
+              Node: Variable
+                luv = {} nuv = {}
+                var=x
+              Node: Const
+                luv = {} nuv = {}
+            in_:
+            Node: Prim
+              luv = {unused, x} nuv = {}
+              args:
+              Node: Variable
+                luv = {x} nuv = {}
+                var=x
+              Node: Variable
+                luv = {unused} nuv = {}
+                var=unused
 
-    { PUSH int 10 ; PUSH int 1 ; DUP 2 ; ADD ; NEVER }
+    { PUSH int 10 ;
+      PUSH int 20 ;
+      PUSH int 10 ;
+      PUSH int 1 ;
+      DUP 2 ;
+      ADD ;
+      DIG 3 ;
+      SWAP ;
+      ADD ;
+      SWAP ;
+      DROP ;
+      SWAP ;
+      DROP }
 
     Optimised:
-    { PUSH int 10 ; PUSH int 1 ; DUP 2 ; ADD ; NEVER } |}]
+    { PUSH int 21 } |}]
 
 let%expect_test "let_in multiple references no overshadow" =
   let expr =
@@ -797,42 +830,69 @@ let%expect_test "test_app" =
   [%expect
     {|
     --- test_app ---
-    Node: App
+    Node: Let_in
       luv = {unusedArg, z} nuv = {}
-      abs:
-      Node: Lambda
-        luv = {unusedArg, z} nuv = {}
-        lam_var=z
-        body:
-        Node: Prim
-          luv = {unusedArg, z} nuv = {}
-          args:
-          Node: Variable
-            luv = {z} nuv = {}
-            var=z
-          Node: Variable
-            luv = {unusedArg} nuv = {}
-            var=unusedArg
-      arg:
+      let_var=unusedArg
+      rhs:
+      Node: Const
+        luv = {} nuv = {}
+      in_:
       Node: Let_in
-        luv = {z} nuv = {}
+        luv = {unusedArg, z} nuv = {}
         let_var=z
         rhs:
         Node: Const
           luv = {} nuv = {}
         in_:
-        Node: Const
-          luv = {} nuv = {}
+        Node: App
+          luv = {unusedArg, z} nuv = {}
+          abs:
+          Node: Lambda
+            luv = {unusedArg, z} nuv = {}
+            lam_var=z
+            body:
+            Node: Prim
+              luv = {unusedArg, z} nuv = {}
+              args:
+              Node: Variable
+                luv = {z} nuv = {}
+                var=z
+              Node: Variable
+                luv = {unusedArg} nuv = {}
+                var=unusedArg
+          arg:
+          Node: Let_in
+            luv = {z} nuv = {}
+            let_var=z
+            rhs:
+            Node: Const
+              luv = {} nuv = {}
+            in_:
+            Node: Const
+              luv = {} nuv = {}
 
-    { PUSH int 999 ;
+    { PUSH int 7 ;
+      PUSH int 10 ;
+      PUSH int 999 ;
       PUSH int 5 ;
       SWAP ;
       DROP ;
       LAMBDA (pair int int) int { UNPAIR ; SWAP ; ADD } ;
-      NEVER }
+      DIG 3 ;
+      APPLY ;
+      SWAP ;
+      EXEC ;
+      SWAP ;
+      DROP }
 
     Optimised:
-    { PUSH int 5 ; LAMBDA (pair int int) int { UNPAIR ; ADD } ; NEVER } |}]
+    { PUSH int 7 ;
+      PUSH int 5 ;
+      LAMBDA (pair int int) int { UNPAIR ; ADD } ;
+      DIG 2 ;
+      APPLY ;
+      SWAP ;
+      EXEC } |}]
 
 let%expect_test "partial apply overshadow f/g" =
   let pair_ty = Ast_builder.With_dummy.mk_tuple_ty [ int_ty; int_ty ] in
@@ -1271,27 +1331,41 @@ let%expect_test "test_prim_add" =
   [%expect
     {|
     --- test_prim_add ---
-    Node: Prim
+    Node: Let_in
       luv = {x, y} nuv = {}
-      args:
+      let_var=x
+      rhs:
+      Node: Const
+        luv = {} nuv = {}
+      in_:
       Node: Let_in
-        luv = {x} nuv = {}
-        let_var=x
+        luv = {x, y} nuv = {}
+        let_var=y
         rhs:
         Node: Const
           luv = {} nuv = {}
         in_:
-        Node: Variable
-          luv = {x} nuv = {}
-          var=x
-      Node: Variable
-        luv = {y} nuv = {}
-        var=y
+        Node: Prim
+          luv = {x, y} nuv = {}
+          args:
+          Node: Let_in
+            luv = {x} nuv = {}
+            let_var=x
+            rhs:
+            Node: Const
+              luv = {} nuv = {}
+            in_:
+            Node: Variable
+              luv = {x} nuv = {}
+              var=x
+          Node: Variable
+            luv = {y} nuv = {}
+            var=y
 
-    { NEVER }
+    { PUSH int 20 ; PUSH int 30 ; PUSH int 10 ; DIG 2 ; DROP ; ADD }
 
     Optimised:
-    { NEVER } |}]
+    { PUSH int 40 } |}]
 
 let%expect_test "test_let_mut_in" =
   let expr =
@@ -1349,53 +1423,61 @@ let%expect_test "let_mut_in basic multiple assignment" =
   [%expect
     {|
     --- let_mut_in basic multiple assignment ---
-    Node: Let_mut_in
+    Node: Let_in
       luv = {temp1, temp2, varM, varX} nuv = {}
-      let_var=varM
+      let_var=varX
       rhs:
       Node: Const
         luv = {} nuv = {}
       in_:
-      Node: Let_in
-        luv = {temp1, temp2, varM, varX} nuv = {temp1}
-        let_var=temp1
+      Node: Let_mut_in
+        luv = {temp1, temp2, varM, varX} nuv = {}
+        let_var=varM
         rhs:
-        Node: Assign
+        Node: Const
           luv = {} nuv = {}
-          let_var=varM
-          value:
-          Node: Prim
-            luv = {} nuv = {}
-            args:
-            Node: Deref
-              luv = {} nuv = {}
-              mut_var=varM
-            Node: Const
-              luv = {} nuv = {}
         in_:
         Node: Let_in
-          luv = {temp2, varM, varX} nuv = {temp2}
-          let_var=temp2
+          luv = {temp1, temp2, varM, varX} nuv = {temp1}
+          let_var=temp1
           rhs:
           Node: Assign
-            luv = {varX} nuv = {}
+            luv = {} nuv = {}
             let_var=varM
             value:
             Node: Prim
-              luv = {varX} nuv = {}
+              luv = {} nuv = {}
               args:
               Node: Deref
                 luv = {} nuv = {}
                 mut_var=varM
-              Node: Variable
-                luv = {varX} nuv = {}
-                var=varX
+              Node: Const
+                luv = {} nuv = {}
           in_:
-          Node: Deref
-            luv = {varM} nuv = {}
-            mut_var=varM
+          Node: Let_in
+            luv = {temp2, varM, varX} nuv = {temp2}
+            let_var=temp2
+            rhs:
+            Node: Assign
+              luv = {varX} nuv = {}
+              let_var=varM
+              value:
+              Node: Prim
+                luv = {varX} nuv = {}
+                args:
+                Node: Deref
+                  luv = {} nuv = {}
+                  mut_var=varM
+                Node: Variable
+                  luv = {varX} nuv = {}
+                  var=varX
+            in_:
+            Node: Deref
+              luv = {varM} nuv = {}
+              mut_var=varM
 
-    { PUSH int 0 ;
+    { PUSH int 1 ;
+      PUSH int 0 ;
       PUSH int 1 ;
       DUP 2 ;
       ADD ;
@@ -1404,10 +1486,17 @@ let%expect_test "let_mut_in basic multiple assignment" =
       DROP ;
       UNIT ;
       DROP ;
-      NEVER }
+      SWAP ;
+      DUP 2 ;
+      ADD ;
+      DUG 1 ;
+      DIG 0 ;
+      DROP ;
+      UNIT ;
+      DROP }
 
     Optimised:
-    { PUSH int 1 ; NEVER } |}]
+    { PUSH int 2 } |}]
 
 let%expect_test "test_deref" =
   let expr =
@@ -1462,31 +1551,38 @@ let%expect_test "test_assign" =
   [%expect
     {|
     --- test_assign ---
-    Node: Let_mut_in
+    Node: Let_in
       luv = {m, unused} nuv = {}
-      let_var=m
+      let_var=unused
       rhs:
       Node: Const
         luv = {} nuv = {}
       in_:
-      Node: Assign
+      Node: Let_mut_in
         luv = {m, unused} nuv = {}
         let_var=m
-        value:
-        Node: Prim
+        rhs:
+        Node: Const
+          luv = {} nuv = {}
+        in_:
+        Node: Assign
           luv = {m, unused} nuv = {}
-          args:
-          Node: Variable
-            luv = {unused} nuv = {}
-            var=unused
-          Node: Deref
-            luv = {m} nuv = {}
-            mut_var=m
+          let_var=m
+          value:
+          Node: Prim
+            luv = {m, unused} nuv = {}
+            args:
+            Node: Variable
+              luv = {unused} nuv = {}
+              var=unused
+            Node: Deref
+              luv = {m} nuv = {}
+              mut_var=m
 
-    { PUSH int 0 ; NEVER }
+    { PUSH int 1 ; PUSH int 0 ; SWAP ; ADD ; DROP ; UNIT }
 
     Optimised:
-    { PUSH int 0 ; NEVER } |}]
+    { UNIT } |}]
 
 let%expect_test "nested assigns inside assigns" =
   let mut_x = mut_var "x" in
@@ -1517,41 +1613,41 @@ let%expect_test "nested assigns inside assigns" =
     {|
     --- nested assigns inside assigns ---
     Node: Let_mut_in
-      luv = {ignore, ignore1, ignore2, x} nuv = {}
+      luv = {ignore, ignore1, ignore2, x, y} nuv = {}
       let_var=x
       rhs:
       Node: Const
         luv = {} nuv = {}
       in_:
       Node: Let_in
-        luv = {ignore, ignore1, ignore2, x} nuv = {ignore1}
+        luv = {ignore, ignore1, ignore2, x, y} nuv = {ignore1}
         let_var=ignore1
         rhs:
         Node: Assign
-          luv = {ignore, x} nuv = {}
+          luv = {ignore, y} nuv = {}
           let_var=x
           value:
           Node: Let_in
-            luv = {ignore, x} nuv = {ignore}
+            luv = {ignore, y} nuv = {ignore}
             let_var=ignore
             rhs:
             Node: Let_mut_in
-              luv = {x} nuv = {}
-              let_var=x
+              luv = {y} nuv = {}
+              let_var=y
               rhs:
               Node: Const
                 luv = {} nuv = {}
               in_:
               Node: Assign
-                luv = {x} nuv = {}
+                luv = {y} nuv = {}
                 let_var=x
                 value:
                 Node: Prim
-                  luv = {x} nuv = {}
+                  luv = {y} nuv = {}
                   args:
                   Node: Deref
-                    luv = {x} nuv = {}
-                    mut_var=x
+                    luv = {y} nuv = {}
+                    mut_var=y
                   Node: Const
                     luv = {} nuv = {}
             in_:
@@ -1585,15 +1681,28 @@ let%expect_test "nested assigns inside assigns" =
       PUSH int 1 ;
       SWAP ;
       ADD ;
-      SWAP ;
-      DROP ;
+      DUG 1 ;
+      DIG 0 ;
       DROP ;
       UNIT ;
       DROP ;
-      NEVER }
+      DUP 1 ;
+      DUG 1 ;
+      DIG 0 ;
+      DROP ;
+      UNIT ;
+      DROP ;
+      PUSH int 5 ;
+      DUP 2 ;
+      ADD ;
+      DUG 1 ;
+      DIG 0 ;
+      DROP ;
+      UNIT ;
+      DROP }
 
     Optimised:
-    { NEVER } |}]
+    { PUSH int 1005 } |}]
 
 (* -------------------------------------------------------------------- *)
 (* 11. IF_BOOL referencing distinct free vars in branches               *)
@@ -1611,33 +1720,68 @@ let%expect_test "test_if_bool" =
   [%expect
     {|
     --- test_if_bool ---
-    Node: If_bool
+    Node: Let_in
       luv = {c, x, y} nuv = {}
-      condition:
-      Node: Prim
-        luv = {c} nuv = {}
-        args:
-        Node: Prim
-          luv = {c} nuv = {}
-          args:
-          Node: Variable
-            luv = {c} nuv = {}
-            var=c
+      let_var=c
+      rhs:
+      Node: Const
+        luv = {} nuv = {}
+      in_:
+      Node: Let_in
+        luv = {c, x, y} nuv = {}
+        let_var=x
+        rhs:
+        Node: Const
+          luv = {} nuv = {}
+        in_:
+        Node: Let_in
+          luv = {c, x, y} nuv = {}
+          let_var=y
+          rhs:
           Node: Const
             luv = {} nuv = {}
-      if_true:
-      Node: Variable
-        luv = {x} nuv = {y}
-        var=x
-      if_false:
-      Node: Variable
-        luv = {y} nuv = {x}
-        var=y
+          in_:
+          Node: If_bool
+            luv = {c, x, y} nuv = {}
+            condition:
+            Node: Prim
+              luv = {c} nuv = {}
+              args:
+              Node: Prim
+                luv = {c} nuv = {}
+                args:
+                Node: Variable
+                  luv = {c} nuv = {}
+                  var=c
+                Node: Const
+                  luv = {} nuv = {}
+            if_true:
+            Node: Variable
+              luv = {x} nuv = {y}
+              var=x
+            if_false:
+            Node: Variable
+              luv = {y} nuv = {x}
+              var=y
 
-    { PUSH int 10 ; NEVER }
+    { PUSH bool False ;
+      PUSH int 10 ;
+      PUSH int 20 ;
+      PUSH int 10 ;
+      DIG 3 ;
+      COMPARE ;
+      LT ;
+      IF { DROP } { SWAP ; DROP } }
 
     Optimised:
-    { PUSH int 10 ; NEVER } |}]
+    { PUSH bool False ;
+      PUSH int 10 ;
+      PUSH int 20 ;
+      PUSH int 10 ;
+      DIG 3 ;
+      COMPARE ;
+      LT ;
+      IF { DROP } { SWAP ; DROP } } |}]
 
 let%expect_test "if_bool distinct var usage, no overshadow" =
   (*
@@ -1657,43 +1801,77 @@ let%expect_test "if_bool distinct var usage, no overshadow" =
   [%expect
     {|
     --- if_bool distinct var usage, no overshadow ---
-    Node: If_bool
+    Node: Let_in
       luv = {condVar, elseVar, thenVar} nuv = {}
-      condition:
-      Node: Prim
-        luv = {condVar} nuv = {}
-        args:
-        Node: Prim
-          luv = {condVar} nuv = {}
-          args:
-          Node: Variable
-            luv = {condVar} nuv = {}
-            var=condVar
+      let_var=condVar
+      rhs:
+      Node: Const
+        luv = {} nuv = {}
+      in_:
+      Node: Let_in
+        luv = {condVar, elseVar, thenVar} nuv = {}
+        let_var=thenVar
+        rhs:
+        Node: Const
+          luv = {} nuv = {}
+        in_:
+        Node: Let_in
+          luv = {condVar, elseVar, thenVar} nuv = {}
+          let_var=elseVar
+          rhs:
           Node: Const
             luv = {} nuv = {}
-      if_true:
-      Node: Prim
-        luv = {thenVar} nuv = {elseVar}
-        args:
-        Node: Variable
-          luv = {thenVar} nuv = {}
-          var=thenVar
-        Node: Const
-          luv = {} nuv = {}
-      if_false:
-      Node: Prim
-        luv = {elseVar} nuv = {thenVar}
-        args:
-        Node: Variable
-          luv = {elseVar} nuv = {}
-          var=elseVar
-        Node: Const
-          luv = {} nuv = {}
+          in_:
+          Node: If_bool
+            luv = {condVar, elseVar, thenVar} nuv = {}
+            condition:
+            Node: Prim
+              luv = {condVar} nuv = {}
+              args:
+              Node: Prim
+                luv = {condVar} nuv = {}
+                args:
+                Node: Variable
+                  luv = {condVar} nuv = {}
+                  var=condVar
+                Node: Const
+                  luv = {} nuv = {}
+            if_true:
+            Node: Prim
+              luv = {thenVar} nuv = {elseVar}
+              args:
+              Node: Variable
+                luv = {thenVar} nuv = {}
+                var=thenVar
+              Node: Const
+                luv = {} nuv = {}
+            if_false:
+            Node: Prim
+              luv = {elseVar} nuv = {thenVar}
+              args:
+              Node: Variable
+                luv = {elseVar} nuv = {}
+                var=elseVar
+              Node: Const
+                luv = {} nuv = {}
 
-    { PUSH int 0 ; NEVER }
+    { PUSH int 0 ;
+      PUSH int 10 ;
+      PUSH int 20 ;
+      PUSH int 0 ;
+      DIG 3 ;
+      COMPARE ;
+      EQ ;
+      IF { DROP ; PUSH int 100 ; SWAP ; ADD }
+         { SWAP ; DROP ; PUSH int 200 ; SWAP ; ADD } }
 
     Optimised:
-    { PUSH int 0 ; NEVER } |}]
+    { PUSH int 0 ;
+      PUSH int 10 ;
+      PUSH int 20 ;
+      DIG 2 ;
+      EQ ;
+      IF { DROP ; PUSH int 100 ; ADD } { SWAP ; DROP ; PUSH int 200 ; ADD } } |}]
 
 let%expect_test "complex nested if_bool overshadow" =
   let condition1 = lt (variable (var "x") int_ty) (int 10) in
@@ -1995,44 +2173,54 @@ let%expect_test "test_if_none" =
     {|
     --- test_if_none ---
     Node: Let_in
-      luv = {maybeVal, outer, v} nuv = {}
-      let_var=outer
+      luv = {maybeVal, outer, tmpVal, v} nuv = {}
+      let_var=maybeVal
       rhs:
       Node: Const
         luv = {} nuv = {}
       in_:
-      Node: If_none
-        luv = {maybeVal, outer, v} nuv = {}
-        subject:
-        Node: Variable
+      Node: Let_in
+        luv = {maybeVal, outer, tmpVal, v} nuv = {}
+        let_var=outer
+        rhs:
+        Node: Const
           luv = {} nuv = {}
-          var=maybeVal
-        if_none:
-        Node: Let_in
-          luv = {maybeVal} nuv = {outer, v}
-          let_var=maybeVal
-          rhs:
-          Node: Const
-            luv = {} nuv = {}
-          in_:
-          Node: Const
-            luv = {} nuv = {}
-        if_some lam_var=v
-        if_some body:
-        Node: Prim
-          luv = {outer, v} nuv = {maybeVal}
-          args:
+        in_:
+        Node: If_none
+          luv = {maybeVal, outer, tmpVal, v} nuv = {}
+          subject:
           Node: Variable
-            luv = {outer} nuv = {}
-            var=outer
-          Node: Variable
-            luv = {v} nuv = {}
-            var=v
+            luv = {maybeVal} nuv = {}
+            var=maybeVal
+          if_none:
+          Node: Let_in
+            luv = {tmpVal} nuv = {outer, tmpVal, v}
+            let_var=tmpVal
+            rhs:
+            Node: Const
+              luv = {} nuv = {}
+            in_:
+            Node: Const
+              luv = {} nuv = {}
+          if_some lam_var=v
+          if_some body:
+          Node: Prim
+            luv = {outer, v} nuv = {tmpVal}
+            args:
+            Node: Variable
+              luv = {outer} nuv = {}
+              var=outer
+            Node: Variable
+              luv = {v} nuv = {}
+              var=v
 
-    { PUSH int 100 ; NEVER }
+    { PUSH int 0 ;
+      PUSH int 100 ;
+      SWAP ;
+      IF_NONE { DROP ; PUSH int 999 ; DROP ; PUSH int 1 } { SWAP ; ADD } }
 
     Optimised:
-    { PUSH int 100 ; NEVER } |}]
+    { PUSH int 100 ; PUSH int 0 ; IF_NONE { DROP ; PUSH int 1 } { ADD } } |}]
 
 (* -------------------------------------------------------------------- *)
 (* 13. IF_CONS overshadow lam_var1 lam_var2                             *)
@@ -2059,31 +2247,66 @@ let%expect_test "test_if_cons" =
   [%expect
     {|
     --- test_if_cons ---
-    Node: If_cons
+    Node: Let_in
       luv = {hd, hd2, lst} nuv = {}
-      subject:
-      Node: Variable
-        luv = {lst} nuv = {}
-        var=lst
-      if_empty:
-      Node: Const
-        luv = {} nuv = {hd, hd2}
-      if_nonempty lam_var1=hd lam_var2=hd2
-      if_nonempty body:
+      let_var=lst
+      rhs:
       Node: Prim
-        luv = {hd, hd2} nuv = {}
+        luv = {} nuv = {}
         args:
-        Node: Variable
-          luv = {hd} nuv = {}
-          var=hd
-        Node: Variable
-          luv = {hd2} nuv = {}
-          var=hd2
+        Node: Const
+          luv = {} nuv = {}
+        Node: Prim
+          luv = {} nuv = {}
+          args:
+      in_:
+      Node: Let_in
+        luv = {hd, hd2, lst} nuv = {}
+        let_var=hd
+        rhs:
+        Node: Const
+          luv = {} nuv = {}
+        in_:
+        Node: Let_in
+          luv = {hd, hd2, lst} nuv = {}
+          let_var=hd2
+          rhs:
+          Node: Const
+            luv = {} nuv = {}
+          in_:
+          Node: If_cons
+            luv = {hd, hd2, lst} nuv = {}
+            subject:
+            Node: Variable
+              luv = {lst} nuv = {}
+              var=lst
+            if_empty:
+            Node: Const
+              luv = {} nuv = {hd, hd2}
+            if_nonempty lam_var1=hd lam_var2=hd2
+            if_nonempty body:
+            Node: Prim
+              luv = {hd, hd2} nuv = {}
+              args:
+              Node: Variable
+                luv = {hd} nuv = {}
+                var=hd
+              Node: Variable
+                luv = {hd2} nuv = {}
+                var=hd2
 
-    { NEVER }
+    { NIL nat ;
+      PUSH int 0 ;
+      CONS ;
+      PUSH int 1 ;
+      PUSH int 2 ;
+      DIG 2 ;
+      IF_CONS
+        { SWAP ; SWAP ; ADD ; DIG 2 ; DROP ; SWAP ; DROP }
+        { SWAP ; DROP ; DROP ; PUSH int 999 } }
 
     Optimised:
-    { NEVER } |}]
+    { PUSH (list nat) { 0 } ; IF_CONS { ADD } { PUSH int 999 } } |}]
 
 (* -------------------------------------------------------------------- *)
 (* 14. IF_LEFT overshadow lam_var in left or right                      *)
@@ -2107,37 +2330,49 @@ let%expect_test "test_if_left" =
   [%expect
     {|
     --- test_if_left ---
-    Node: If_left
-      luv = {l, r, s} nuv = {}
-      subject:
-      Node: Variable
-        luv = {} nuv = {}
-        var=s
-      if_left lam_var=l
-      Node: Let_in
-        luv = {l, s} nuv = {r}
-        let_var=s
-        rhs:
-        Node: Const
-          luv = {} nuv = {}
-        in_:
-        Node: Variable
-          luv = {l} nuv = {}
-          var=l
-      if_right lam_var=r
+    Node: Let_in
+      luv = {l, r, s, t} nuv = {}
+      let_var=s
+      rhs:
       Node: Prim
-        luv = {r} nuv = {l, s}
+        luv = {} nuv = {}
         args:
-        Node: Variable
-          luv = {r} nuv = {}
-          var=r
         Node: Const
           luv = {} nuv = {}
+      in_:
+      Node: If_left
+        luv = {l, r, s, t} nuv = {}
+        subject:
+        Node: Variable
+          luv = {s} nuv = {}
+          var=s
+        if_left lam_var=l
+        Node: Let_in
+          luv = {l, t} nuv = {r, t}
+          let_var=t
+          rhs:
+          Node: Const
+            luv = {} nuv = {}
+          in_:
+          Node: Variable
+            luv = {l} nuv = {}
+            var=l
+        if_right lam_var=r
+        Node: Prim
+          luv = {r} nuv = {l, t}
+          args:
+          Node: Variable
+            luv = {r} nuv = {}
+            var=r
+          Node: Const
+            luv = {} nuv = {}
 
-    { NEVER }
+    { PUSH int 0 ;
+      LEFT nat ;
+      IF_LEFT { PUSH int 999 ; DROP } { PUSH int 1 ; SWAP ; ADD } }
 
     Optimised:
-    { NEVER } |}]
+    { PUSH int 0 ; LEFT nat ; IF_LEFT {} { PUSH int 1 ; ADD } } |}]
 
 (* -------------------------------------------------------------------- *)
 (* 15. WHILE referencing overshadow var + nested let_in                *)
@@ -2250,47 +2485,95 @@ let%expect_test "while referencing outside variables" =
   [%expect
     {|
     --- while referencing outside variables ---
-    Node: Let_mut_in
+    Node: Let_in
       luv = {i, limit, step} nuv = {}
-      let_var=i
+      let_var=limit
       rhs:
       Node: Const
         luv = {} nuv = {}
       in_:
-      Node: While
+      Node: Let_in
         luv = {i, limit, step} nuv = {}
-        cond:
-        Node: Prim
+        let_var=step
+        rhs:
+        Node: Const
           luv = {} nuv = {}
-          args:
-          Node: Prim
-            luv = {} nuv = {}
-            args:
-            Node: Deref
-              luv = {} nuv = {}
-              mut_var=i
-            Node: Variable
-              luv = {} nuv = {}
-              var=limit
-        body:
-        Node: Assign
-          luv = {} nuv = {}
+        in_:
+        Node: Let_mut_in
+          luv = {i, limit, step} nuv = {}
           let_var=i
-          value:
-          Node: Prim
+          rhs:
+          Node: Const
             luv = {} nuv = {}
-            args:
-            Node: Deref
+          in_:
+          Node: While
+            luv = {i, limit, step} nuv = {}
+            cond:
+            Node: Prim
               luv = {} nuv = {}
-              mut_var=i
-            Node: Variable
+              args:
+              Node: Prim
+                luv = {} nuv = {}
+                args:
+                Node: Deref
+                  luv = {} nuv = {}
+                  mut_var=i
+                Node: Variable
+                  luv = {} nuv = {}
+                  var=limit
+            body:
+            Node: Assign
               luv = {} nuv = {}
-              var=step
+              let_var=i
+              value:
+              Node: Prim
+                luv = {} nuv = {}
+                args:
+                Node: Deref
+                  luv = {} nuv = {}
+                  mut_var=i
+                Node: Variable
+                  luv = {} nuv = {}
+                  var=step
 
-    { PUSH int 0 ; NEVER }
+    { PUSH int 10 ;
+      PUSH int 2 ;
+      PUSH int 0 ;
+      DUP 3 ;
+      DUP 2 ;
+      COMPARE ;
+      LT ;
+      LOOP { DUP 2 ;
+             DUP 2 ;
+             ADD ;
+             DUG 1 ;
+             DIG 0 ;
+             DROP ;
+             UNIT ;
+             DROP ;
+             DUP 3 ;
+             DUP 2 ;
+             COMPARE ;
+             LT } ;
+      UNIT ;
+      SWAP ;
+      DROP ;
+      SWAP ;
+      DROP ;
+      SWAP ;
+      DROP }
 
     Optimised:
-    { PUSH int 0 ; NEVER } |}]
+    { PUSH int 10 ;
+      PUSH int 2 ;
+      PUSH int 0 ;
+      DUP 3 ;
+      DUP 2 ;
+      COMPARE ;
+      LT ;
+      LOOP { DUP 2 ; ADD ; DUP 3 ; DUP 2 ; COMPARE ; LT } ;
+      DROP 3 ;
+      UNIT } |}]
 
 (* -------------------------------------------------------------------- *)
 (* 16. WHILE_LEFT overshadow lam_var in body                            *)
@@ -2406,20 +2689,13 @@ let%expect_test "test_for" =
             Node: Const
               luv = {} nuv = {}
         body:
-        Node: Let_in
-          luv = {i} nuv = {}
-          let_var=i
-          rhs:
-          Node: Const
+        Node: Assign
+          luv = {} nuv = {acc}
+          let_var=acc
+          value:
+          Node: Variable
             luv = {} nuv = {}
-          in_:
-          Node: Assign
-            luv = {i} nuv = {acc}
-            let_var=acc
-            value:
-            Node: Variable
-              luv = {i} nuv = {}
-              var=i
+            var=i
 
     { PUSH int 0 ;
       DROP ;
@@ -2428,7 +2704,22 @@ let%expect_test "test_for" =
       DUP 2 ;
       COMPARE ;
       LT ;
-      LOOP { PUSH int 999 ; DROP ; UNIT ; SWAP ; DROP ; DROP ; PUSH int 1 ; NEVER } ;
+      LOOP { DUP 1 ;
+             DROP ;
+             UNIT ;
+             DROP ;
+             PUSH int 1 ;
+             DUP 2 ;
+             ADD ;
+             DUG 1 ;
+             DIG 0 ;
+             DROP ;
+             UNIT ;
+             DROP ;
+             PUSH int 5 ;
+             DUP 2 ;
+             COMPARE ;
+             LT } ;
       DROP ;
       UNIT }
 
@@ -2438,7 +2729,7 @@ let%expect_test "test_for" =
       DUP 2 ;
       COMPARE ;
       LT ;
-      LOOP { DROP ; PUSH int 1 ; NEVER } ;
+      LOOP { PUSH int 1 ; ADD ; PUSH int 5 ; DUP 2 ; COMPARE ; LT } ;
       DROP ;
       UNIT } |}]
 
@@ -3568,28 +3859,35 @@ let%expect_test "test_tuple" =
   [%expect
     {|
     --- test_tuple ---
-    Node: Tuple
-      luv = {unused2, x} nuv = {}
-      Leaf label=<no-label>
-      Node: Let_in
-        luv = {x} nuv = {}
-        let_var=x
-        rhs:
-        Node: Const
-          luv = {} nuv = {}
-        in_:
-        Node: Variable
+    Node: Let_in
+      luv = {unused, x} nuv = {}
+      let_var=unused
+      rhs:
+      Node: Const
+        luv = {} nuv = {}
+      in_:
+      Node: Tuple
+        luv = {unused, x} nuv = {}
+        Leaf label=<no-label>
+        Node: Let_in
           luv = {x} nuv = {}
-          var=x
-      Leaf label=<no-label>
-      Node: Variable
-        luv = {unused2} nuv = {}
-        var=unused2
+          let_var=x
+          rhs:
+          Node: Const
+            luv = {} nuv = {}
+          in_:
+          Node: Variable
+            luv = {x} nuv = {}
+            var=x
+        Leaf label=<no-label>
+        Node: Variable
+          luv = {unused} nuv = {}
+          var=unused
 
-    { NEVER }
+    { PUSH int 999 ; PUSH int 10 ; PAIR }
 
     Optimised:
-    { NEVER } |}]
+    { PUSH int 999 ; PUSH int 10 ; PAIR } |}]
 
 (* -------------------------------------------------------------------- *)
 (* 24. PROJ overshadow referencing outer var + partial usage           *)
@@ -3612,23 +3910,30 @@ let%expect_test "test_proj" =
     --- test_proj ---
     Node: Proj
       luv = {alpha} nuv = {}
-      Node: Tuple
+      Node: Let_in
         luv = {alpha} nuv = {}
-        Leaf label=<no-label>
-        Node: Variable
+        let_var=alpha
+        rhs:
+        Node: Const
+          luv = {} nuv = {}
+        in_:
+        Node: Tuple
           luv = {alpha} nuv = {}
-          var=alpha
-        Leaf label=<no-label>
-        Node: Const
-          luv = {} nuv = {}
-        Leaf label=<no-label>
-        Node: Const
-          luv = {} nuv = {}
+          Leaf label=<no-label>
+          Node: Variable
+            luv = {alpha} nuv = {}
+            var=alpha
+          Leaf label=<no-label>
+          Node: Const
+            luv = {} nuv = {}
+          Leaf label=<no-label>
+          Node: Const
+            luv = {} nuv = {}
 
-    { PUSH int 123 ; PUSH int 999 ; NEVER }
+    { PUSH int 999 ; PUSH int 123 ; PUSH int 999 ; DIG 2 ; PAIR 3 ; GET 1 }
 
     Optimised:
-    { PUSH int 123 ; PUSH int 999 ; NEVER } |}]
+    { PUSH int 999 ; PUSH int 123 ; PUSH int 999 ; DIG 2 ; PAIR 3 ; CAR } |}]
 
 (* -------------------------------------------------------------------- *)
 (* 25. UPDATE overshadow with let_in on update value                   *)
@@ -3784,27 +4089,34 @@ let%expect_test "test_raw_michelson" =
   [%expect
     {|
     --- test_raw_michelson ---
-    Node: Raw_michelson
+    Node: Let_in
       luv = {unusedR, x} nuv = {}
-      args:
-      Node: Let_in
-        luv = {unusedR} nuv = {}
-        let_var=unusedR
-        rhs:
-        Node: Const
-          luv = {} nuv = {}
-        in_:
-        Node: Variable
+      let_var=x
+      rhs:
+      Node: Const
+        luv = {} nuv = {}
+      in_:
+      Node: Raw_michelson
+        luv = {unusedR, x} nuv = {}
+        args:
+        Node: Let_in
           luv = {unusedR} nuv = {}
-          var=unusedR
-      Node: Variable
-        luv = {x} nuv = {}
-        var=x
+          let_var=unusedR
+          rhs:
+          Node: Const
+            luv = {} nuv = {}
+          in_:
+          Node: Variable
+            luv = {unusedR} nuv = {}
+            var=unusedR
+        Node: Variable
+          luv = {x} nuv = {}
+          var=x
 
-    { NEVER }
+    { PUSH int 10 ; PUSH int 7 ; { PUSH int 42 } }
 
     Optimised:
-    { NEVER } |}]
+    { PUSH int 10 ; PUSH int 7 ; PUSH int 42 } |}]
 
 let%expect_test "raw_michelson overshadow multiple args" =
   (*
@@ -3884,62 +4196,109 @@ let%expect_test "test_create_contract" =
     {|
     --- test_create_contract ---
     Node: Let_in
-      luv = {args, bal, del, p, s, unusedCC} nuv = {unusedCC}
-      let_var=unusedCC
+      luv = {args, bal, del, p, s, unusedCC} nuv = {}
+      let_var=args
       rhs:
-      Node: Const
+      Node: Tuple
         luv = {} nuv = {}
+        Leaf label=<no-label>
+        Node: Const
+          luv = {} nuv = {}
+        Leaf label=<no-label>
+        Node: Const
+          luv = {} nuv = {}
       in_:
-      Node: Create_contract
-        luv = {args, bal, del, p, s} nuv = {}
-        lam_var=args
-        delegate:
-        Node: Variable
-          luv = {del} nuv = {}
-          var=del
-        initial_balance:
-        Node: Variable
-          luv = {bal} nuv = {}
-          var=bal
-        initial_storage:
+      Node: Let_in
+        luv = {args, bal, del, p, s, unusedCC} nuv = {}
+        let_var=bal
+        rhs:
+        Node: Const
+          luv = {} nuv = {}
+        in_:
         Node: Let_in
-          luv = {args} nuv = {}
-          let_var=args
+          luv = {args, bal, del, p, s, unusedCC} nuv = {}
+          let_var=del
           rhs:
-          Node: Const
-            luv = {} nuv = {}
-          in_:
-          Node: Const
-            luv = {} nuv = {}
-        code body:
-        Node: Let_tuple_in
-          luv = {args, p, s} nuv = {}
-          components=[p;s]
-          rhs:
-          Node: Variable
-            luv = {args} nuv = {}
-            var=args
-          in_:
           Node: Prim
-            luv = {p, s} nuv = {}
+            luv = {} nuv = {}
             args:
-            Node: Variable
-              luv = {p} nuv = {}
-              var=p
-            Node: Variable
-              luv = {s} nuv = {}
-              var=s
+          in_:
+          Node: Let_in
+            luv = {args, bal, del, p, s, unusedCC} nuv = {unusedCC}
+            let_var=unusedCC
+            rhs:
+            Node: Const
+              luv = {} nuv = {}
+            in_:
+            Node: Create_contract
+              luv = {args, bal, del, p, s} nuv = {}
+              lam_var=args
+              delegate:
+              Node: Variable
+                luv = {del} nuv = {}
+                var=del
+              initial_balance:
+              Node: Variable
+                luv = {bal} nuv = {}
+                var=bal
+              initial_storage:
+              Node: Let_in
+                luv = {args} nuv = {}
+                let_var=args
+                rhs:
+                Node: Const
+                  luv = {} nuv = {}
+                in_:
+                Node: Const
+                  luv = {} nuv = {}
+              code body:
+              Node: Let_tuple_in
+                luv = {args, p, s} nuv = {}
+                components=[p;s]
+                rhs:
+                Node: Variable
+                  luv = {args} nuv = {}
+                  var=args
+                in_:
+                Node: Prim
+                  luv = {p, s} nuv = {}
+                  args:
+                  Node: Variable
+                    luv = {p} nuv = {}
+                    var=p
+                  Node: Variable
+                    luv = {s} nuv = {}
+                    var=s
 
-    { PUSH string "no use" ;
+    { PUSH int 2 ;
+      PUSH int 1 ;
+      PAIR ;
+      PUSH mutez 100 ;
+      NONE key_hash ;
+      PUSH string "no use" ;
       DROP ;
       PUSH nat 99 ;
       PUSH nat 100 ;
       SWAP ;
       DROP ;
-      NEVER }
+      DIG 2 ;
+      DIG 2 ;
+      CREATE_CONTRACT
+        { parameter nat ;
+          storage nat ;
+          code { UNPAIR ; SWAP ; SWAP ; ADD ; SWAP ; DROP } } ;
+      PAIR ;
+      SWAP ;
+      DROP }
 
     Optimised:
-    { PUSH nat 100 ; NEVER } |}]
+    { PUSH mutez 100 ;
+      NONE key_hash ;
+      PUSH nat 100 ;
+      DUG 2 ;
+      CREATE_CONTRACT
+        { parameter nat ; storage nat ; code { SWAP ; DROP ; UNPAIR ; ADD } } ;
+      PAIR } |}]
 
 (* -------------------------------------------------------------------- *)
 (* 28. GLOBAL_CONSTANT overshadow multiple arguments                   *)
