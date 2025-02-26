@@ -1,5 +1,11 @@
 (* In this file, we test the compilation of various expressions to Michelson, 
-  with each type of LLTZ node tested atleast once. We check that both optimised and unptimised michelson output is correct. *)
+  with each type of LLTZ node tested atleast once. We check that both optimised and unptimised michelson output is correct. 
+  
+  The concrete syntaxes are written with a OCaml-like syntax. 
+  In LLTZ, we can only copy the value of variables not their reference,
+  therefore even for mutable variable we don't use 'ref' which is present in OCaml
+  to simplify the syntax. Assignments are done with the '<-' operator.
+  *)
 open Core
 open Lltz_ir.Ast_builder.With_dummy
 module Ast_builder = Lltz_ir.Ast_builder
