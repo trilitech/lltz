@@ -11,8 +11,7 @@ module Last_vars = Lltz_codegen.Last_vars
 module Ast_builder = Lltz_ir.Ast_builder
 
 let print_used expr =
-  let vars = Last_vars.collect_used_vars expr in
-  vars
+  Last_vars.collect_used_vars expr
   |> Set.to_list
   |> List.sort ~compare:String.compare
   |> String.concat ~sep:", "
@@ -238,7 +237,7 @@ let%expect_test "used div_ overshadow local var" =
   in
   print_used expr;
   [%expect {|
-    name_var_4sfa9wjas81, x
+    name_var_4sfa9wjas80, x
   |}]
 
 (*
@@ -251,7 +250,7 @@ let%expect_test "used mod_ overshadow in lhs" =
   let expr = mod_ lhs_expr (variable (var "y") int_ty) in
   print_used expr;
   [%expect {|
-    n, name_var_4sfa9wjas82, y
+    n, name_var_4sfa9wjas81, y
   |}]
 
 (*
@@ -268,7 +267,7 @@ let%expect_test "used div_ with mutable var + overshadow in rhs" =
   let expr = div_ lhs_expr rhs_expr in
   print_used expr;
   [%expect {|
-    m, name_var_4sfa9wjas83, v, x
+    m, name_var_4sfa9wjas82, v, x
   |}]
 
 (*
@@ -281,7 +280,7 @@ let%expect_test "used both div_ and mod_ combined" =
   let expr = mod_ div_expr (variable (var "b") int_ty) in
   print_used expr;
   [%expect {|
-    a, b, name_var_4sfa9wjas84, name_var_4sfa9wjas85
+    a, b, name_var_4sfa9wjas83, name_var_4sfa9wjas84
   |}]
 
 (* if condX=0 then thenVar else elseVar *)
