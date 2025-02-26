@@ -11,8 +11,7 @@ module Last_vars = Lltz_codegen.Last_vars
 module Ast_builder = Lltz_ir.Ast_builder
 
 let print_used expr =
-  let vars = Last_vars.collect_used_vars expr in
-  vars
+  Last_vars.collect_used_vars expr
   |> Set.to_list
   |> List.sort ~compare:String.compare
   |> String.concat ~sep:", "

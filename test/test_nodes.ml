@@ -341,10 +341,10 @@ let%expect_test "variable usage: let_in (bind + reference)" =
   let expr = let_in (var "x") ~rhs:(Lltz_ir.Ast_builder.With_dummy.int (-42)) ~in_:(variable (var "x") int_ty) in
   test_expr expr;
   [%expect {|
-  { PUSH nat 42 }
+  { PUSH int -42 }
 
   Optimised:
-  { PUSH nat 42 } |}]
+  { PUSH int -42 } |}]
 
 
 (* let x = 42 in
