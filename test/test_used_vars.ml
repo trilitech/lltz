@@ -1,3 +1,10 @@
+(* In this module, we test the `Last_vars.collect_used_vars` function computing set of all variables that were used. 
+
+  The concrete syntaxes are written with a OCaml-like syntax. 
+  In LLTZ, we can only copy the value of variables not their reference,
+  therefore even for mutable variable we don't use 'ref' which is present in OCaml
+  to simplify the syntax. Assignments are done with the '<-' operator.
+*)
 open Core
 open Lltz_ir.Ast_builder.With_dummy
 module Last_vars = Lltz_codegen.Last_vars
@@ -11,6 +18,7 @@ let print_used expr =
   |> String.concat ~sep:", "
   |> print_endline
 
+(* x *)
 let%expect_test "used var simple" =
   let expr = variable (var "x") nat_ty in
   print_used expr;
@@ -18,6 +26,7 @@ let%expect_test "used var simple" =
     x
   |}]
 
+(* m *)
 let%expect_test "used deref free" =
   let expr = deref (mut_var "m") nat_ty in
   print_used expr;
@@ -25,11 +34,13 @@ let%expect_test "used deref free" =
     m
   |}]
 
+(* 42 *)
 let%expect_test "used const" =
   let expr = int 42 in
   print_used expr;
   [%expect {| |}]
 
+(* let x = 1 in x + x *)
 let%expect_test "used let_in overshadow" =
   let expr =
     let_in
@@ -42,6 +53,9 @@ let%expect_test "used let_in overshadow" =
     x
   |}]
 
+(* let mut m = 10 in
+   m <- (!m + x)
+*)
 let%expect_test "used let_mut_in referencing var in body" =
   let expr =
     let_mut_in
@@ -57,6 +71,7 @@ let%expect_test "used let_mut_in referencing var in body" =
     m, x
   |}]
 
+(* fun (p : nat) -> p + freeVar *)
 let%expect_test "used lambda referencing outer var not bound" =
   let lam_expr =
     lambda
@@ -68,12 +83,11 @@ let%expect_test "used lambda referencing outer var not bound" =
     freeVar, p
   |}]
 
+(* 
+  let rec f = fun (n : nat) ->
+  if n <= freeN then f else f(n)
+*)
 let%expect_test "used lambda_rec referencing free var" =
-  (*
-  CST:
-  let rec f = (n : nat) : nat =>
-    if n <= freeN then f else f n
-  *)
   let expr =
     lambda_rec
       (var "f")
@@ -92,6 +106,7 @@ let%expect_test "used lambda_rec referencing free var" =
     f, freeN, n
   |}]
 
+(* (fun (z : nat) -> 5) (0 + unboundArg) *)
 let%expect_test "used app overshadow in abs + free var in arg" =
   let abs_expr = lambda (var "z", nat_ty) ~body:(nat 5) in
   let arg_expr = add (int 0) (variable (var "unboundArg") nat_ty) in
@@ -101,13 +116,14 @@ let%expect_test "used app overshadow in abs + free var in arg" =
     unboundArg
   |}]
 
+(*
+  let outer = 100 in
+  let two_arg_fun = fun (p : (int*int)) ->
+    outer + (fst p + snd p)
+  let applied1 = two_arg_fun 10
+  applied1 20
+*)
 let%expect_test "used partial application overshadow outer var" =
-  (*
-    let outer = 100 in
-    let two_arg_fun = (p : (nat * nat)) : nat => outer + car p + cdr p in
-    let applied1 = two_arg_fun 10 in
-    applied1 20
-  *)
   let pair_ty = mk_tuple_ty [ int_ty; int_ty ] in
   let two_arg_fun =
     lambda
@@ -140,6 +156,16 @@ let%expect_test "used partial application overshadow outer var" =
     applied1, outer, p, two_arg_fun
   |}]
 
+(*
+  let a = 8 in
+  let f = fun (p : (int*int)) ->
+    a + (fst p + snd p)
+  let partial = f 2
+  let leftover =
+    let a = 999 in partial 
+  in
+  leftover 3
+*)
 let%expect_test "used partial apply overshadow leftover function" =
   let pair_ty = mk_tuple_ty [ int_ty; int_ty ] in
   let lambda_f =
@@ -178,6 +204,7 @@ let%expect_test "used partial apply overshadow leftover function" =
   print_used expr;
   [%expect {| a, f, leftover, p, partial |}]
 
+(* x + y *)
 let%expect_test "used prim add" =
   let expr = add (variable (var "x") int_ty) (variable (var "y") int_ty) in
   print_used expr;
@@ -185,6 +212,7 @@ let%expect_test "used prim add" =
     x, y
   |}]
 
+(* let a=9 in a eq a *)
 let%expect_test "used prim eq overshadow usage" =
   let lhs = let_in (var "a") ~rhs:(nat 9) ~in_:(variable (var "a") nat_ty) in
   let rhs = variable (var "a") nat_ty in
@@ -194,6 +222,10 @@ let%expect_test "used prim eq overshadow usage" =
     a
   |}]
 
+(*
+  let x=50 in
+  div_ x (let x=5 in x)
+*)
 let%expect_test "used div_ overshadow local var" =
   let expr =
     let_in
@@ -209,6 +241,9 @@ let%expect_test "used div_ overshadow local var" =
     name_var_4sfa9wjas81, x
   |}]
 
+(*
+  mod_ (let n=7 in n+2) y
+*)
 let%expect_test "used mod_ overshadow in lhs" =
   let lhs_expr =
     let_in (var "n") ~rhs:(int 7) ~in_:(add (variable (var "n") int_ty) (int 2))
@@ -219,6 +254,9 @@ let%expect_test "used mod_ overshadow in lhs" =
     n, name_var_4sfa9wjas82, y
   |}]
 
+(*
+  div_ (let_mut m= (x+1) in m) (let v=2 in v)
+*)
 let%expect_test "used div_ with mutable var + overshadow in rhs" =
   let lhs_expr =
     let_mut_in
@@ -233,6 +271,9 @@ let%expect_test "used div_ with mutable var + overshadow in rhs" =
     m, name_var_4sfa9wjas83, v, x
   |}]
 
+(*
+  mod_ (div_ (let a=10 in a) (let b=2 in b)) b
+*)
 let%expect_test "used both div_ and mod_ combined" =
   let a_expr = let_in (var "a") ~rhs:(int 10) ~in_:(variable (var "a") int_ty) in
   let b_expr = let_in (var "b") ~rhs:(int 2) ~in_:(variable (var "b") int_ty) in
@@ -243,6 +284,7 @@ let%expect_test "used both div_ and mod_ combined" =
     a, b, name_var_4sfa9wjas84, name_var_4sfa9wjas85
   |}]
 
+(* if condX=0 then thenVar else elseVar *)
 let%expect_test "used if_bool distinct free vars" =
   let condition = eq (variable (var "condX") int_ty) (int 0) in
   let then_expr = variable (var "thenVar") int_ty in
@@ -253,6 +295,10 @@ let%expect_test "used if_bool distinct free vars" =
     condX, elseVar, thenVar
   |}]
 
+(*
+  let x=10 in
+  if (let a=20 in a = x) then (let x=99 in x) else x
+*)
 let%expect_test "used if_bool overshadow in condition + overshadow in then branch" =
   let condition_expr =
     let_in
@@ -271,6 +317,11 @@ let%expect_test "used if_bool overshadow in condition + overshadow in then branc
   print_used full_expr;
   [%expect {| a, x |}]
 
+(*
+  match optVal with
+    None -> 100
+  | Some v -> v + x
+*)
 let%expect_test "used if_none referencing subject + some" =
   let expr =
     if_none
@@ -286,6 +337,11 @@ let%expect_test "used if_none referencing subject + some" =
     optVal, v, x
   |}]
 
+(*
+  match lst with
+    [] -> 0
+  | hd::hd -> hd + 2
+*)
 let%expect_test "used if_cons overshadow lam_var1/lam_var2" =
   let expr =
     if_cons
@@ -302,6 +358,11 @@ let%expect_test "used if_cons overshadow lam_var1/lam_var2" =
     hd, lst
   |}]
 
+(*
+  match s with
+    Left l -> let l=999 in 1
+  | Right l -> l + 2
+*)
 let%expect_test "used if_left overshadow lam_var" =
   let subject =
     variable (var "s") (or_ty (mk_row [ Leaf (None, int_ty); Leaf (None, int_ty) ]))
@@ -318,6 +379,7 @@ let%expect_test "used if_left overshadow lam_var" =
     l, s
   |}]
 
+(* while x < 5 do m <- x done *)
 let%expect_test "used while referencing cond, body" =
   let expr =
     while_
@@ -329,6 +391,10 @@ let%expect_test "used while referencing cond, body" =
     x
   |}]
 
+(*
+  while_left (Left 10) do
+    Right(flag)
+*)
 let%expect_test "used while_left overshadow lam_var" =
   let cond_expr = left (None, None, int_ty) (int 10) in
   let expr =
@@ -344,6 +410,12 @@ let%expect_test "used while_left overshadow lam_var" =
     flag
   |}]
 
+(*
+  for i=0 while i<5 do
+    m <- i
+    i <- i+1
+  done
+*)
 let%expect_test "used for usage" =
   let expr =
     for_
@@ -358,6 +430,14 @@ let%expect_test "used for usage" =
     i
   |}]
 
+(*
+  let outer=50 in
+  for i=0 while i<3 do
+    let i = outer in
+    i + 1
+    i <- i+1
+  done
+*)
 let%expect_test "used for overshadow in body referencing outer var" =
   let mut_i = mut_var "i" in
   let init_expr = nat 0 in
@@ -376,6 +456,7 @@ let%expect_test "used for overshadow in body referencing outer var" =
   print_used full_expr;
   [%expect {| i, outer |}]
 
+(* for_each [] do elem -> let elem=999 in elem *)
 let%expect_test "used for_each overshadow lam_var" =
   let list_expr = nil int_ty in
   let expr =
@@ -391,6 +472,10 @@ let%expect_test "used for_each overshadow lam_var" =
     elem
   |}]
 
+(*
+  let outer=2 in
+  map [1] (x-> x + outer)
+*)
 let%expect_test "used map referencing outer var" =
   let list_expr = cons (nat 1) (nil nat_ty) in
   let lam_body = add (variable (var "x") nat_ty) (variable (var "outer") nat_ty) in
@@ -405,6 +490,9 @@ let%expect_test "used map referencing outer var" =
     outer, x
   |}]
 
+(*
+  fold_left [1] init=10 (acc_x -> let acc_x=999 in 0)
+*)
 let%expect_test "used fold_left overshadow lam_var" =
   let coll = cons (nat 1) (nil nat_ty) in
   let fold_body = let_in (var "acc_x") ~rhs:(int 999) ~in_:(nat 0) in
@@ -421,6 +509,10 @@ let%expect_test "used fold_left overshadow lam_var" =
   print_used expr;
   [%expect {| |}]
 
+(*
+  let outer=100 in
+  fold_right [1] init=0 (p -> fst p + snd p + outer)
+*)
 let%expect_test "used fold_right referencing outer var" =
   let coll = cons (int 1) (nil int_ty) in
   let expr =
@@ -447,6 +539,10 @@ let%expect_test "used fold_right referencing outer var" =
     outer, p
   |}]
 
+
+(*
+  let_tuple_in (a,b,a)=(1,2,3) in a + b
+*)
 let%expect_test "used let_tuple_in overshadow" =
   let triple =
     tuple (mk_row [ Leaf (None, int 1); Leaf (None, int 2); Leaf (None, int 3) ])
@@ -462,6 +558,8 @@ let%expect_test "used let_tuple_in overshadow" =
     a, b
   |}]
 
+
+(* (x,y) *)
 let%expect_test "used tuple referencing x,y inside row" =
   let expr =
     tuple
@@ -475,6 +573,7 @@ let%expect_test "used tuple referencing x,y inside row" =
     x, y
   |}]
 
+(* ( (alpha, 20) )[0] *)
 let%expect_test "used proj referencing some var in the tuple" =
   let tuple_expr =
     tuple (mk_row [ Leaf (None, variable (var "alpha") int_ty); Leaf (None, int 20) ])
@@ -485,6 +584,7 @@ let%expect_test "used proj referencing some var in the tuple" =
     alpha
   |}]
 
+(* update_tuple (10,20) (idx=1) (let u=999 in u) *)
 let%expect_test "used update overshadow" =
   let pair_expr = tuple (mk_row [ Leaf (None, nat 10); Leaf (None, nat 20) ]) in
   let upd_expr = let_in (var "u") ~rhs:(nat 999) ~in_:(variable (var "u") nat_ty) in
@@ -503,6 +603,7 @@ let push_int n =
     , [ Tezos_micheline.Micheline.Int (Ast_builder.Dummy_range.v, Z.of_int n) ]
     , [] )
 
+(* raw_michelson { PUSH 42 } [ a1, let a1=100 in a1 ] : int *)
 let%expect_test "used raw_michelson overshadow" =
   let code_ast =
     Tezos_micheline.Micheline.Seq (Ast_builder.Dummy_range.v, [ push_int 42 ])
@@ -515,20 +616,17 @@ let%expect_test "used raw_michelson overshadow" =
     a1
   |}]
 
+
+(*
+  create_contract
+    storage=nat
+    code= fun(args: (nat*nat)) ->
+            let (p,s)=args in p + s
+    delegate= del
+    initial_balance= bal
+    initial_storage= let args=5 in 6
+ *)
 let%expect_test "used create_contract overshadow binder_var" =
-  (*
-    CREATE_CONTRACT
-    { storage = nat
-    ; code =
-        (lambda (args : (nat * nat)) {
-           let_tuple (p, s) = args in p + s
-         })
-    ; delegate = del : option key_hash
-    ; initial_balance = bal : mutez
-    ; initial_storage =
-        let args = 5 in 6
-    }
-  *)
   let param_storage_ty = mk_tuple_ty [ nat_ty; nat_ty ] in
   let code_body =
     let_tuple_in
@@ -549,6 +647,12 @@ let%expect_test "used create_contract overshadow binder_var" =
     args, bal, del, p, s
   |}]
 
+(*
+  global_constant "myHash"
+    [ let g=10 in g,
+      g
+    ] : int
+*)
 let%expect_test "used global_constant overshadow" =
   let expr =
     global_constant
