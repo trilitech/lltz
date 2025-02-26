@@ -1,5 +1,11 @@
 (* In this file, we test the compilation of various expressions to Michelson, 
-  with each type of LLTZ node tested atleast once. We check that both optimised and unptimised michelson output is correct. *)
+  with each type of LLTZ node tested atleast once. We check that both optimised and unptimised michelson output is correct. 
+  
+  The concrete syntaxes are written with a OCaml-like syntax. 
+  In LLTZ, we can only copy the value of variables not their reference,
+  therefore even for mutable variable we don't use 'ref' which is present in OCaml
+  to simplify the syntax. Assignments are done with the '<-' operator.
+  *)
 open Core
 open Lltz_ir.Ast_builder.With_dummy
 module Ast_builder = Lltz_ir.Ast_builder
@@ -332,13 +338,13 @@ let%expect_test "variable x" =
 
 (* let x = -42 in x *)
 let%expect_test "variable usage: let_in (bind + reference)" =
-  let expr = let_in (var "x") ~rhs:(int -42) ~in_:(variable (var "x") int_ty) in
+  let expr = let_in (var "x") ~rhs:(int (-42)) ~in_:(variable (var "x") int_ty) in
   test_expr expr;
   [%expect {|
-  { PUSH nat 42 }
+  { PUSH int -42 }
 
   Optimised:
-  { PUSH nat 42 } |}]
+  { PUSH int -42 } |}]
 
 
 (* let x = 42 in
@@ -3933,7 +3939,7 @@ let%expect_test "convert_list usage" =
 (* x = gen_name;
    let x = 10 in x *)
 let%expect_test "gen_name usage" =
-  let x = gen_name in
+  let x = gen_name () in
   let expr = let_in (Var x) ~rhs:(nat 10) ~in_:(variable (Var x) nat_ty) in
   test_expr expr;
   [%expect {|
