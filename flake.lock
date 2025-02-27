@@ -18,22 +18,6 @@
         "type": "github"
       }
     },
-    "grace": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1717098178,
-        "narHash": "sha256-jubzimeKs29Y6Di2/kpKEOnNAEzMzVpC5HMLjog4Tlg=",
-        "owner": "johnyob",
-        "repo": "grace",
-        "rev": "d15a6d7d07a2551d1a9934fa79c2cf84c918f990",
-        "type": "github"
-      },
-      "original": {
-        "owner": "johnyob",
-        "repo": "grace",
-        "type": "github"
-      }
-    },
     "hackage": {
       "flake": false,
       "locked": {
@@ -88,11 +72,9 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "grace": "grace",
         "hackage": "hackage",
         "nixpkgs": "nixpkgs",
         "ocaml-overlay": "ocaml-overlay",
-        "tezos-ligo": "tezos-ligo",
         "treefmt": "treefmt"
       }
     },
@@ -109,23 +91,6 @@
         "owner": "nix-systems",
         "repo": "default",
         "type": "github"
-      }
-    },
-    "tezos-ligo": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1723647240,
-        "narHash": "sha256-FkOR4VqFngdejBCqzwwySINfK/oNklsnIVrvQYVAfyc=",
-        "owner": "ligolang",
-        "repo": "tezos-ligo",
-        "rev": "fb4bad17f4d4a8b1df1ba5ea96935f63321e3a30",
-        "type": "gitlab"
-      },
-      "original": {
-        "owner": "ligolang",
-        "ref": "v21-ligo",
-        "repo": "tezos-ligo",
-        "type": "gitlab"
       }
     },
     "treefmt": {
