@@ -16,17 +16,6 @@
       url = "github:nix-ocaml/nix-overlays";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
-    # Also doesn't belong here, but required to avoid nix's bad UX with submodules
-    tezos-ligo = {
-      url = "gitlab:ligolang/tezos-ligo/v21-ligo";
-      flake = false;
-    };
-
-    grace = {
-      url = "github:johnyob/grace";
-      flake = false;
-    };
   };
   outputs = inputs:
     with inputs;
@@ -48,7 +37,7 @@
             ];
           };
 
-          ligo = pkgs.callPackage ./nix/ligo.nix {inherit tezos-ligo grace;};
+          ligo = pkgs.callPackage ./nix/ligo.nix {};
           ligo-syntaxes = ./tools/vscode/syntaxes;
 
           fmt = treefmt.lib.evalModule pkgs {
