@@ -14,8 +14,7 @@ module Ast_builder = Lltz_ir.Ast_builder
 open Lltz_ir.Ast_builder.With_dummy
 
 let print_vars expr =
-  let vars = Last_vars.collect_all_vars expr in
-  vars |> Set.to_list |> String.concat ~sep:", " |> print_endline
+  Last_vars.collect_all_vars expr |> Set.to_list |> String.concat ~sep:", " |> print_endline
 
 let v_x_nat = var "x"
 let v_y_nat = var "y"
