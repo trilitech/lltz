@@ -235,7 +235,13 @@ let test_and_print title expr =
   Test_nodes.test_expr expr
 
 (* -------------------------------------------------------------------- *)
-
+(* 
+  let mut x = 100 in
+    if (x = 100) then
+      x <- x - 50
+    else
+      x <- x - 10
+*)
 let%expect_test "assign same var multiple branches" =
   let mut_x = mut_var "x" in
   let condition = eq (deref mut_x nat_ty) (nat 100) in
@@ -316,6 +322,10 @@ let%expect_test "assign same var multiple branches" =
       IF { PUSH int -50 ; ADD ; DROP } { PUSH int -10 ; ADD ; DROP } ;
       UNIT } |}]
 
+(*
+  let x = 10 in
+    x
+*)
 let%expect_test "test_variable" =
   let expr = 
     let_in (var "x") ~rhs:(int 10) ~in_:
@@ -340,6 +350,13 @@ let%expect_test "test_variable" =
     Optimised:
     { PUSH int 10 } |}]
 
+(*
+  let unused = 10 in
+    let x = 20 in
+      let x = 10 in
+        let x = x + 1 in
+          x + unused
+*)
 let%expect_test "test_let_in" =
   let expr =
     let_in (var "unused") ~rhs:(int 10) ~in_:(
@@ -418,6 +435,11 @@ let%expect_test "test_let_in" =
     Optimised:
     { PUSH int 21 } |}]
 
+(*
+  let varA = 10 in
+    let varB = 5 in
+      (varA + varB) + varA
+*)
 let%expect_test "let_in multiple references no overshadow" =
   let expr =
     let_in
@@ -471,6 +493,10 @@ let%expect_test "let_in multiple references no overshadow" =
     Optimised:
     { PUSH int 10 ; PUSH int 5 ; DUP 2 ; SWAP ; DIG 2 ; ADD ; ADD } |}]
 
+(*
+  let outerVar = 7 in
+    fun (a:int) -> a + outerVar
+*)
 let%expect_test "test_lambda" =
   let expr =
     let_in
@@ -514,6 +540,14 @@ let%expect_test "test_lambda" =
     Optimised:
     { LAMBDA (pair int int) int { UNPAIR ; ADD } ; PUSH int 7 ; APPLY } |}]
 
+(*
+  let y = 99 in
+    let f = fun (a:int) -> a + y in
+      let g = fun (a:int) ->
+        (f (a * 2)) + y
+      in
+        g(10)
+*)
 let%expect_test "multiple lambdas referencing external vars" =
   let expr =
     let_in
@@ -642,6 +676,11 @@ let%expect_test "multiple lambdas referencing external vars" =
       PUSH int 10 ;
       EXEC } |}]
 
+(*
+  let a = 1 in
+    let b = 2 in
+      fun (x:int) -> x + (a + b)
+*)
 let%expect_test "lambda referencing multiple distinct outside vars" =
   let expr =
     let_in
@@ -717,6 +756,14 @@ let%expect_test "lambda referencing multiple distinct outside vars" =
       SWAP ;
       APPLY } |}]
 
+(*
+  let outer = 1 in
+    let rec f (n:int) =
+      if n > 0 then
+        f (n - 1)
+      else
+        outer
+*)
 let%expect_test "test_lambda_rec" =
   let body_expr =
     if_bool
@@ -815,6 +862,12 @@ let%expect_test "test_lambda_rec" =
       PUSH int 1 ;
       APPLY } |}]
 
+(*
+  let unusedArg = 7 in
+    let z = 10 in
+      (fun (z:int) -> z + unusedArg)
+        ( let z = 999 in 5 )
+*)
 let%expect_test "test_app" =
   let lam =
     lambda
@@ -894,6 +947,12 @@ let%expect_test "test_app" =
       SWAP ;
       EXEC } |}]
 
+(*
+  let f = fun (p:(int * int)) -> fst(p) - snd(p) in
+    let g = f(3) in
+      let f = 999 in
+        g(7)
+*)
 let%expect_test "partial apply overshadow f/g" =
   let pair_ty = Ast_builder.With_dummy.mk_tuple_ty [ int_ty; int_ty ] in
   let lam_f =
@@ -992,6 +1051,14 @@ let%expect_test "partial apply overshadow f/g" =
       PUSH int 7 ;
       EXEC } |}]
 
+(*
+  let outerZ = 999 in
+    let funF = fun (p:(int * int)) ->
+      fst(p) + snd(p) + outerZ
+    in
+      let partial = funF(3) in
+        partial(7)
+*)
 let%expect_test "partial apply referencing outer var" =
   let pair_ty = Ast_builder.With_dummy.mk_tuple_ty [ int_ty; int_ty ] in
   let lamF =
@@ -1103,6 +1170,19 @@ let%expect_test "partial apply referencing outer var" =
       PUSH int 7 ;
       EXEC } |}]
 
+(*
+  let outer = 10 in
+    let mut x = 0 in
+      let ignore1 = x <- x + outer in
+        let f = fun (n:int) ->
+          let g = fun (z:int) ->
+            let ignore_g = x <- x + z in
+              x
+          in
+            g(n + outer)
+        in
+          f(5)
+*)
 let%expect_test "mixed let_in, let_mut_in, nested lambdas referencing overshadow" =
   let mut_x = mut_var "x" in
   let assign_x_outer =
@@ -1306,6 +1386,9 @@ let%expect_test "mixed let_in, let_mut_in, nested lambdas referencing overshadow
       PUSH int 5 ;
       EXEC } |}]
 
+(*
+  42
+*)
 let%expect_test "test_const" =
   let expr = int 42 in
   test_and_print "test_const" expr;
@@ -1320,6 +1403,11 @@ let%expect_test "test_const" =
     Optimised:
     { PUSH int 42 } |}]
 
+(*
+  let x = 20 in
+    let y = 30 in
+      (let x = 10 in x) + y
+*)
 let%expect_test "test_prim_add" =
   let lhs = let_in (var "x") ~rhs:(int 10) ~in_:(variable (var "x") int_ty) in
   let rhs = variable (var "y") int_ty in
@@ -1367,6 +1455,11 @@ let%expect_test "test_prim_add" =
     Optimised:
     { PUSH int 40 } |}]
 
+(*
+  let mut m = 100 in
+    let m = 999 in
+      m <- 1
+*)
 let%expect_test "test_let_mut_in" =
   let expr =
     let_mut_in
@@ -1404,6 +1497,13 @@ let%expect_test "test_let_mut_in" =
     Optimised:
     { UNIT } |}]
 
+(*
+  let varX = 1 in
+    let mut varM = 0 in
+      let temp1 = varM <- (varM + 1) in
+        let temp2 = varM <- (varM + varX) in
+          varM
+*)
 let%expect_test "let_mut_in basic multiple assignment" =
   let mutM = mut_var "varM" in
   let assign1 = assign mutM (add (deref mutM int_ty) (int 1)) in
@@ -1498,6 +1598,11 @@ let%expect_test "let_mut_in basic multiple assignment" =
     Optimised:
     { PUSH int 2 } |}]
 
+(*
+  let mut x = 7 in
+    let x = 100 in
+      x
+*)
 let%expect_test "test_deref" =
   let expr =
     let_mut_in
@@ -1532,9 +1637,12 @@ let%expect_test "test_deref" =
     Optimised:
     { PUSH int 100 } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 10. ASSIGN referencing overshadow var + unused var                   *)
-(* -------------------------------------------------------------------- *)
+(*
+  assign referencing overshadow var + unused var:
+  let unused = 1 in
+    let mut m = 0 in
+      m <- (unused + m)
+*)
 let%expect_test "test_assign" =
   let expr =
     let_in (var "unused") ~rhs:(int 1) ~in_:
@@ -1584,6 +1692,18 @@ let%expect_test "test_assign" =
     Optimised:
     { UNIT } |}]
 
+(*
+  let mut x = 0 in
+    let ignore1 = x <- (
+      let ignore =
+        let_mut y = 999 in
+          x <- (y + 1);
+      in
+      x
+    ) in
+      let ignore2 = x <- (x + 5) in
+        x
+*)
 let%expect_test "nested assigns inside assigns" =
   let mut_x = mut_var "x" in
   let nested_assign =
@@ -1704,9 +1824,13 @@ let%expect_test "nested assigns inside assigns" =
     Optimised:
     { PUSH int 1005 } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 11. IF_BOOL referencing distinct free vars in branches               *)
-(* -------------------------------------------------------------------- *)
+(*
+  if_bool referencing distinct vars in branches:
+  let c = false in
+    let x = 10 in
+      let y = 20 in
+        if (c < 10) then x else y
+*)
 let%expect_test "test_if_bool" =
   let cond = lt (variable (var "c") int_ty) (int 10) in
   let then_ = variable (var "x") int_ty in
@@ -1783,12 +1907,13 @@ let%expect_test "test_if_bool" =
       LT ;
       IF { DROP } { SWAP ; DROP } } |}]
 
+(*
+  let condVar = 0 in
+    let thenVar = 10 in
+      let elseVar = 20 in
+        if (condVar = 0) then thenVar + 100 else elseVar + 200
+*)
 let%expect_test "if_bool distinct var usage, no overshadow" =
-  (*
-    if eq(condVar, 0)
-      then thenVar + 100
-      else elseVar + 200
-  *)
   let condition = eq (variable (var "condVar") int_ty) (int 0) in
   let then_ = add (variable (var "thenVar") int_ty) (int 100) in
   let else_ = add (variable (var "elseVar") int_ty) (int 200) in
@@ -1873,6 +1998,18 @@ let%expect_test "if_bool distinct var usage, no overshadow" =
       EQ ;
       IF { DROP ; PUSH int 100 ; ADD } { SWAP ; DROP ; PUSH int 200 ; ADD } } |}]
 
+(*
+  let x = 1 in
+    if (x < 10) then
+      if (x = 5) then
+        let x = 999 in
+          x
+      else
+        let mut x = 2 in
+          x <- (x + 100)
+    else
+      x
+*)
 let%expect_test "complex nested if_bool overshadow" =
   let condition1 = lt (variable (var "x") int_ty) (int 10) in
   let then_branch =
@@ -1990,16 +2127,18 @@ let%expect_test "complex nested if_bool overshadow" =
       LT ;
       IF { PUSH int 5 ; COMPARE ; EQ ; IF { PUSH int 999 } { UNIT } } {} } |}]
 
-let%expect_test "complicated if_bool + while + deref + overshadow" =
-  (*
-    let mut counter = 0 in
+(*
+  complicated if_bool + while + deref + overshadow:
+  let mut counter = 0 in
     while (counter < 3) do
-      if eq(counter,1)
-        then let x = counter in x
-        else counter := counter + 10
-    done
-    let x=counter in x+1
-  *)
+      if (counter = 1) then
+        let x = counter in x
+      else
+        counter <- (counter + 10)
+    done;
+  let x = counter in x + 1
+*)
+let%expect_test "complicated if_bool + while + deref + overshadow" =
   let mut_counter = mut_var "counter" in
   let body =
     if_bool
@@ -2150,9 +2289,14 @@ let%expect_test "complicated if_bool + while + deref + overshadow" =
       PUSH int 1 ;
       ADD } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 12. IF_NONE overshadow in none branch, overshadow in some           *)
-(* -------------------------------------------------------------------- *)
+(*
+  if_none overshadow in none branch, overshadow in some:
+  let maybeVal = 0 in
+    let outer = 100 in
+      match maybeVal with
+        None -> ( let tmpVal = 999 in 1 )
+      | Some v -> outer + v
+*)
 let%expect_test "test_if_none" =
   let subject = variable (var "maybeVal") (option_ty int_ty) in
   let none_ = let_in (var "tmpVal") ~rhs:(int 999) ~in_:(int 1) in
@@ -2222,9 +2366,15 @@ let%expect_test "test_if_none" =
     Optimised:
     { PUSH int 100 ; PUSH int 0 ; IF_NONE { DROP ; PUSH int 1 } { ADD } } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 13. IF_CONS overshadow lam_var1 lam_var2                             *)
-(* -------------------------------------------------------------------- *)
+(*
+  if_cons overshadow lam_var1 lam_var2:
+  let lst = 0::[] in
+    let hd = 1 in
+      let hd2 = 2 in
+        match lst with
+          [] -> 999
+        | hd::hd2 -> hd + hd2
+*)
 let%expect_test "test_if_cons" =
   let lst = variable (var "lst") (list_ty nat_ty) in
   let empty_expr = int 999 in
@@ -2308,9 +2458,16 @@ let%expect_test "test_if_cons" =
     Optimised:
     { PUSH (list nat) { 0 } ; IF_CONS { ADD } { PUSH int 999 } } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 14. IF_LEFT overshadow lam_var in left or right                      *)
-(* -------------------------------------------------------------------- *)
+(*
+  if_left overshadow lam_var in left or right:
+  let s = Left(0 : nat) in
+    match s with
+      Left(l : int) ->
+        let t = 999 in
+          l
+    | Right(r : nat) ->
+        r + 1
+*)
 let%expect_test "test_if_left" =
   let or_val =
     variable
@@ -2374,9 +2531,14 @@ let%expect_test "test_if_left" =
     Optimised:
     { PUSH int 0 ; LEFT nat ; IF_LEFT {} { PUSH int 1 ; ADD } } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 15. WHILE referencing overshadow var + nested let_in                *)
-(* -------------------------------------------------------------------- *)
+(*
+  while referencing overshadow var + nested let_in:
+  let mut m = 0 in
+    while (m < 5) do
+      let q = 123 in
+        m <- q
+    done
+*)
 let%expect_test "test_while" =
   let body_expr =
     let_in
@@ -2460,14 +2622,15 @@ let%expect_test "test_while" =
       DROP ;
       UNIT } |}]
 
+(*
+  let limit = 10 in
+    let step = 2 in
+      let mut i = 0 in
+        while (i < limit) do
+          i <- i + step
+        done
+*)
 let%expect_test "while referencing outside variables" =
-  (*
-    let mut i=0 in
-    while i < limit do
-      i := i + step
-    done
-    i
-  *)
   let mutI = mut_var "i" in
   let limitVar = variable (var "limit") int_ty in
   let stepVar = variable (var "step") int_ty in
@@ -2575,9 +2738,12 @@ let%expect_test "while referencing outside variables" =
       DROP 3 ;
       UNIT } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 16. WHILE_LEFT overshadow lam_var in body                            *)
-(* -------------------------------------------------------------------- *)
+(*
+  while_left (Left 10)
+    (flag : int) ->
+      let flag = 999 in
+        Right(123)
+*)
 let%expect_test "test_while_left" =
   let start_val = left (None, None, int_ty) (int 10) in
   let expr =
@@ -2627,9 +2793,14 @@ let%expect_test "test_while_left" =
       LEFT int ;
       LOOP_LEFT { DROP ; PUSH int 123 ; RIGHT int } } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 17. FOR referencing index overshadow body var + outer var           *)
-(* -------------------------------------------------------------------- *)
+(*
+  for referencing index overshadow body var + outer var:
+  let mut acc = 0 in
+    for i from 0 while i<5 do
+      acc <- i
+      i <- i+1
+    done
+*)
 let%expect_test "test_for" =
   let idx = mut_var "i" in
   let body_expr = (assign (mut_var "acc") (variable (var "i") int_ty))
@@ -2733,15 +2904,16 @@ let%expect_test "test_for" =
       DROP ;
       UNIT } |}]
 
+(*
+  let mut i = 0 in
+    let f = (fun (p : (int,int)) -> fst(p) + snd(p) + i ) in
+      for i from i while i<4 do
+        let partial = f(2) in
+          partial(3)
+        i <- i+1
+      done
+*)
 let%expect_test "for_ partial apply overshadow in body" =
-  (*
-    let mut i=0 in
-    let f = lambda (p:(int,int)) -> fst(p) + snd(p) + i in
-    for i= i+1 until i<4 do
-      let partial = apply(2,f) in
-      partial(3)
-    done
-  *)
   let idx = mut_var "i" in
   let pair_ty = Ast_builder.With_dummy.mk_tuple_ty [ int_ty; int_ty ] in
   let lam_f =
@@ -2962,9 +3134,14 @@ let%expect_test "for_ partial apply overshadow in body" =
       DROP ;
       UNIT } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 18. FOR_EACH overshadow lam_var, referencing outer var              *)
-(* -------------------------------------------------------------------- *)
+(*
+  for_each overshadow lam_var, referencing outer var:
+  let outer = 100 in
+    for_each [1;2]
+      (elem : int) ->
+        let elem = 999 in
+          elem + outer
+*)
 let%expect_test "test_for_each" =
   let collection = cons (int 1) (cons (int 2) (nil int_ty)) in
   let lam_body =
@@ -3043,9 +3220,13 @@ let%expect_test "test_for_each" =
       DROP ;
       UNIT } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 19. MAP overshadow lam_var, referencing outer var                   *)
-(* -------------------------------------------------------------------- *)
+(*
+  map overshadow lam_var, referencing outer var
+  let outer = 10 in
+    map [1;2] (x : nat) ->
+      let x=999 in
+        x + outer
+*)
 let%expect_test "test_map" =
   let collection = cons (nat 1) (cons (nat 2) (nil nat_ty)) in
   let lam_body =
@@ -3123,11 +3304,12 @@ let%expect_test "test_map" =
       SWAP ;
       DROP } |}]
 
+(*
+  let x=999 in
+    map [10;20] (v:int) ->
+      ( let x=v in x+1 ) + x
+*)
 let%expect_test "map overshadow partial usage" =
-  (*
-    let x=999 in
-    map [10,20] ( lam v-> (let x=v in x + 1) + x )
-  *)
   let list_expr = cons (int 10) (cons (int 20) (nil int_ty)) in
   let lam_body =
     add
@@ -3212,11 +3394,12 @@ let%expect_test "map overshadow partial usage" =
       SWAP ;
       DROP } |}]
 
+(*
+  let factor = 3 in
+    map [10;20] (item:int) ->
+      item + item + factor
+*)
 let%expect_test "map usage referencing outside var, multiple item usage" =
-  (*
-    let factor=3 in
-    map [10,20]  ( lam item -> item + item + factor )
-  *)
   let list_expr = cons (int 10) (cons (int 20) (nil int_ty)) in
   let lam_body =
     add
@@ -3291,9 +3474,14 @@ let%expect_test "map usage referencing outside var, multiple item usage" =
       SWAP ;
       DROP } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 20. FOLD_LEFT overshadow lam_var + referencing init                 *)
-(* -------------------------------------------------------------------- *)
+(*
+  fold_left overshadow lam_var + referencing init:
+  fold_left [1;2]
+    init=0
+    (acc:(int*int)) ->
+      let acc=999 in
+        fst(acc) + snd(acc)
+*)
 let%expect_test "test_fold_left" =
   let coll = cons (int 1) (cons (int 2) (nil int_ty)) in
   let init_expr = int 0 in
@@ -3382,12 +3570,14 @@ let%expect_test "test_fold_left" =
       PUSH (list int) { 1 ; 2 } ;
       ITER { DROP 2 ; PUSH int 999 ; UNPAIR ; ADD } } |}]
 
+(*
+  let outside=7 in
+    fold_left [1;2;3] init=0
+      (acc,x) ->
+        let x = fst(acc) + outside in
+          x + x
+*)
 let%expect_test "fold_left overshadow inside body" =
-  (*
-    let outside=7 in
-    fold_left [1,2,3] init=0
-      (acc,x)-> let x=acc+outside in x + x
-  *)
   let coll = cons (int 1) (cons (int 2) (cons (int 3) (nil int_ty))) in
   let fold_body =
     let_in
@@ -3493,12 +3683,13 @@ let%expect_test "fold_left overshadow inside body" =
       SWAP ;
       DROP } |}]
 
+(*
+  let outside=5 in
+    fold_left [1;2] init=0
+      (acc,x) ->
+        (fst(acc) + outside) + snd(acc)
+*)
 let%expect_test "fold_left referencing outside var" =
-  (*
-    let outside=5 in
-    fold_left [1,2] init=0
-      (acc,x)-> (fst(acc) + outside) + snd(acc)
-  *)
   let coll = cons (int 1) (cons (int 2) (nil int_ty)) in
   let fold_body =
     add
@@ -3590,9 +3781,15 @@ let%expect_test "fold_left referencing outside var" =
       SWAP ;
       DROP } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 21. FOLD_RIGHT overshadow lam_var + referencing outer var           *)
-(* -------------------------------------------------------------------- *)
+(*
+  fold_right overshadow lam_var + referencing outer var:
+  let unused=666 in
+    fold_right [1;2]
+      init=0
+      (acc:(int*int)) ->
+        let acc=999 in
+          snd(acc) - fst(acc)
+*)
 let%expect_test "test_fold_right" =
   let coll = cons (int 1) (cons (int 2) (nil int_ty)) in
   let init_expr = int 0 in
@@ -3690,9 +3887,11 @@ let%expect_test "test_fold_right" =
       ITER { CONS } ;
       ITER { DROP 2 ; PUSH int 999 ; UNPAIR ; SWAP ; SUB } } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 22. LET_TUPLE_IN overshadow many components, referencing only some   *)
-(* -------------------------------------------------------------------- *)
+(*
+  let_tuple_in overshadow many components, referencing only some:
+  let_tuple_in [a,b,a] = (1,2,3) in
+    a + b
+*)
 let%expect_test "test_let_tuple_in" =
   let triple =
     tuple
@@ -3748,13 +3947,13 @@ let%expect_test "test_let_tuple_in" =
     Optimised:
     { PUSH int 3 ; PUSH int 2 ; PUSH int 1 ; DIG 2 ; DROP ; ADD } |}]
 
-let%expect_test "let_tuple_in referencing multiple times, plus an unused" =
-  (*
-    let triple=(1,2,3)
+(*
+  let triple = (1,2,3) in
     let_tuple_in [a,b,c] = triple in
       let unused=999 in
-      a + b + c
-  *)
+        a + b + c
+*)
+let%expect_test "let_tuple_in referencing multiple times, plus an unused" =
   let triple_expr =
     tuple
       (Row.Node [ Row.Leaf (None, int 1); Row.Leaf (None, int 2); Row.Leaf (None, int 3) ])
@@ -3843,9 +4042,12 @@ let%expect_test "let_tuple_in referencing multiple times, plus an unused" =
     Optimised:
     { PUSH int 3 ; PUSH int 2 ; PUSH int 1 ; DUG 2 ; ADD ; ADD } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 23. TUPLE referencing multiple overshadow variables                 *)
-(* -------------------------------------------------------------------- *)
+(*
+  tuple referencing multiple overshadow variables:
+  let unused=999 in
+    ( let x=10 in x,
+      unused )
+*)
 let%expect_test "test_tuple" =
   let expr =
     let_in (var "unused") ~rhs:(int 999) ~in_:
@@ -3889,9 +4091,11 @@ let%expect_test "test_tuple" =
     Optimised:
     { PUSH int 999 ; PUSH int 10 ; PAIR } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 24. PROJ overshadow referencing outer var + partial usage           *)
-(* -------------------------------------------------------------------- *)
+(* 
+  proj overshadow referencing outer var + partial usage:
+  let alpha=999 in
+    (alpha, 999, 123).[0]
+*)
 let%expect_test "test_proj" =
   let triple =
     let_in (var "alpha") ~rhs:(int 999) ~in_:
@@ -3935,9 +4139,11 @@ let%expect_test "test_proj" =
     Optimised:
     { PUSH int 999 ; PUSH int 123 ; PUSH int 999 ; DIG 2 ; PAIR 3 ; CAR } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 25. UPDATE overshadow with let_in on update value                   *)
-(* -------------------------------------------------------------------- *)
+(*
+  update overshadow with let_in on update value:
+  update (10,20) index=1 with
+    let u=999 in u
+*)
 let%expect_test "test_update" =
   let pair_expr = tuple (Row.Node [ Row.Leaf (None, int 10); Row.Leaf (None, int 20) ]) in
   let upd_expr = let_in (var "u") ~rhs:(int 999) ~in_:(variable (var "u") int_ty) in
@@ -3981,11 +4187,12 @@ let%expect_test "test_update" =
     Optimised:
     { PUSH int 20 ; PUSH int 10 ; PAIR ; PUSH int 999 ; UPDATE 2 } |}]
 
+(*
+  let outsideU=100 in
+    update (10,20) index=1 with
+      let tmp=9 in tmp + outsideU
+*)
 let%expect_test "update_tuple referencing multiple outside vars in update" =
-  (*
-     let base= (10,20)
-     update base component=1 with let tmp=9 in tmp + outside
-  *)
   let pair_expr = tuple (Row.Node [ Row.Leaf (None, int 10); Row.Leaf (None, int 20) ]) in
   let upd_expr =
     let_in
@@ -4062,9 +4269,6 @@ let%expect_test "update_tuple referencing multiple outside vars in update" =
       ADD ;
       UPDATE 2 } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 26. RAW_MICHELSON overshadow in args                                *)
-(* -------------------------------------------------------------------- *)
 module MA = Michelson.Ast
 
 let push_int n =
@@ -4076,6 +4280,14 @@ let push_int n =
       ]
     , [] )
 
+(*
+  RAW_MICHELSON overshadow in args 
+  let x=10 in
+    raw_michelson { PUSH int 42 } [
+      let unusedR=7 in unusedR,
+      x
+    ] : int
+*)
 let%expect_test "test_raw_michelson" =
   let code_ast =
     Tezos_micheline.Micheline.Seq (Ast_builder.Dummy_range.v, [ push_int 42 ])
@@ -4118,13 +4330,13 @@ let%expect_test "test_raw_michelson" =
     Optimised:
     { PUSH int 10 ; PUSH int 7 ; PUSH int 42 } |}]
 
+(*
+  raw_michelson { PUSH int 42 } [
+    let x=10 in x,
+    let x=999 in x
+  ] : int
+*)
 let%expect_test "raw_michelson overshadow multiple args" =
-  (*
-    raw_michelson {PUSH int 42} [
-      let x=10 in x,
-      let x=999 in x
-    ] int
-  *)
   let code_ast =
     Tezos_micheline.Micheline.Seq (Ast_builder.Dummy_range.v, [ push_int 42 ])
   in
@@ -4164,9 +4376,23 @@ let%expect_test "raw_michelson overshadow multiple args" =
     Optimised:
     { PUSH int 999 ; PUSH int 10 ; PUSH int 42 } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 27. CREATE_CONTRACT overshadow code var, referencing multiple unused *)
-(* -------------------------------------------------------------------- *)
+(*
+  CREATE_CONTRACT overshadow code var, referencing multiple unused:
+  let args=(1,2) in
+    let bal=100mutez in
+      let del=None in
+        let unusedCC="no use" in
+          create_contract
+            storage=nat
+            code = fun(args:(nat*nat)) ->
+              let (p,s)=args in
+                p + s
+            delegate=del
+            initial_balance=bal
+            initial_storage=
+              let args=99 in
+                100
+*)
 let%expect_test "test_create_contract" =
   let param_storage_ty = mk_tuple_ty [ nat_ty; nat_ty ] in
   let code_body =
@@ -4300,9 +4526,13 @@ let%expect_test "test_create_contract" =
         { parameter nat ; storage nat ; code { SWAP ; DROP ; UNPAIR ; ADD } } ;
       PAIR } |}]
 
-(* -------------------------------------------------------------------- *)
-(* 28. GLOBAL_CONSTANT overshadow multiple arguments                   *)
-(* -------------------------------------------------------------------- *)
+(*  
+  GLOBAL_CONSTANT overshadow multiple arguments:
+  global_constant "SomeGlobalHash" [
+    let x=1 in x,
+    let x=99 in x
+  ] : int
+*)
 let%expect_test "test_global_constant" =
   let arg1 = let_in (var "x") ~rhs:(int 1) ~in_:(variable (var "x") int_ty) in
   let arg2 = let_in (var "x") ~rhs:(int 99) ~in_:(variable (var "x") int_ty) in
