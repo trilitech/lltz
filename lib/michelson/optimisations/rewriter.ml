@@ -1,7 +1,6 @@
 module Tezos_micheline = Tezos_micheline
 module Michelson = Michelson
 module Oasis_core = Oasis_core
-module Tezos_utils = Tezos_utils
 module If_suffix_rewriter = If_suffix_rewriter
 open Core
 
@@ -57,6 +56,14 @@ let rec strip_annotations (x : (unit, Michelson.Ast.Prim.t) Tezos_micheline.Mich
       | _ -> None
   in
 
+  let rec strip_annots = 
+  let open Tezos_micheline.Micheline in
+  function
+  | Seq (l, s) -> Seq (l, List.map ~f:strip_annots s)
+  | Prim (l, p, lst, _) -> Prim (l, p, List.map ~f:strip_annots lst, [])
+  | x -> x
+  in
+
   match x with
   | Seq (l, args) ->
     let args = List.map ~f:strip_annotations args in
@@ -66,7 +73,7 @@ let rec strip_annotations (x : (unit, Michelson.Ast.Prim.t) Tezos_micheline.Mich
     | Some n ->
       let type_args, args = List.split_n args n in
       (* strip annots from type args *)
-      let type_args = List.map ~f:Tezos_utils.Michelson.strip_annots type_args in
+      let type_args = List.map ~f:strip_annots type_args in
       (* recur into remaining args *)
       let args = List.map ~f:strip_annotations args in
       Prim (l, p, type_args @ args, annot)
