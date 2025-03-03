@@ -1,3 +1,0 @@
-(ignored_subdirs
-  (tezos-ligo grace tezos_utils)
-)
