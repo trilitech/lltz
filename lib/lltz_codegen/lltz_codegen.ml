@@ -159,8 +159,8 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Unit -> unit
   | Car -> car
   | Cdr -> cdr
-  | Left (opt1, opt2, ty) -> left (convert_type ty)
-  | Right (opt1, opt2, ty) -> right (convert_type ty)
+  | Left (_, _, ty) -> left (convert_type ty)
+  | Right (_, _, ty) -> right (convert_type ty)
   | Some -> some
   | Eq -> eq
   | Abs -> abs
@@ -178,7 +178,7 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Size -> size
   | Address -> address
   | Implicit_account -> implicit_account
-  | Contract (opt, ty) -> contract (convert_type ty)
+  | Contract (annot, ty) -> contract ~annot (convert_type ty)
   | Pack -> pack
   | Unpack ty -> unpack (convert_type ty)
   | Hash_key -> hash_key
@@ -194,7 +194,7 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Voting_power -> voting_power
   | Get_n n -> get_n n
   | Cast ty -> cast (convert_type ty)
-  | Rename opt -> failwith (* Instruction does not exist. *)
+  | Rename _ -> failwith (* Instruction does not exist. *)
   | Emit (opt, ty_opt) -> emit opt (Option.map ~f:convert_type ty_opt)
   | Failwith -> assert false (* Resolved in compile_prim *)
   | Never -> assert false (* Resolved in compile_prim *)
@@ -236,38 +236,35 @@ let rec compile  : LLTZ.E.t -> t =
     seq
     [ (match expr.desc with
        | Variable (Var name) -> compile_variable name expr.type_ expr.annotations
-       | Let_in { let_var = Var var; rhs; in_ } -> compile_let_in expr
-       | Lambda { lam_var = Var var, lam_var_type; body } ->
-         compile_lambda expr
-       | Lambda_rec
-           { mu_var = Var mu, mu_type; lambda = {lam_var = Var var, lam_var_type; body} } ->
-         compile_lambda_rec expr
+       | Let_in { let_var = Var _; _; } -> compile_let_in expr
+       | Lambda _ -> compile_lambda expr
+       | Lambda_rec _ -> compile_lambda_rec expr
        | App { abs; arg } -> compile_app abs arg
        | Const constant -> compile_const constant
        | Prim (primitive, args) -> compile_prim primitive args
-       | Let_mut_in { let_var = Mut_var var; rhs; in_ } -> compile_mut_let_in expr
+       | Let_mut_in _ -> compile_mut_let_in expr
        | Deref (Mut_var var) -> compile_deref var expr.type_ expr.annotations
-       | Assign (Mut_var var, value) -> compile_assign expr
+       | Assign (Mut_var _, _) -> compile_assign expr
        | If_bool { condition; if_true; if_false } ->
          compile_if_bool condition if_true if_false
-       | If_none { subject; if_none; if_some = {lam_var = Var var, var_type; body = some} } ->
+       | If_none { subject; if_none; if_some = {lam_var = Var var, _; body = some} } ->
          compile_if_none subject if_none (var, some)
-       | If_cons { subject; if_empty; if_nonempty = { lam_var1 = Var hd, var1_ty; lam_var2 = Var tl, var2_ty; body =nonempty }} ->
+       | If_cons { subject; if_empty; if_nonempty = { lam_var1 = Var hd, _; lam_var2 = Var tl, _; body =nonempty }} ->
          compile_if_cons subject if_empty (hd, tl, nonempty)
-       | If_left { subject; if_left = {lam_var = Var left, left_ty; body =l}; if_right = {lam_var = Var right, right_ty; body = r} } ->
+       | If_left { subject; if_left = {lam_var = Var left, _; body =l}; if_right = {lam_var = Var right, _; body = r} } ->
          compile_if_left subject (left, l) (right, r)
        | While { cond; body } -> compile_while cond body
-       | While_left { cond; body = {lam_var = Var var, var_ty; body=body_lambda} } -> compile_while_left cond var body_lambda expr.type_
+       | While_left { cond; body = {lam_var = Var var, _; body=body_lambda} } -> compile_while_left cond var body_lambda expr.type_
        | For { index = Mut_var var; init; cond; update; body } ->
          compile_for var init cond update body
-       | For_each { collection; body = {lam_var = Var var, var_ty; body = lambda_body} } ->
+       | For_each { collection; body = {lam_var = Var var, _; body = lambda_body} } ->
          compile_for_each collection var lambda_body
-       | Map { collection; map = {lam_var = Var var, var_ty; body=lam_body} } -> compile_map collection var lam_body
-       | Fold_left { collection; init = init_body; fold = {lam_var = Var var, var_ty; body = fold_body} } ->
+       | Map { collection; map = {lam_var = Var var, _; body=lam_body} } -> compile_map collection var lam_body
+       | Fold_left { collection; init = init_body; fold = {lam_var = Var var, _; body = fold_body} } ->
          compile_fold_left collection init_body var fold_body
-       | Fold_right { collection; init = init_body; fold = {lam_var = Var var, var_ty; body = fold_body} }
+       | Fold_right { collection; init = init_body; fold = {lam_var = Var var, _; body = fold_body} }
          -> compile_fold_right collection init_body var fold_body
-       | Let_tuple_in { components; rhs; in_ } -> compile_let_tuple_in expr
+       | Let_tuple_in _-> compile_let_tuple_in expr
        | Tuple row -> compile_tuple row
        | Proj (tuple, path) ->compile_proj tuple path
        | Update { tuple; component; update } -> compile_update tuple component update
@@ -291,8 +288,7 @@ let rec compile  : LLTZ.E.t -> t =
 
 and unused_set (e: LLTZ.E.t) = e.annotations.remove_never_used_vars
 
-and compile_contract  (input_var: string) (input_ty: LLTZ.T.t) (code: LLTZ.E.t) =
-  let input_ty = convert_type input_ty in
+and compile_contract  (input_var: string) (code: LLTZ.E.t) =
   let code_instr = compile  code in
   let unused_set = if (Set.mem code.annotations.last_used_vars input_var) 
     then unused_set code 
@@ -303,26 +299,30 @@ and compile_contract  (input_var: string) (input_ty: LLTZ.T.t) (code: LLTZ.E.t) 
 (* Compile a variable by duplicating its value on the stack. *)
 and compile_variable name type_ annotations = 
   trace ~flag:(String.append "var " name) (
-    Slot.dup_or_dig (`Ident name) (LLTZ.T.is_duppable type_ && (Pervasives.not (Set.mem annotations.last_used_vars name)))
+    Slot.dup_or_dig (`Ident name) (LLTZ.T.is_duppable type_ && (Stdlib.not (Set.mem annotations.last_used_vars name)))
   )
 
 (* Compile a let-in expression by compiling the right-hand side, then binding the result to the variable in the inner expression. *)
 and compile_let_in expr =
-  let Let_in { let_var = Var var; rhs; in_ } = expr.desc in
-  if (Set.mem expr.annotations.remove_never_used_vars var)
-  then
-    trace ~flag: (String.append "let in " var) (seq [ compile  rhs; drop 1; compile  in_])
-  else
-    trace ~flag: (String.append "let in " var) (seq [ compile  rhs; Slot.let_ (`Ident var) ~unused_set:(unused_set expr) ~in_:(compile  in_);])
+  match expr.desc with
+  | Let_in { let_var = Var var; rhs; in_ } ->
+    if (Set.mem expr.annotations.remove_never_used_vars var)
+    then
+      trace ~flag: (String.append "let in " var) (seq [ compile  rhs; drop 1; compile  in_])
+    else
+      trace ~flag: (String.append "let in " var) (seq [ compile  rhs; Slot.let_ (`Ident var) ~unused_set:(unused_set expr) ~in_:(compile  in_);])
+  | _ -> assert false
 
 (* Compile a mutable let-in expression by compiling the right-hand side, then binding the result to the mutable variable in the inner expression. *)
 and compile_mut_let_in expr =
-  let Let_mut_in { let_var = Mut_var var; rhs; in_ } = expr.desc in
-  if (Set.mem expr.annotations.remove_never_used_vars var)
-  then
-    trace ~flag: (String.append "let_mut in " var) (seq [ compile  rhs; drop 1; compile  in_])
-  else
-    trace ~flag: (String.append "let_mut in " var) (seq [ compile  rhs; Slot.let_ (`Ident var) ~unused_set:(unused_set expr) ~in_:(compile  in_) ])
+  match expr.desc with
+  | Let_mut_in { let_var = Mut_var var; rhs; in_ } ->
+    if (Set.mem expr.annotations.remove_never_used_vars var)
+    then
+      trace ~flag: (String.append "let_mut in " var) (seq [ compile  rhs; drop 1; compile  in_])
+    else
+      trace ~flag: (String.append "let_mut in " var) (seq [ compile  rhs; Slot.let_ (`Ident var) ~unused_set:(unused_set expr) ~in_:(compile  in_) ])
+  | _ -> assert false
 
 (* Compile a constant by pushing its value onto the stack. *)
 and compile_const constant =
@@ -359,17 +359,19 @@ and compile_prim primitive args =
 (* Compile a dereference by duplicating the value of the mutable variable on the stack. *)
 and compile_deref name type_ annotations = 
   trace ~flag:(String.append "mut_var " name)  (
-    Slot.dup_or_dig (`Ident name) ((LLTZ.T.is_duppable type_) && (Pervasives.not (Set.mem annotations.last_used_vars name)))
+    Slot.dup_or_dig (`Ident name) ((LLTZ.T.is_duppable type_) && (Stdlib.not (Set.mem annotations.last_used_vars name)))
   )
 
 (* Compile an assignment by compiling the value to be assigned, then assigning it to the slot corresponding to the mutable variable. *)
 and compile_assign expr = (*TODO merge with last used opt, do also for lets*)
-  let Assign (Mut_var var, value) = expr.desc in
-  if ((Set.mem expr.annotations.last_used_vars var) || 
-    (Set.mem expr.annotations.remove_never_used_vars var)) then
-    trace ~flag:"assign" (seq [  compile  value; Slot.collect (`Ident var); drop 1; unit ])
-  else
-    trace ~flag:"assign" (seq [ trace (compile  value); Slot.set (`Ident var); unit])
+  match expr.desc with
+  | Assign (Mut_var var, value) ->
+    if ((Set.mem expr.annotations.last_used_vars var) || 
+      (Set.mem expr.annotations.remove_never_used_vars var)) then
+      trace ~flag:"assign" (seq [  compile  value; Slot.collect (`Ident var); drop 1; unit ])
+    else
+      trace ~flag:"assign" (seq [ trace (compile  value); Slot.set (`Ident var); unit])
+  | _ -> assert false
 
 and remove_unused (e : LLTZ.E.t) =
   let unused = e.annotations.remove_never_used_vars in
@@ -442,14 +444,14 @@ and compile_tuple row =
 
 (* Compile a projection expression by compiling the tuple and then getting the nth element. *)
 and compile_proj tuple path =
-  let _, gets, tuple_expanded_instr = expand_tuple tuple path false in
+  let _, _, tuple_expanded_instr = expand_tuple tuple path false in
   trace ~flag:"proj" 
     (seq
        ([ trace ~flag:"proj expansion" tuple_expanded_instr ]))
 
 (* Compile an update expression by compiling the tuple row, getting the nth element, compiling the update value, and combining the values back together into tuple. *)
 and compile_update tuple component update =
-  let lengths, gets, tuple_expanded_instr = expand_tuple tuple component true in
+  let lengths, gets, _ = expand_tuple tuple component true in
   let updates =
     List.rev
       (match component with
@@ -504,64 +506,68 @@ and expand_tuple tuple path keep_path =
 
 (* Compile let-tuple-in expression by compiling the right-hand side with the tuple, then binding the components to the variables in the inner expression. *)
 and compile_let_tuple_in expr =
-  let Let_tuple_in { components; rhs; in_ } = expr.desc in
-  let rhs_instr = compile  rhs in
-  let new_env = List.map components ~f:(fun (Var var) -> `Ident var) in
-  trace ~flag: "let tuple in" (seq
-    [ rhs_instr
-    ; unpair_n (List.length components)
-    ; trace (Slot.let_all new_env ~unused_set:(unused_set expr) ~in_:(seq [(compile  in_)]))])
+  match expr.desc with
+  | Let_tuple_in { components; rhs; in_ } ->
+    let rhs_instr = compile  rhs in
+    let new_env = List.map components ~f:(fun (Var var) -> `Ident var) in
+    trace ~flag: "let tuple in" (seq
+      [ rhs_instr
+      ; unpair_n (List.length components)
+      ; trace (Slot.let_all new_env ~unused_set:(unused_set expr) ~in_:(seq [(compile  in_)]))])
+  | _ -> assert false
 
 (* Compile lambda expression by compiling the body and creating a lambda instruction. *)
 and compile_lambda expr =
-  let Lambda { lam_var = Var var, lam_var_type; body } = expr.desc in
+  match expr.desc with
+  | Lambda { lam_var = Var var, lam_var_type; body } ->
+    let lam_var = var, convert_type lam_var_type in
+    let return_type = convert_type body.type_ in
 
-  let lam_var = var, convert_type lam_var_type in
-  let return_type = convert_type body.type_ in
+    let environment =
+      LLTZ.Free_vars.free_vars_with_types expr
+    in
 
-  let environment =
-    LLTZ.Free_vars.free_vars_with_types expr
-  in
+    let partial_apps = seq (
+      List.map (environment |> Map.to_alist) 
+      ~f:(fun (ident, var_ty) -> 
+        seq [ 
+          Slot.dup_or_dig (`Ident ident) (LLTZ.T.is_duppable var_ty && (Stdlib.not (Set.mem expr.annotations.last_used_vars ident))); 
+          apply ]
+        )
+      ) in
 
-  let partial_apps = seq (
-    List.map (environment |> Map.to_alist) 
-    ~f:(fun (ident, var_ty) -> 
-      seq [ 
-        Slot.dup_or_dig (`Ident ident) (LLTZ.T.is_duppable var_ty && (Pervasives.not (Set.mem expr.annotations.last_used_vars ident))); 
-        apply ]
+    seq
+      ([ lambda ~environment:(environment |> Map.map ~f:convert_type |> Map.to_alist) ~lam_var ~return_type (compile  body) ]
+      @ [partial_apps]
       )
-    ) in
-
-  seq
-    ([ lambda ~environment:(environment |> Map.map ~f:convert_type |> Map.to_alist) ~lam_var ~return_type (compile  body) ]
-    @ [partial_apps]
-    )
+  | _ -> assert false
 
 (* Compile lambda-rec expression by compiling the body and creating a lambda-rec instruction. *)
 and compile_lambda_rec expr =
-  let Lambda_rec { mu_var = Var mu, mu_type; lambda = {lam_var = Var var, lam_var_type; body} } = expr.desc in
+  match expr.desc with
+  | Lambda_rec { mu_var = Var mu, _; lambda = {lam_var = Var var, lam_var_type; body} } ->
+    let lam_var = var, convert_type lam_var_type in
+    let return_type = convert_type body.type_ in
 
-  let lam_var = var, convert_type lam_var_type in
-  let return_type = convert_type body.type_ in
+    let environment =
+      LLTZ.Free_vars.free_vars_with_types expr
+    in
 
-  let environment =
-    LLTZ.Free_vars.free_vars_with_types expr
-  in
+    let partial_apps = seq (
+      List.map (environment |> Map.to_alist) 
+      ~f:(fun (ident, var_ty) -> 
+        seq [ 
+          Slot.dup_or_dig (`Ident ident) (LLTZ.T.is_duppable var_ty && (Stdlib.not (Set.mem expr.annotations.last_used_vars ident))); 
+          apply ]
+        )
+      ) 
+    in
 
-  let partial_apps = seq (
-    List.map (environment |> Map.to_alist) 
-    ~f:(fun (ident, var_ty) -> 
-      seq [ 
-        Slot.dup_or_dig (`Ident ident) (LLTZ.T.is_duppable var_ty && (Pervasives.not (Set.mem expr.annotations.last_used_vars ident))); 
-        apply ]
+    seq
+      ([ lambda_rec ~environment:(environment |> Map.map ~f:convert_type |> Map.to_alist) ~lam_var ~mu ~return_type ~partial_apps (compile  body) ]
+      @ [partial_apps]
       )
-    ) 
-  in
-
-  seq
-    ([ lambda_rec ~environment:(environment |> Map.map ~f:convert_type |> Map.to_alist) ~lam_var ~mu ~return_type ~partial_apps (compile  body) ]
-    @ [partial_apps]
-    )
+  | _ -> assert false
 
 (* Compile an application by compiling a lambda and argument, then applying the EXEC instruction. *)
 and compile_app abs arg =
@@ -679,7 +685,7 @@ and compile_inj context expr =
        (
         match right_instrs_types with
         | [] -> []
-        | hd :: tl ->
+        | _ :: tl ->
           List.map (List.rev tl) ~f:(fun ty -> right ty)
        )
       ))
@@ -738,9 +744,9 @@ let compile_to_micheline  ?(optimize = true) ?(strip_annots = true) expr stack=
   else
     micheline
 
-let compile_contract_to_micheline  ?(optimize = true) ?(strip_annots = true) input_var input_ty expr stack=
+let compile_contract_to_micheline  ?(optimize = true) ?(strip_annots = true) input_var expr stack=
   let expr = Last_vars.compute_last_vars expr in
-  let compiled = compile_contract  input_var input_ty expr in
+  let compiled = compile_contract  input_var expr in
   let micheline = Michelson.Ast.seq (compiled stack).instructions in
 
   if optimize then
