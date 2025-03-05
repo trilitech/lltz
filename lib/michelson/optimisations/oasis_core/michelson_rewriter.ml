@@ -1041,7 +1041,7 @@ let main (expr : instr_list) : (instr_list * instr_list) option =
   | MI1 Neg :: MIdig 1 :: MI2 Add :: rest -> [MI2 Sub] $ rest
   | MI1 Neg :: MIdig 1 :: MI2 Sub :: rest -> [MI2 Add] $ rest
   (* Pushing the same thing twice (will be unfolded again): *)
-  | MIpush (t, l) :: MIdup 1 :: rest -> [MIpush (t, l); MIpush (t, l)] $ rest
+  (*| MIpush (t, l) :: MIdup 1 :: rest -> [MIpush (t, l); MIpush (t, l)] $ rest*)
   | MIif (x, y) :: rest -> cond_check_last (fun x y -> MIif (x, y)) x y rest
   | MIif_none (x, y) :: rest ->
       cond_check_last (fun x y -> MIif_none (x, y)) x y rest
@@ -1095,6 +1095,11 @@ let lltz_specific (expr : instr_list) : (instr_list * instr_list) option =
     [push_instr t x; MI1 Some_] $ rest
   | MIpush ({mt = MT1 (Option, t)}, {literal = None_}) :: rest ->
     [MI0 (None_ t)] $ rest
+  (*push list*)
+  | MIpush ({mt = MT1 (List, t)}, {literal = Seq xs}) :: rest when List.length xs = 1 ->
+    [MI0 (Nil t)] @ List.concat (List.map ~f:(fun x -> [push_instr t x; MI2 Cons] ) (List.rev xs)) $ rest
+  | MIlambda ({mt = MT0 Int}, {mt = MT0 Int}, {instr = MIConstant {literal = String hash}}) :: rest ->
+    [MIpush (mt_lambda mt_int mt_int, MLiteral.constant hash)] $ rest
   | MIpush ({mt = MT2 (Or {annot_left; annot_right}, tl, tr)}, {literal = Left x}) :: rest ->
     [push_instr tl x; MI1 (Left (annot_left, annot_right, tr))] $ rest
   | MIpush ({mt = MT2 (Or {annot_left; annot_right}, tl, tr)}, {literal = Right x}) :: rest ->
