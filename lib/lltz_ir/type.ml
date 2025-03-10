@@ -46,41 +46,32 @@ module T = struct
     | Tx_rollup_l2_address
   [@@deriving sexp, equal, compare, traverse]
 
-  let rec is_duppable (t:t) =
+  let rec is_duppable (t : t) =
     match t.desc with
     | Ticket _ -> false
-    | Tuple row | Or row ->
-      is_duppable_row row
-    | Option t1 | List t1 | Set t1 ->
-      is_duppable t1
-    | Map (t1, t2) | Big_map (t1, t2) ->
-      is_duppable t1 && is_duppable t2
+    | Tuple row | Or row -> is_duppable_row row
+    | Option t1 | List t1 | Set t1 -> is_duppable t1
+    | Map (t1, t2) | Big_map (t1, t2) -> is_duppable t1 && is_duppable t2
     (* For primitive types and types without subtypes *)
     | _ -> true
-    
+
   and is_duppable_row row =
     match row with
-    | Node ts ->
-        List.for_all ts is_duppable_row
-    | Leaf (_, x) ->
-        is_duppable x
+    | Node ts -> List.for_all ts ~f:is_duppable_row
+    | Leaf (_, x) -> is_duppable x
 
   (* Check equality of types without considering ranges and optimization annotations *)
-  and equal_types t1 t2 = 
+  and equal_types t1 t2 =
     match t1.desc, t2.desc with
-    | Tuple row1, Tuple row2
-    | Or row1, Or row2 ->
-      Row.equal_types equal_types row1 row2
+    | Tuple row1, Tuple row2 | Or row1, Or row2 -> Row.equal_types equal_types row1 row2
     | Option t1, Option t2
     | List t1, List t2
     | Set t1, Set t2
     | Contract t1, Contract t2
-    | Ticket t1, Ticket t2 ->
-      equal_types t1 t2
+    | Ticket t1, Ticket t2 -> equal_types t1 t2
     | Function (t1, t2), Function (t1', t2')
     | Map (t1, t2), Map (t1', t2')
-    | Big_map (t1, t2), Big_map (t1', t2') ->
-      equal_types t1 t1' && equal_types t2 t2'
+    | Big_map (t1, t2), Big_map (t1', t2') -> equal_types t1 t1' && equal_types t2 t2'
     | Unit, Unit
     | Bool, Bool
     | Nat, Nat
@@ -94,19 +85,18 @@ module T = struct
     | Keys, Keys
     | Key_hash, Key_hash
     | Signature, Signature
-    | Operation, Operation ->
-      true
-    | Sapling_state {memo = n1}, Sapling_state {memo = n2} -> n1 = n2
-    | Sapling_transaction {memo = n1}, Sapling_transaction {memo = n2} -> n1 = n2
+    | Operation, Operation -> true
+    | Sapling_state { memo = n1 }, Sapling_state { memo = n2 } -> n1 = n2
+    | Sapling_transaction { memo = n1 }, Sapling_transaction { memo = n2 } -> n1 = n2
     | Never, Never
     | Bls12_381_g1, Bls12_381_g1
     | Bls12_381_g2, Bls12_381_g2
     | Bls12_381_fr, Bls12_381_fr
     | Chest_key, Chest_key
     | Chest, Chest
-    | Tx_rollup_l2_address, Tx_rollup_l2_address ->
-      true
+    | Tx_rollup_l2_address, Tx_rollup_l2_address -> true
     | _ -> false
+  ;;
 end
 
 include T

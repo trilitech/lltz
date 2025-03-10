@@ -18,3 +18,8 @@
    ppx_deriving.fold
    ppx_sexp_conv
    ppx_yojson_conv)))
+
+(env
+ (dev
+  (flags
+   (:standard -w -9))))

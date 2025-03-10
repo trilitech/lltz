@@ -1,5 +1,4 @@
 open Core
-
 include String
 
 let create =
@@ -7,3 +6,4 @@ let create =
   fun ?(prefix = "_") () ->
     Int.incr next;
     prefix ^ Int.to_string !next
+;;
