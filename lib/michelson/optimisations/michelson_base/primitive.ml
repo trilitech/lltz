@@ -17,10 +17,10 @@ type 'ty prim0 =
   | Empty_set of 'ty
   | Nil of 'ty
   | None_ of 'ty
-  | Sapling_empty_state of {memo : int}
+  | Sapling_empty_state of { memo : int }
   | Unit_
   | Min_block_time
-[@@deriving eq, ord, show {with_path = false}, map, fold, sexp_of]
+[@@deriving eq, ord, show { with_path = false }, map, fold, sexp_of]
 
 type 'ty prim1 =
   | Car
@@ -63,12 +63,12 @@ type 'ty prim1 =
   | Cast of 'ty
   | Rename of string option
   | Emit of string option * 'ty option
-[@@deriving eq, ord, show {with_path = false}, map, sexp_of]
+[@@deriving eq, ord, show { with_path = false }, map, sexp_of]
 
 type prim1_fail =
   | Failwith
   | Never
-[@@deriving eq, ord, show {with_path = false}, sexp_of]
+[@@deriving eq, ord, show { with_path = false }, sexp_of]
 
 type 'ty prim2 =
   | Pair of string option * string option
@@ -95,7 +95,7 @@ type 'ty prim2 =
   | Split_ticket
   | Updaten of int
   | View of string (* view name *) * 'ty (* return type *)
-[@@deriving eq, ord, show {with_path = false}, map, sexp_of]
+[@@deriving eq, ord, show { with_path = false }, map, sexp_of]
 
 type prim3 =
   | Slice
@@ -104,4 +104,4 @@ type prim3 =
   | Transfer_tokens
   | Check_signature
   | Open_chest
-[@@deriving eq, ord, show {with_path = false}, sexp_of]
+[@@deriving eq, ord, show { with_path = false }, sexp_of]
