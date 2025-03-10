@@ -1,4 +1,4 @@
-(lang dune 3.7)
+(lang dune 3.8)
 
 (name lltz)
 
@@ -20,9 +20,15 @@
  (depends
   (ocaml
    (= 4.14.2))
+   ptime
   dune
   core
   ppx_jane
-  tezos-micheline
+  ppx_yojson_conv
+  (linol
+   (= 0.5))
+  (linol-lwt
+   (= 0.5))
+  digestif
   ppxlib
   grace))
