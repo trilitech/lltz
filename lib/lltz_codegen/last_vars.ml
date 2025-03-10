@@ -1,4 +1,3 @@
-open Grace
 open Core
 
 module LLTZ = struct
@@ -8,6 +7,7 @@ module LLTZ = struct
   module P = Lltz_ir.Primitive
   module Dsl = Lltz_ir.Ast_builder.Default
   module Free_vars = Lltz_ir.Free_vars
+  module Annotations = Lltz_ir.Annotations
 end
 
 let rec traverse_row
@@ -132,7 +132,7 @@ let collect_all_vars (expr : LLTZ.E.t) : String.Set.t =
       let acc = traverse_row row acc (fun expr acc -> aux expr acc) in
       acc
     | Proj (tuple, _path) -> aux tuple acc
-    | Update { tuple; component; update } ->
+    | Update { tuple; update; _ } ->
       let acc = aux tuple acc in
       aux update acc
     | Inj (_context, expr) -> aux expr acc
@@ -145,7 +145,7 @@ let collect_all_vars (expr : LLTZ.E.t) : String.Set.t =
           Set.add acc var)
       in
       acc
-    | Raw_michelson { michelson; args } ->
+    | Raw_michelson { args; _ } ->
       List.fold_left ~f:(fun acc arg -> aux arg acc) ~init:acc args
     | Create_contract
         { storage = _storage
@@ -240,8 +240,8 @@ let rec collect_used_vars (expr : LLTZ.E.t) : String.Set.t =
   | Proj (tuple, _) -> collect_used_vars tuple
   | Update { tuple; component = _; update } ->
     Set.union (collect_used_vars tuple) (collect_used_vars update)
-  | Inj (_, e) -> assert false
-  | Match (subject, cases) -> assert false
+  | Inj (_, _) -> assert false
+  | Match (_, _) -> assert false
   | Raw_michelson { michelson = _; args } ->
     List.fold_left
       ~f:(fun acc a -> Set.union acc (collect_used_vars a))
@@ -270,10 +270,10 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       expr', live_set'
     in
     let mk_annots ?(remove_never_used_vars = String.Set.empty) last_used_vars =
-      { expr.annotations with last_used_vars; remove_never_used_vars }
+      LLTZ.Annotations.{ last_used_vars; remove_never_used_vars }
     in
     let process_args args live_set =
-      let args_rev', live_set =
+      let args_rev', _ =
         List.fold_left
           ~f:(fun (args_acc, live_set) arg ->
             let arg', live_set = process_subexpr arg live_set in
@@ -319,12 +319,10 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
     let add_lambda1 (l : LLTZ.E.lambda) acc =
       match LLTZ.E.(l.lam_var) with
       | Var x, _ -> Set.add (add_expr l.body acc) x
-      | _ -> assert false
     in
     let add_lambda2 (l : LLTZ.E.lambda2) acc =
       match LLTZ.E.(l.lam_var1), LLTZ.E.(l.lam_var2) with
       | (Var x1, _), (Var x2, _) -> Set.add (Set.add (add_expr l.body acc) x2) x1
-      | _ -> assert false
     in
     let merge_branch_last_used (e1 : LLTZ.E.t) (e2 : LLTZ.E.t) =
       let to_add1 =
@@ -359,7 +357,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       (* TODO: possibility to further improve in the bodies of loops *)
       let live_set = Set.add live_set x in
       let in_', live_set = process_subexpr in_ live_set in
-      let rhs', live_set = process_subexpr rhs live_set in
+      let rhs', _ = process_subexpr rhs live_set in
       let last_used_vars = Set.add (add_expr rhs' (add_expr in_' String.Set.empty)) x in
       let remove_never_used_vars =
         if Set.mem used_vars x then String.Set.empty else String.Set.singleton x
@@ -370,7 +368,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       }
     | Lambda { lam_var = Var x, lam_var_type; body } ->
       let live_set = Set.add live_set x in
-      let body', live_set = process_subexpr body live_set in
+      let body', _ = process_subexpr body live_set in
       let last_used_vars = Set.add body'.annotations.last_used_vars x in
       { expr with
         desc = Lambda { lam_var = Var x, lam_var_type; body = body' }
@@ -380,10 +378,9 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       let lam_var_name =
         match lambda.lam_var with
         | Var x, _ -> x
-        | _ -> assert false
       in
       let live_set = Set.add (Set.add live_set mu) lam_var_name in
-      let body', live_set = process_subexpr lambda.body live_set in
+      let body', _ = process_subexpr lambda.body live_set in
       let last_used_vars = Set.add (add_lambda1 lambda String.Set.empty) mu in
       let lambda' = { lambda with body = body' } in
       { expr with
@@ -392,7 +389,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       }
     | App { abs; arg } ->
       let abs', live_set = process_subexpr abs live_set in
-      let arg', live_set = process_subexpr arg live_set in
+      let arg', _ = process_subexpr arg live_set in
       let last_used_vars = add_expr abs' (add_expr arg' String.Set.empty) in
       { expr with
         desc = App { abs = abs'; arg = arg' }
@@ -409,7 +406,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
     | Let_mut_in { let_var = Mut_var x; rhs; in_ } ->
       let live_set = Set.add live_set x in
       let in_', live_set = process_subexpr in_ live_set in
-      let rhs', live_set = process_subexpr rhs live_set in
+      let rhs', _ = process_subexpr rhs live_set in
       let last_used_vars = Set.add (add_expr rhs' (add_expr in_' String.Set.empty)) x in
       let remove_never_used_vars =
         if Set.mem used_vars x then String.Set.empty else String.Set.singleton x
@@ -426,7 +423,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       { expr with annotations = mk_annots last_used_vars }
     | Assign (Mut_var x, value) ->
       let is_last_use = Set.mem live_set x in
-      let value', live_set = process_subexpr value live_set in
+      let value', _ = process_subexpr value live_set in
       let last_used_vars = value'.annotations.last_used_vars in
       let last_used_vars =
         if is_last_use then Set.add last_used_vars x else last_used_vars
@@ -442,7 +439,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       let if_false', live_set_left = process_subexpr if_false live_set in
       let if_true', live_set_right = process_subexpr if_true live_set in
       let live_set = Set.inter live_set_left live_set_right in
-      let condition', live_set = process_subexpr condition live_set in
+      let condition', _ = process_subexpr condition live_set in
       let last_used_vars =
         add_expr condition' (add_expr if_true' (add_expr if_false' String.Set.empty))
       in
@@ -456,7 +453,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       let if_none', live_set_none = process_subexpr if_none live_set in
       let if_some', live_set_some = process_lambda1 if_some live_set in
       let live_set = Set.inter live_set_none live_set_some in
-      let subject', live_set = process_subexpr subject live_set in
+      let subject', _ = process_subexpr subject live_set in
       let last_used_vars =
         add_expr subject' (add_expr if_none' (add_lambda1 if_some' String.Set.empty))
       in
@@ -474,7 +471,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       let if_empty', live_set_empty = process_subexpr if_empty live_set in
       let if_nonempty', live_set_nonempty = process_lambda2 if_nonempty live_set in
       let live_set = Set.inter live_set_empty live_set_nonempty in
-      let subject', live_set = process_subexpr subject live_set in
+      let subject', _ = process_subexpr subject live_set in
       let last_used_vars =
         add_expr subject' (add_expr if_empty' (add_lambda2 if_nonempty' String.Set.empty))
       in
@@ -494,7 +491,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       let if_right', live_set_right = process_lambda1 if_right live_set in
       let if_left', live_set_left = process_lambda1 if_left live_set in
       let live_set = Set.inter live_set_left live_set_right in
-      let subject', live_set = process_subexpr subject live_set in
+      let subject', _ = process_subexpr subject live_set in
       let last_used_vars =
         add_expr subject' (add_lambda1 if_left' (add_lambda1 if_right' String.Set.empty))
       in
@@ -512,7 +509,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       }
     | While { cond; body } ->
       let body'', live_set = process_subexpr body live_set in
-      let cond'', live_set = process_subexpr cond live_set in
+      let cond'', _ = process_subexpr cond live_set in
       let last_used_vars = add_expr cond'' (add_expr body'' String.Set.empty) in
       (* Optimizing internal variables only as other can be reused in next cycle*)
       let body', _ = process_subexpr body String.Set.empty in
@@ -523,7 +520,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       }
     | While_left { cond; body } ->
       let body'', live_set = process_lambda1 body live_set in
-      let cond'', live_set = process_subexpr cond live_set in
+      let cond'', _ = process_subexpr cond live_set in
       let last_used_vars = add_expr cond'' (add_lambda1 body'' String.Set.empty) in
       (* Optimizing internal variables only as other can be reused in next cycle. *)
       let body', _ = process_lambda1 body String.Set.empty in
@@ -536,7 +533,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       let body'', live_set = process_subexpr body live_set in
       let update'', live_set = process_subexpr update live_set in
       let cond'', live_set = process_subexpr cond live_set in
-      let init'', live_set = process_subexpr init live_set in
+      let init'', _ = process_subexpr init live_set in
       let last_used_vars =
         Set.add
           (add_expr
@@ -561,7 +558,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       }
     | For_each { collection; body } ->
       let body', live_set = process_lambda1 body live_set in
-      let collection', live_set = process_subexpr collection live_set in
+      let collection', _ = process_subexpr collection live_set in
       let last_used_vars = add_expr collection' (add_lambda1 body' String.Set.empty) in
       let body'', _ = process_lambda1 body String.Set.empty in
       { expr with
@@ -570,7 +567,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       }
     | Map { collection; map } ->
       let map', live_set = process_lambda1 map live_set in
-      let collection', live_set = process_subexpr collection live_set in
+      let collection', _ = process_subexpr collection live_set in
       let last_used_vars = add_expr collection' (add_lambda1 map' String.Set.empty) in
       let map'', _ = process_lambda1 map String.Set.empty in
       { expr with
@@ -580,7 +577,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
     | Fold_left { collection; init; fold } ->
       let fold', live_set = process_lambda1 fold live_set in
       let collection', live_set = process_subexpr collection live_set in
-      let init', live_set = process_subexpr init live_set in
+      let init', _ = process_subexpr init live_set in
       let last_used_vars =
         add_expr collection' (add_expr init' (add_lambda1 fold' String.Set.empty))
       in
@@ -592,7 +589,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
     | Fold_right { collection; init; fold } ->
       let fold', live_set = process_lambda1 fold live_set in
       let collection', live_set = process_subexpr collection live_set in
-      let init', live_set = process_subexpr init live_set in
+      let init', _ = process_subexpr init live_set in
       let last_used_vars =
         add_expr collection' (add_expr init' (add_lambda1 fold' String.Set.empty))
       in
@@ -606,7 +603,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
         List.fold_left ~f:(fun acc (Var x) -> Set.add acc x) ~init:live_set components
       in
       let in_', live_set = process_subexpr in_ live_set in
-      let rhs', live_set = process_subexpr rhs live_set in
+      let rhs', _ = process_subexpr rhs live_set in
       let last_used_vars =
         add_expr
           rhs'
@@ -650,18 +647,18 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       let last_used_vars = Set.diff live_set new_live_set in
       { expr with desc = Tuple row'; annotations = mk_annots last_used_vars }
     | Proj (tuple, path) ->
-      let tuple', live_set = process_subexpr tuple live_set in
+      let tuple', _ = process_subexpr tuple live_set in
       let last_used_vars = tuple'.annotations.last_used_vars in
       { expr with desc = Proj (tuple', path); annotations = mk_annots last_used_vars }
     | Update { tuple; component; update } ->
       let update', live_set = process_subexpr update live_set in
-      let tuple', live_set = process_subexpr tuple live_set in
+      let tuple', _ = process_subexpr tuple live_set in
       let last_used_vars = add_expr tuple' (add_expr update' String.Set.empty) in
       { expr with
         desc = Update { tuple = tuple'; component; update = update' }
       ; annotations = mk_annots last_used_vars
       }
-    | Inj (context, expr_inj) ->
+    | Inj (_, _) ->
       assert false
       (*
          TODO: Will be used once connected to SmartPy
@@ -669,7 +666,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       (*let (expr_inj', live_set) = process_subexpr expr_inj live_set in
       let last_used_vars = expr_inj'.annotations.last_used_vars in
       { expr with desc = Inj (context, expr_inj'); annotations = mk_annots last_used_vars }*)
-    | Match (subject, cases) ->
+    | Match (_, _) ->
       assert false
       (*
          TODO: Will be used once connected to SmartPy
@@ -691,7 +688,7 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
       let code', live_set = process_lambda1 code live_set in
       let delegate', live_set = process_subexpr delegate live_set in
       let initial_balance', live_set = process_subexpr initial_balance live_set in
-      let initial_storage', live_set = process_subexpr initial_storage live_set in
+      let initial_storage', _ = process_subexpr initial_storage live_set in
       let last_used_vars =
         add_expr
           delegate'
@@ -719,7 +716,6 @@ let compute_last_vars (expr : LLTZ.E.t) : LLTZ.E.t =
         desc = Global_constant { hash; args = args' }
       ; annotations = mk_annots last_used_vars
       }
-    | _ -> expr
   in
   let init_live_set = collect_all_vars expr in
   aux expr init_live_set

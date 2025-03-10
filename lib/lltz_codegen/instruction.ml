@@ -62,7 +62,7 @@ let dig_and_keep n stack =
   (* brings element at index n to the top *)
   let stack =
     match rev_prefix n stack with
-    | rev_slots1, nth :: slots2 -> `Value :: List.rev_append rev_slots1 slots2
+    | rev_slots1, _ :: slots2 -> `Value :: List.rev_append rev_slots1 slots2
     | _ ->
       raise_s
         [%message
@@ -716,7 +716,7 @@ let rec micheline_fails
   | Prim (_, I Dip, [ x ], _)
   | Prim (_, I Dip, [ _; x ], _) -> micheline_fails x
   | Prim (_, _, _, _) -> false
-  | Int (_, _) | String (_, _) | Bytes (_, _) | Seq (_, []) -> false
+  | Int (_, _) | String (_, _) | Bytes (_, _) -> false
 ;;
 
 let raw_michelson michelson args stack =

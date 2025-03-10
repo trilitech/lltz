@@ -16,7 +16,7 @@ let unify_annots pref ?tolerant a b =
 let rec unify_types ?tolerant t u =
   let open Utils.Control in
   let unify_types = unify_types ?tolerant in
-  let mk { mt } =
+  let mk { mt; _ } =
     match
       ( unify_annots ?tolerant ":" t.annot_type u.annot_type
       , unify_annots ~tolerant:() "@" t.annot_variable u.annot_variable )
@@ -77,6 +77,7 @@ let type_prim0 = function
   | Nil _ -> assert false
   | None_ _ -> assert false
   | Unit_ -> assert false
+  | Min_block_time -> assert false
 ;;
 
 let type_prim1 = function

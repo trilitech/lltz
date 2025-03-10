@@ -80,7 +80,7 @@ let rewrite_none = None
 let cAr = MIfield [ A ]
 let cDr = MIfield [ D ]
 
-(** {1 Our concrete rule sets} *)
+(* {1 Our concrete rule sets} *)
 
 (** Does the instruction push something on top of the stack, without
     modifying or looking at anything beneath? *)
@@ -143,7 +143,8 @@ let rec may_fail = function
       | Nil _
       | Empty_set _
       | Empty_map _
-      | Empty_bigmap _ )
+      | Empty_bigmap _
+      | Min_block_time )
   | MI1
       ( Car
       | Cdr
@@ -215,7 +216,8 @@ let rec may_fail = function
   | MIcreate_contract _
   | MIconcat1
   | MIconcat2
-  | MIconcat_unresolved -> false
+  | MIconcat_unresolved
+  | MIConstant _ -> false
 ;;
 
 (*
@@ -454,8 +456,8 @@ let dig_dug ~with_comments n =
       let dugs = n + 1 - digs in
       let instrs =
         if digs <= dugs
-        then List.init digs (fun _ -> MIdig n)
-        else List.init dugs (fun _ -> MIdug n)
+        then List.init digs ~f:(fun _ -> MIdig n)
+        else List.init dugs ~f:(fun _ -> MIdug n)
       in
       instrs, rest
   in
@@ -1032,30 +1034,10 @@ let main (expr : instr_list) : (instr_list * instr_list) option =
 ;;
 
 let lltz_specific (expr : instr_list) : (instr_list * instr_list) option =
-  let rec all_dig_k k n xs =
-    match n, xs with
-    | 0, _ -> true
-    | _, MIdig k' :: tl when k' = k -> all_dig_k k (n - 1) tl
-    | _ -> false
-  in
-  let rec all_dug_k k n xs =
-    match n, xs with
-    | 0, _ -> true
-    | _, MIdug k' :: tl when k' = k -> all_dug_k k (n - 1) tl
-    | _ -> false
-  in
   let push_instr t x =
     match t with
     | { mt = MT0 Unit } -> MI0 Unit_
     | _ -> MIpush (t, x)
-  in
-  let condition_same_suffix cond x y rest =
-    match List.rev (to_seq x.instr), List.rev (to_seq y.instr) with
-    | i1 :: xs, i2 :: ys when equal_instr { instr = i1 } { instr = i2 } ->
-      let x' = iseqi (List.rev xs) in
-      let y' = iseqi (List.rev ys) in
-      [ cond x' y'; i1 ] $ rest
-    | _ -> rewrite_none
   in
   match expr with
   (*| MIpush (t, l) :: MI1 Some_ :: rest ->
@@ -1095,10 +1077,6 @@ let lltz_specific (expr : instr_list) : (instr_list * instr_list) option =
   | MIpairn n :: MIunpair field :: rest
     when n = List.length field && List.for_all ~f:(( = ) true) field -> [] $ rest
   | MIdropn 1 :: rest -> [ MIdrop ] $ rest
-  (*| MIif (x, y) :: rest -> condition_same_suffix  (fun x y -> MIif (x, y)) x y rest
-    | MIif_none (x, y) :: rest -> condition_same_suffix  (fun x y -> MIif_none (x, y)) x y rest
-    | MIif_left (x, y) :: rest -> condition_same_suffix  (fun x y -> MIif_left (x, y)) x y rest
-    | MIif_cons (x, y) :: rest -> condition_same_suffix  (fun x y -> MIif_cons (x, y)) x y rest*)
   | _ -> rewrite_none
 ;;
 

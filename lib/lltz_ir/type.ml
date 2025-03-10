@@ -57,7 +57,7 @@ module T = struct
 
   and is_duppable_row row =
     match row with
-    | Node ts -> List.for_all ts is_duppable_row
+    | Node ts -> List.for_all ts ~f:is_duppable_row
     | Leaf (_, x) -> is_duppable x
 
   (* Check equality of types without considering ranges and optimization annotations *)
