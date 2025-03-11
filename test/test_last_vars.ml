@@ -2456,7 +2456,7 @@ let%expect_test "test_if_cons" =
         { SWAP ; DROP ; DROP ; PUSH int 999 } }
 
     Optimised:
-    { PUSH (list nat) { 0 } ; IF_CONS { ADD } { PUSH int 999 } } |}]
+    { NIL nat ; PUSH nat 0 ; CONS ; IF_CONS { ADD } { PUSH int 999 } } |}]
 
 (*
   if_left overshadow lam_var in left or right:

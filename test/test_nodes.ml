@@ -3107,7 +3107,11 @@ let%expect_test "pairing_check bls12 list" =
       PAIRING_CHECK }
 
     Optimised:
-    { PUSH (list (pair bls12_381_g1 bls12_381_g2)) { Pair 0x4731 0x4732 } ;
+    { NIL (pair bls12_381_g1 bls12_381_g2) ;
+      PUSH bls12_381_g2 0x4732 ;
+      PUSH bls12_381_g1 0x4731 ;
+      PAIR ;
+      CONS ;
       PAIRING_CHECK } |}]
 
 let%expect_test "voting_power key_hash" =

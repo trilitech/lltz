@@ -1042,15 +1042,20 @@ let lltz_specific (expr : instr_list) : (instr_list * instr_list) option =
   match expr with
   (*| MIpush (t, l) :: MI1 Some_ :: rest ->
     [MIpush (mt_option t, MLiteral.some l)] $ rest*)
-  | MIpush ({ mt = MT1 (Option, t) }, { literal = Some_ x }) :: rest ->
-    [ push_instr t x; MI1 Some_ ] $ rest
-  | MIpush ({ mt = MT1 (Option, t) }, { literal = None_ }) :: rest ->
-    [ MI0 (None_ t) ] $ rest
-  | MIpush ({ mt = MT2 (Or { annot_left; annot_right }, tl, tr) }, { literal = Left x })
-    :: rest -> [ push_instr tl x; MI1 (Left (annot_left, annot_right, tr)) ] $ rest
-  | MIpush ({ mt = MT2 (Or { annot_left; annot_right }, tl, tr) }, { literal = Right x })
-    :: rest ->
-    [ push_instr tr x; MI1 (Right (annot_left, annot_right, tl)) ] $ rest
+  | MIpush ({mt = MT1 (Option, t)}, {literal = Some_ x}) :: rest ->
+    [push_instr t x; MI1 Some_] $ rest
+  | MIpush ({mt = MT1 (Option, t)}, {literal = None_}) :: rest ->
+    [MI0 (None_ t)] $ rest
+  (* Create list directly using NIL and CONS if it has just one element, instead of PUSH list ... *)
+  | MIpush ({mt = MT1 (List, t)}, {literal = Seq xs}) :: rest when List.length xs = 1 ->
+    [MI0 (Nil t)] @ List.concat (List.map ~f:(fun x -> [push_instr t x; MI2 Cons] ) (List.rev xs)) $ rest
+  (* LAMBDA int int { constant "hash..."} -> PUSH (lambda int int) (constant "hash...") *)
+  | MIlambda ({mt = MT0 Int}, {mt = MT0 Int}, {instr = MIConstant {literal = String hash}}) :: rest ->
+    [MIpush (mt_lambda mt_int mt_int, MLiteral.constant hash)] $ rest
+  | MIpush ({mt = MT2 (Or {annot_left; annot_right}, tl, tr)}, {literal = Left x}) :: rest ->
+    [push_instr tl x; MI1 (Left (annot_left, annot_right, tr))] $ rest
+  | MIpush ({mt = MT2 (Or {annot_left; annot_right}, tl, tr)}, {literal = Right x}) :: rest ->
+    [push_instr tr x; MI1 (Right (annot_left, annot_right, tl))] $ rest
     (*| MIpush (t2, l2)
       :: MIpush (t1, l1)
       :: MI2 (Pair (annot_fst, annot_snd))
