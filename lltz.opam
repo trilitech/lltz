@@ -8,11 +8,11 @@ license: "MIT"
 homepage: "https://github.com/trilitech/lltz"
 bug-reports: "https://github.com/trilitech/lltz/issues"
 depends: [
-  "ocaml" {= "4.14.2"}
-  "dune" {>= "3.8"}
+  "ocaml" {>= "4.14.1"}
+  "dune" {>= "3.15"}
   "core"
   "ppx_jane"
-  "tezos-micheline"
+  "octez-libs"
   "ppxlib"
   "grace"
   "odoc" {with-doc}
