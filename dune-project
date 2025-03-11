@@ -20,15 +20,9 @@
  (depends
   (ocaml
    (= 4.14.2))
-   ptime
   dune
   core
   ppx_jane
-  ppx_yojson_conv
-  (linol
-   (= 0.5))
-  (linol-lwt
-   (= 0.5))
-  digestif
+  tezos-micheline
   ppxlib
   grace))

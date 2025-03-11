@@ -1,1 +1,5 @@
 (vendored_dirs vendored-dune vendors)
+
+(env
+ (release
+  (flags (:standard))))

@@ -36,22 +36,6 @@
         "type": "github"
       }
     },
-    "hackage": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1718930234,
-        "narHash": "sha256-Z7Atdi8ao72IamBzjfYCGcNrFLAUICXjLPChpWR/+WE=",
-        "owner": "input-output-hk",
-        "repo": "hackage.nix",
-        "rev": "3db1b82e4dbc6b44ddd5b98a88a6ea82be29efd5",
-        "type": "github"
-      },
-      "original": {
-        "owner": "input-output-hk",
-        "repo": "hackage.nix",
-        "type": "github"
-      }
-    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1718991812,
@@ -91,7 +75,6 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "hackage": "hackage",
         "nixpkgs": "nixpkgs",
         "ocaml-overlay": "ocaml-overlay",
         "treefmt": "treefmt"

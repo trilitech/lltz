@@ -1,5 +1,5 @@
 {
-  description = "LIGO Nix Flake";
+  description = "LLTZ Nix Flake";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs";
@@ -7,10 +7,6 @@
     treefmt = {
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
-    };
-    hackage = {
-      url = "github:input-output-hk/hackage.nix";
-      flake = false;
     };
     ocaml-overlay = {
       url = "github:nix-ocaml/nix-overlays";
@@ -31,14 +27,11 @@
               (_: prev:
                 with prev; {
                   ocamlPackages = ocaml-ng.ocamlPackages_4_14;
-                  coqPackages = coqPackages_8_13;
-                  # ocamlformat = ocaml-ng.ocamlPackages_4_14.ocamlformat_0_21_0;
                 })
             ];
           };
 
-          ligo = pkgs.callPackage ./nix/ligo.nix {};
-          ligo-syntaxes = ./tools/vscode/syntaxes;
+          lltz = pkgs.callPackage ./nix/lltz.nix {};
 
           fmt = treefmt.lib.evalModule pkgs {
             projectRootFile = "dune-project";
@@ -50,15 +43,15 @@
           };
         in {
           packages = {
-            ligo = ligo;
-            default = ligo;
+            lltz = lltz;
+            default = lltz;
           };
 
-          devShells = with ligo-webide; rec {
+          devShells = rec {
             default = pkgs.mkShell {
-              name = "ligo-dev-shell";
+              name = "lltz-dev-shell";
 
-              inputsFrom = [ligo];
+              inputsFrom = [lltz];
 
               buildInputs = with pkgs; [
                 alejandra
