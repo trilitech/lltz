@@ -6,8 +6,9 @@
   octez-libs.micheline
   michelson
   lltz.michelson.optimisations.utils
-  lltz.michelson.optimisations.michelson_base
- )
+  lltz.michelson.optimisations.michelson_base)
+ (flags
+  (:standard -w -9))
  (preprocess
   (pps
    ppx_expect

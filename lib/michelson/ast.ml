@@ -1,4 +1,4 @@
-open Core 
+open Core
 open Tezos_micheline
 
 module Prim = struct
@@ -554,7 +554,7 @@ module Prim = struct
     | G of Global_storage.t
   [@@deriving equal, compare, sexp]
 
-  let to_string = function 
+  let to_string = function
     | K keyword -> Keyword.to_string keyword
     | I instr -> Instruction.to_string instr
     | T type_ -> Type.to_string type_
@@ -567,7 +567,7 @@ module Prim = struct
       match fs with
       | f :: fs ->
         (try f received with
-        | _ -> loop fs)
+         | _ -> loop fs)
       | [] ->
         raise_s
           [%message "Michelson.Prim.of_string: unexpected input" (received : string)]
@@ -586,10 +586,10 @@ module Prim = struct
     match Michelson_v1_primitives.prim_of_string (to_string t) with
     | Ok prim -> prim
     | Error _err ->
-      raise_s
-        [%message
+    raise_s
+    [%message
           "Michelson.Ast.Prim.to_michelson_v1_protocol_prim: failed to convert." (t : t)]
-  ;;*)
+    ;;*)
 end
 
 module Annot = struct
@@ -615,9 +615,9 @@ let iter (t : t) ~f =
 let analyze_instructions t =
   let tbl : (string, int) Hashtbl.t = Hashtbl.create (module String) in
   iter t ~f:(fun prim ->
-      match prim with
-      | I instr -> Hashtbl.incr tbl (Prim.Instruction.to_string instr)
-      | _ -> ());
+    match prim with
+    | I instr -> Hashtbl.incr tbl (Prim.Instruction.to_string instr)
+    | _ -> ());
   tbl
 ;;
 
@@ -639,58 +639,65 @@ let false_ : t = prim (C False)
 module Type = struct
   type nonrec t = t
 
-  let make ?(annot=None) ?(args=[]) prim_c =
-    let annot = match annot with None -> [] | Some a -> [a] in
+  let make ?(annot = None) ?(args = []) prim_c =
+    let annot =
+      match annot with
+      | None -> []
+      | Some a -> [ a ]
+    in
     prim ~annot ~arguments:args prim_c
+  ;;
 
-  let address ?(annot=None) () = make ~annot (T Address)
-  let big_map ?(annot=None) key value = make ~annot ~args:[ key; value ] (T Big_map)
-  let bls12_381_fr ?(annot=None) () = make ~annot (T Bls12_381_fr)
-  let bls12_381_g1 ?(annot=None) () = make ~annot (T Bls12_381_g1)
-  let bls12_381_g2 ?(annot=None) () = make ~annot (T Bls12_381_g2)
-  let bool ?(annot=None) () = make ~annot (T Bool)
-  let bytes ?(annot=None) () = make ~annot (T Bytes)
-  let chain_id ?(annot=None) () = make ~annot (T Chain_id)
-  let contract ?(annot=None) type_ = make ~annot ~args:[ type_ ] (T Contract)
-  let int ?(annot=None) () : t = make ~annot (T Int)
-  let key ?(annot=None) () = make ~annot (T Key)
-  let key_hash ?(annot=None) () = make ~annot (T Key_hash)
-  let lambda ?(annot=None) arg ret = make ~annot ~args:[ arg; ret ] (T Lambda)
-  let list ?(annot=None) type_ = make ~annot ~args:[ type_ ] (T List)
-  let map ?(annot=None) key value = make ~annot ~args:[ key; value ] (T Map)
-  let mutez ?(annot=None) () = make ~annot (T Mutez)
-  let nat ?(annot=None) () = make ~annot (T Nat)
-  let never ?(annot=None) () = make ~annot (T Never)
-  let operation ?(annot=None) () = make ~annot (T Operation)
-  let option ?(annot=None) ty = make ~annot ~args:[ ty ] (T Option)
+  let address ?(annot = None) () = make ~annot (T Address)
+  let big_map ?(annot = None) key value = make ~annot ~args:[ key; value ] (T Big_map)
+  let bls12_381_fr ?(annot = None) () = make ~annot (T Bls12_381_fr)
+  let bls12_381_g1 ?(annot = None) () = make ~annot (T Bls12_381_g1)
+  let bls12_381_g2 ?(annot = None) () = make ~annot (T Bls12_381_g2)
+  let bool ?(annot = None) () = make ~annot (T Bool)
+  let bytes ?(annot = None) () = make ~annot (T Bytes)
+  let chain_id ?(annot = None) () = make ~annot (T Chain_id)
+  let contract ?(annot = None) type_ = make ~annot ~args:[ type_ ] (T Contract)
+  let int ?(annot = None) () : t = make ~annot (T Int)
+  let key ?(annot = None) () = make ~annot (T Key)
+  let key_hash ?(annot = None) () = make ~annot (T Key_hash)
+  let lambda ?(annot = None) arg ret = make ~annot ~args:[ arg; ret ] (T Lambda)
+  let list ?(annot = None) type_ = make ~annot ~args:[ type_ ] (T List)
+  let map ?(annot = None) key value = make ~annot ~args:[ key; value ] (T Map)
+  let mutez ?(annot = None) () = make ~annot (T Mutez)
+  let nat ?(annot = None) () = make ~annot (T Nat)
+  let never ?(annot = None) () = make ~annot (T Never)
+  let operation ?(annot = None) () = make ~annot (T Operation)
+  let option ?(annot = None) ty = make ~annot ~args:[ ty ] (T Option)
+  let or_ ?(annot = None) t1 t2 = make ~annot ~args:[ t1; t2 ] (T Or)
+  let pair ?(annot = None) t1 t2 = make ~annot ~args:[ t1; t2 ] (T Pair)
 
-  let or_ ?(annot=None) t1 t2 = make ~annot ~args:[ t1; t2 ] (T Or)
-
-  let pair ?(annot=None) t1 t2 = make ~annot ~args:[ t1; t2 ] (T Pair)
-
-  let pair_n ?(annot=None) ts =
+  let pair_n ?(annot = None) ts =
     match ts with
-    | _ :: _ :: _  -> 
-      (
-        let annot_list = match annot with None -> [] | Some a -> [a] in
-        prim ~annot:annot_list ~arguments:ts (T Pair)
-      )
+    | _ :: _ :: _ ->
+      let annot_list =
+        match annot with
+        | None -> []
+        | Some a -> [ a ]
+      in
+      prim ~annot:annot_list ~arguments:ts (T Pair)
     | _ -> assert false
   ;;
 
-  let sampling_state ?(annot=None) n = make ~annot ~args:[ n ] (T Sapling_state)
-  let sapling_transaction ?(annot=None) n = make ~annot ~args:[ n ] (T Sapling_transaction)
-  let set ?(annot=None) cty = make ~annot ~args:[ cty ] (T Set)
-  let signature ?(annot=None) () = make ~annot (T Signature)
-  let string ?(annot=None) () = make ~annot (T String)
-  let ticket ?(annot=None) cty = make ~annot ~args:[ cty ] (T Ticket)
-  let timestamp ?(annot=None) () = make ~annot (T Timestamp)
-  let unit ?(annot=None) () = make ~annot (T Unit)
+  let sampling_state ?(annot = None) n = make ~annot ~args:[ n ] (T Sapling_state)
 
-  let chest ?(annot=None) () = make ~annot (T Chest)
-  let tx_rollup_l2_address ?(annot=None) () = make ~annot (T Tx_rollup_l2_address)
+  let sapling_transaction ?(annot = None) n =
+    make ~annot ~args:[ n ] (T Sapling_transaction)
+  ;;
 
-  let chest_key ?(annot=None) () = make ~annot (T Chest_key)
+  let set ?(annot = None) cty = make ~annot ~args:[ cty ] (T Set)
+  let signature ?(annot = None) () = make ~annot (T Signature)
+  let string ?(annot = None) () = make ~annot (T String)
+  let ticket ?(annot = None) cty = make ~annot ~args:[ cty ] (T Ticket)
+  let timestamp ?(annot = None) () = make ~annot (T Timestamp)
+  let unit ?(annot = None) () = make ~annot (T Unit)
+  let chest ?(annot = None) () = make ~annot (T Chest)
+  let tx_rollup_l2_address ?(annot = None) () = make ~annot (T Tx_rollup_l2_address)
+  let chest_key ?(annot = None) () = make ~annot (T Chest_key)
 end
 
 module Instruction = struct
@@ -713,13 +720,25 @@ module Instruction = struct
   let compare = prim (I Compare)
   let concat = prim (I Concat)
   let cons = prim (I Cons)
-  let contract ty = prim ~arguments:[ ty ] (I Contract)
-  let create_contract parameter_ty storage_ty code = 
-    prim ~arguments: ([
-      seq [ prim ~arguments:[ parameter_ty ] (K Parameter)
-      ; prim ~arguments:[ storage_ty ] (K Storage)
-      ; prim ~arguments:[ code ] (K Code)
-      ]] ) (I Create_contract)
+
+  let contract ?(annot = None) ty =
+    match annot with
+    | None -> prim ~arguments:[ ty ] (I Contract)
+    | Some annot -> prim ~annot:[ annot ] ~arguments:[ ty ] (I Contract)
+  ;;
+
+  let create_contract parameter_ty storage_ty code =
+    prim
+      ~arguments:
+        [ seq
+            [ prim ~arguments:[ parameter_ty ] (K Parameter)
+            ; prim ~arguments:[ storage_ty ] (K Storage)
+            ; prim ~arguments:[ code ] (K Code)
+            ]
+        ]
+      (I Create_contract)
+  ;;
+
   let dig_n n = prim ~arguments:[ int n ] (I Dig)
   let dip instr = prim ~arguments:[ seq instr ] (I Dip)
   let dip_n n instr = prim ~arguments:[ int n; seq instr ] (I Dip)
@@ -729,12 +748,15 @@ module Instruction = struct
   let dup = prim (I Dup)
   let dup_n n = prim ~arguments:[ int n ] (I Dup)
   let ediv = prim (I Ediv)
+
   let emit opt ty_opt =
     match opt, ty_opt with
     | None, None -> prim (I Emit)
     | Some s, None -> prim ~annot:[ s ] (I Emit)
     | None, Some ty -> prim ~arguments:[ ty ] (I Emit)
     | Some s, Some ty -> prim ~annot:[ s ] ~arguments:[ ty ] (I Emit)
+  ;;
+
   let empty_big_map kty vty = prim ~arguments:[ kty; vty ] (I Empty_big_map)
   let empty_map kty vty = prim ~arguments:[ kty; vty ] (I Empty_map)
   let empty_set cty = prim ~arguments:[ cty ] (I Empty_set)
@@ -779,6 +801,7 @@ module Instruction = struct
   let open_chest = prim (I Open_chest)
   let or_ = prim (I Or)
   let pack = prim (I Pack)
+
   let pair ?(left_annot = None) ?(right_annot = None) () =
     match left_annot, right_annot with
     | None, None -> prim (I Pair)
@@ -786,6 +809,7 @@ module Instruction = struct
     | None, Some r -> prim ~annot:[ r ] (I Pair)
     | Some l, Some r -> prim ~annot:[ l; r ] (I Pair)
   ;;
+
   let pair_n n = prim ~arguments:[ int n ] (I Pair)
   let pairing_check = prim (I Pairing_check)
   let push ty x = prim ~arguments:[ ty; x ] (I Push)
@@ -793,12 +817,14 @@ module Instruction = struct
   let rename ty = prim ~arguments:[ ty ] (I Rename)
   let right ty1 = prim ~arguments:[ ty1 ] (I Right)
   let sapling_verify_update = prim (I Sapling_verify_update)
-  let sapling_empty_state ms = 
-    prim ~arguments:[ int ms ] (I Sapling_empty_state)
-  let self opt = 
+  let sapling_empty_state ms = prim ~arguments:[ int ms ] (I Sapling_empty_state)
+
+  let self opt =
     match opt with
     | None -> prim (I Self)
     | Some s -> prim ~annot:[ s ] (I Self)
+  ;;
+
   let self_address = prim (I Self_address)
   let sender = prim (I Sender)
   let set_delegate = prim (I Set_delegate)
@@ -828,7 +854,6 @@ module Instruction = struct
   let xor = prim (I Xor)
   let int = prim (I Int)
   let nat = prim (I Nat)
-
   let global_constant hash = prim ~arguments:[ string hash ] (G Constant)
 
   (*Sequence*)
@@ -845,7 +870,9 @@ module Contract = struct
   let dummy code =
     { parameter = Type.unit ()
     ; storage = Type.unit ()
-    ; code = seq Instruction.([ drop ] @ code @ [ drop; unit; nil (Type.operation ()); pair ()])
+    ; code =
+        seq
+          Instruction.([ drop ] @ code @ [ drop; unit; nil (Type.operation ()); pair () ])
     }
   ;;
 

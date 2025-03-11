@@ -30,6 +30,7 @@ module T = struct
       | _ -> false
     in
     equal_types t1 t2
+  ;;
 end
 
 include T
@@ -67,6 +68,7 @@ let rec pp ppa ppf t =
       ts
   | Leaf (label, x) ->
     Format.fprintf ppf "Leaf (%a, %a)" Format.(pp_print_option pp_label) label ppa x
+;;
 
 module Context = struct
   type 'a t =
@@ -124,3 +126,4 @@ let rec find_leaf row =
        (match find_leaf hd with
         | Some x -> Some x
         | None -> find_leaf (Node tl)))
+;;
