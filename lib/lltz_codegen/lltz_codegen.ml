@@ -8,7 +8,6 @@ module Type = Type
 module Instruction = Instruction
 module Slot = Slot
 module Last_vars = Last_vars
-
 open Core
 
 module LLTZ = struct
@@ -29,18 +28,22 @@ end
 open Instruction
 open Tezos_micheline
 
-
 (* If label does not begin with % add it to the beginning*)
 let sanitize_label annot =
   match annot with
-  | Some label -> if String.is_prefix label ~prefix:"%" then Some label else Some ("%" ^ label)
+  | Some label ->
+    if String.is_prefix label ~prefix:"%" then Some label else Some ("%" ^ label)
   | None -> None
+;;
 
 let rec compile_row_types ?(annot = None) row =
   match row with
   | LLTZ.R.Node nodes ->
-    Type.tuple ~annot:(sanitize_label annot) (List.map nodes ~f:(compile_row_types ~annot:None))
-  | LLTZ.R.Leaf (Some (LLTZ.R.Label annot), value) -> convert_type ~annot:(sanitize_label (Some annot)) value
+    Type.tuple
+      ~annot:(sanitize_label annot)
+      (List.map nodes ~f:(compile_row_types ~annot:None))
+  | LLTZ.R.Leaf (Some (LLTZ.R.Label annot), value) ->
+    convert_type ~annot:(sanitize_label (Some annot)) value
   | LLTZ.R.Leaf (None, value) -> convert_type value
 
 and compile_row_types_for_or ?(annot = None) row =
@@ -48,7 +51,8 @@ and compile_row_types_for_or ?(annot = None) row =
   | LLTZ.R.Node nodes ->
     let converted_types = List.map nodes ~f:(compile_row_types_for_or ~annot:None) in
     Type.ors ~annot:(sanitize_label annot) converted_types
-  | LLTZ.R.Leaf (Some (LLTZ.R.Label annot), value) -> convert_type ~annot:(sanitize_label (Some annot)) value
+  | LLTZ.R.Leaf (Some (LLTZ.R.Label annot), value) ->
+    convert_type ~annot:(sanitize_label (Some annot)) value
   | LLTZ.R.Leaf (None, value) -> convert_type value
 
 and convert_type ?(annot = None) (ty : LLTZ.T.t) : Michelson.Ast.t =
@@ -60,9 +64,11 @@ and convert_type ?(annot = None) (ty : LLTZ.T.t) : Michelson.Ast.t =
   | Set ty -> Michelson.T.set ~annot (convert_type ty)
   | Contract ty -> Michelson.T.contract ~annot (convert_type ty)
   | Ticket ty -> Michelson.T.ticket ~annot (convert_type ty)
-  | Function (param, ret) -> Michelson.T.lambda ~annot (convert_type param) (convert_type ret)
+  | Function (param, ret) ->
+    Michelson.T.lambda ~annot (convert_type param) (convert_type ret)
   | Map (key, value) -> Michelson.T.map ~annot (convert_type key) (convert_type value)
-  | Big_map (key, value) -> Michelson.T.big_map ~annot (convert_type key) (convert_type value)
+  | Big_map (key, value) ->
+    Michelson.T.big_map ~annot (convert_type key) (convert_type value)
   | Unit -> Michelson.T.unit ~annot ()
   | Bool -> Michelson.T.bool ~annot ()
   | Nat -> Michelson.T.nat ~annot ()
@@ -91,10 +97,10 @@ and convert_type ?(annot = None) (ty : LLTZ.T.t) : Michelson.Ast.t =
 and int_of_timestamp_str s =
   match Ptime.of_rfc3339 s with
   | Ok (ptime, _, _) ->
-     let span = Ptime.to_span ptime in
-     (match Ptime.Span.to_int_s span with
-      | Some secs -> secs
-      | None -> assert false)
+    let span = Ptime.to_span ptime in
+    (match Ptime.Span.to_int_s span with
+     | Some secs -> secs
+     | None -> assert false)
   | Error _ -> assert false
 
 and convert_constant (const : LLTZ.E.constant) : Michelson.Ast.t =
@@ -155,7 +161,7 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Empty_set cty -> empty_set (convert_type cty)
   | Nil ty -> nil (convert_type ty)
   | None ty -> none (convert_type ty)
-  | Sapling_empty_state { memo } -> sapling_empty_state (memo)
+  | Sapling_empty_state { memo } -> sapling_empty_state memo
   | Unit -> unit
   | Car -> car
   | Cdr -> cdr
@@ -188,7 +194,7 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Keccak -> keccak
   | Sha3 -> sha3
   | Set_delegate -> set_delegate
-  | Read_ticket -> Michelson.Ast.seq [read_ticket; pair ()]
+  | Read_ticket -> Michelson.Ast.seq [ read_ticket; pair () ]
   | Join_tickets -> join_tickets
   | Pairing_check -> pairing_check
   | Voting_power -> voting_power
@@ -225,23 +231,23 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | View (name, ty) -> view name (convert_type ty)
   | Slice -> slice
   | Update -> update
-  | Get_and_update -> Michelson.Ast.seq [get_and_update; pair ()]
+  | Get_and_update -> Michelson.Ast.seq [ get_and_update; pair () ]
   | Transfer_tokens -> transfer_tokens
   | Check_signature -> check_signature
   | Open_chest -> open_chest
 ;;
 
-let rec compile  : LLTZ.E.t -> t =
+let rec compile : LLTZ.E.t -> t =
   fun expr ->
-    seq
+  seq
     [ (match expr.desc with
        | Variable (Var name) -> compile_variable name expr.type_ expr.annotations
        | Let_in { let_var = Var var; rhs; in_ } -> compile_let_in expr
-       | Lambda { lam_var = Var var, lam_var_type; body } ->
-         compile_lambda expr
+       | Lambda { lam_var = Var var, lam_var_type; body } -> compile_lambda expr
        | Lambda_rec
-           { mu_var = Var mu, mu_type; lambda = {lam_var = Var var, lam_var_type; body} } ->
-         compile_lambda_rec expr
+           { mu_var = Var mu, mu_type
+           ; lambda = { lam_var = Var var, lam_var_type; body }
+           } -> compile_lambda_rec expr
        | App { abs; arg } -> compile_app abs arg
        | Const constant -> compile_const constant
        | Prim (primitive, args) -> compile_prim primitive args
@@ -250,33 +256,53 @@ let rec compile  : LLTZ.E.t -> t =
        | Assign (Mut_var var, value) -> compile_assign expr
        | If_bool { condition; if_true; if_false } ->
          compile_if_bool condition if_true if_false
-       | If_none { subject; if_none; if_some = {lam_var = Var var, var_type; body = some} } ->
+       | If_none
+           { subject; if_none; if_some = { lam_var = Var var, var_type; body = some } } ->
          compile_if_none subject if_none (var, some)
-       | If_cons { subject; if_empty; if_nonempty = { lam_var1 = Var hd, var1_ty; lam_var2 = Var tl, var2_ty; body =nonempty }} ->
-         compile_if_cons subject if_empty (hd, tl, nonempty)
-       | If_left { subject; if_left = {lam_var = Var left, left_ty; body =l}; if_right = {lam_var = Var right, right_ty; body = r} } ->
-         compile_if_left subject (left, l) (right, r)
+       | If_cons
+           { subject
+           ; if_empty
+           ; if_nonempty =
+               { lam_var1 = Var hd, var1_ty; lam_var2 = Var tl, var2_ty; body = nonempty }
+           } -> compile_if_cons subject if_empty (hd, tl, nonempty)
+       | If_left
+           { subject
+           ; if_left = { lam_var = Var left, left_ty; body = l }
+           ; if_right = { lam_var = Var right, right_ty; body = r }
+           } -> compile_if_left subject (left, l) (right, r)
        | While { cond; body } -> compile_while cond body
-       | While_left { cond; body = {lam_var = Var var, var_ty; body=body_lambda} } -> compile_while_left cond var body_lambda expr.type_
+       | While_left { cond; body = { lam_var = Var var, var_ty; body = body_lambda } } ->
+         compile_while_left cond var body_lambda expr.type_
        | For { index = Mut_var var; init; cond; update; body } ->
          compile_for var init cond update body
-       | For_each { collection; body = {lam_var = Var var, var_ty; body = lambda_body} } ->
-         compile_for_each collection var lambda_body
-       | Map { collection; map = {lam_var = Var var, var_ty; body=lam_body} } -> compile_map collection var lam_body
-       | Fold_left { collection; init = init_body; fold = {lam_var = Var var, var_ty; body = fold_body} } ->
-         compile_fold_left collection init_body var fold_body
-       | Fold_right { collection; init = init_body; fold = {lam_var = Var var, var_ty; body = fold_body} }
-         -> compile_fold_right collection init_body var fold_body
+       | For_each { collection; body = { lam_var = Var var, var_ty; body = lambda_body } }
+         -> compile_for_each collection var lambda_body
+       | Map { collection; map = { lam_var = Var var, var_ty; body = lam_body } } ->
+         compile_map collection var lam_body
+       | Fold_left
+           { collection
+           ; init = init_body
+           ; fold = { lam_var = Var var, var_ty; body = fold_body }
+           } -> compile_fold_left collection init_body var fold_body
+       | Fold_right
+           { collection
+           ; init = init_body
+           ; fold = { lam_var = Var var, var_ty; body = fold_body }
+           } -> compile_fold_right collection init_body var fold_body
        | Let_tuple_in { components; rhs; in_ } -> compile_let_tuple_in expr
        | Tuple row -> compile_tuple row
-       | Proj (tuple, path) ->compile_proj tuple path
+       | Proj (tuple, path) -> compile_proj tuple path
        | Update { tuple; component; update } -> compile_update tuple component update
        | Inj (path, expr) -> compile_inj path expr
-       | Match (subject, cases) -> 
-        compile_match subject cases
-       | Raw_michelson {michelson; args} ->  compile_raw_michelson michelson args
+       | Match (subject, cases) -> compile_match subject cases
+       | Raw_michelson { michelson; args } -> compile_raw_michelson michelson args
        | Create_contract
-           { storage; code = {lam_var = Var binder_var, binder_ty ;body =code_body}; delegate; initial_balance; initial_storage } ->
+           { storage
+           ; code = { lam_var = Var binder_var, binder_ty; body = code_body }
+           ; delegate
+           ; initial_balance
+           ; initial_storage
+           } ->
          compile_create_contract
            storage
            binder_var
@@ -285,91 +311,125 @@ let rec compile  : LLTZ.E.t -> t =
            delegate
            initial_balance
            initial_storage
-       | Global_constant {hash; args} -> compile_global_constant hash args expr.type_
-      )
+       | Global_constant { hash; args } -> compile_global_constant hash args expr.type_)
     ]
 
-and unused_set (e: LLTZ.E.t) = e.annotations.remove_never_used_vars
+and unused_set (e : LLTZ.E.t) = e.annotations.remove_never_used_vars
 
-and compile_contract  (input_var: string) (input_ty: LLTZ.T.t) (code: LLTZ.E.t) =
+and compile_contract (input_var : string) (input_ty : LLTZ.T.t) (code : LLTZ.E.t) =
   let input_ty = convert_type input_ty in
-  let code_instr = compile  code in
-  let unused_set = if (Set.mem code.annotations.last_used_vars input_var) 
-    then unused_set code 
-    else (Set.add (unused_set code) input_var)
+  let code_instr = compile code in
+  let unused_set =
+    if Set.mem code.annotations.last_used_vars input_var
+    then unused_set code
+    else Set.add (unused_set code) input_var
   in
-  seq [ Slot.mock_value; Slot.let_ (`Ident input_var) ~unused_set ~in_:code_instr; ]
+  seq [ Slot.mock_value; Slot.let_ (`Ident input_var) ~unused_set ~in_:code_instr ]
 
 (* Compile a variable by duplicating its value on the stack. *)
-and compile_variable name type_ annotations = 
-  trace ~flag:(String.append "var " name) (
-    Slot.dup_or_dig (`Ident name) (LLTZ.T.is_duppable type_ && (Pervasives.not (Set.mem annotations.last_used_vars name)))
-  )
+and compile_variable name type_ annotations =
+  trace
+    ~flag:(String.append "var " name)
+    (Slot.dup_or_dig
+       (`Ident name)
+       (LLTZ.T.is_duppable type_
+        && Pervasives.not (Set.mem annotations.last_used_vars name)))
 
 (* Compile a let-in expression by compiling the right-hand side, then binding the result to the variable in the inner expression. *)
 and compile_let_in expr =
-  let Let_in { let_var = Var var; rhs; in_ } = expr.desc in
-  if (Set.mem expr.annotations.remove_never_used_vars var)
+  let (Let_in { let_var = Var var; rhs; in_ }) = expr.desc in
+  if Set.mem expr.annotations.remove_never_used_vars var
   then
-    trace ~flag: (String.append "let in " var) (seq [ compile  rhs; drop 1; compile  in_])
+    trace ~flag:(String.append "let in " var) (seq [ compile rhs; drop 1; compile in_ ])
   else
-    trace ~flag: (String.append "let in " var) (seq [ compile  rhs; Slot.let_ (`Ident var) ~unused_set:(unused_set expr) ~in_:(compile  in_);])
+    trace
+      ~flag:(String.append "let in " var)
+      (seq
+         [ compile rhs
+         ; Slot.let_ (`Ident var) ~unused_set:(unused_set expr) ~in_:(compile in_)
+         ])
 
 (* Compile a mutable let-in expression by compiling the right-hand side, then binding the result to the mutable variable in the inner expression. *)
 and compile_mut_let_in expr =
-  let Let_mut_in { let_var = Mut_var var; rhs; in_ } = expr.desc in
-  if (Set.mem expr.annotations.remove_never_used_vars var)
+  let (Let_mut_in { let_var = Mut_var var; rhs; in_ }) = expr.desc in
+  if Set.mem expr.annotations.remove_never_used_vars var
   then
-    trace ~flag: (String.append "let_mut in " var) (seq [ compile  rhs; drop 1; compile  in_])
+    trace
+      ~flag:(String.append "let_mut in " var)
+      (seq [ compile rhs; drop 1; compile in_ ])
   else
-    trace ~flag: (String.append "let_mut in " var) (seq [ compile  rhs; Slot.let_ (`Ident var) ~unused_set:(unused_set expr) ~in_:(compile  in_) ])
+    trace
+      ~flag:(String.append "let_mut in " var)
+      (seq
+         [ compile rhs
+         ; Slot.let_ (`Ident var) ~unused_set:(unused_set expr) ~in_:(compile in_)
+         ])
 
 (* Compile a constant by pushing its value onto the stack. *)
 and compile_const constant =
-  (match constant with
-  | LLTZ.E.Unit -> seq [ unit;]
-  | _ -> seq [ push (get_const_type constant) (convert_constant constant) ])
+  match constant with
+  | LLTZ.E.Unit -> seq [ unit ]
+  | _ -> seq [ push (get_const_type constant) (convert_constant constant) ]
 
 (* Compile a primitive by compiling its arguments, then applying the primitive to the arguments. *)
 and compile_prim primitive args =
-  trace ~flag:((Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))) (
-  let args_instrs = List.map ~f:(compile ) args in
-  match primitive with
-  | LLTZ.P.Failwith -> 
-    seq (List.rev_append args_instrs [ Instruction.failwith ])
-  | LLTZ.P.Never -> seq (List.rev_append args_instrs [ Instruction.never ])
-  | LLTZ.P.Concat2 -> 
-    (match args with
-    | [arg1; arg2] -> seq [ 
-      (* Concat2 not used so that arity is clear in optimisations *)
-      nil (convert_type (arg2.type_));
-      compile  arg2; 
-      cons;
-      compile  arg1;
-      cons;
-      prim ~message:"concat" 1 1 (convert_primitive primitive)  (* just one input arg *)
-    ]
-    | _ -> raise_s [%message "Concat2 expects 2 arguments" (args : LLTZ.E.t list)])
-  | LLTZ.P.Sub ->
-    (seq (List.rev(args_instrs) @ [ prim ~message:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive)) (List.length args) 1 (convert_primitive primitive) ]))
-  | _ -> 
-    (seq (List.rev(args_instrs) @ [ prim ~message:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive)) (List.length args) 1 (convert_primitive primitive) ]))
-  )
+  trace
+    ~flag:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))
+    (let args_instrs = List.map ~f:compile args in
+     match primitive with
+     | LLTZ.P.Failwith -> seq (List.rev_append args_instrs [ Instruction.failwith ])
+     | LLTZ.P.Never -> seq (List.rev_append args_instrs [ Instruction.never ])
+     | LLTZ.P.Concat2 ->
+       (match args with
+        | [ arg1; arg2 ] ->
+          seq
+            [ (* Concat2 not used so that arity is clear in optimisations *)
+              nil (convert_type arg2.type_)
+            ; compile arg2
+            ; cons
+            ; compile arg1
+            ; cons
+            ; prim ~message:"concat" 1 1 (convert_primitive primitive)
+              (* just one input arg *)
+            ]
+        | _ -> raise_s [%message "Concat2 expects 2 arguments" (args : LLTZ.E.t list)])
+     | LLTZ.P.Sub ->
+       seq
+         (List.rev args_instrs
+          @ [ prim
+                ~message:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))
+                (List.length args)
+                1
+                (convert_primitive primitive)
+            ])
+     | _ ->
+       seq
+         (List.rev args_instrs
+          @ [ prim
+                ~message:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))
+                (List.length args)
+                1
+                (convert_primitive primitive)
+            ]))
 
 (* Compile a dereference by duplicating the value of the mutable variable on the stack. *)
-and compile_deref name type_ annotations = 
-  trace ~flag:(String.append "mut_var " name)  (
-    Slot.dup_or_dig (`Ident name) ((LLTZ.T.is_duppable type_) && (Pervasives.not (Set.mem annotations.last_used_vars name)))
-  )
+and compile_deref name type_ annotations =
+  trace
+    ~flag:(String.append "mut_var " name)
+    (Slot.dup_or_dig
+       (`Ident name)
+       (LLTZ.T.is_duppable type_
+        && Pervasives.not (Set.mem annotations.last_used_vars name)))
 
 (* Compile an assignment by compiling the value to be assigned, then assigning it to the slot corresponding to the mutable variable. *)
-and compile_assign expr = (*TODO merge with last used opt, do also for lets*)
-  let Assign (Mut_var var, value) = expr.desc in
-  if ((Set.mem expr.annotations.last_used_vars var) || 
-    (Set.mem expr.annotations.remove_never_used_vars var)) then
-    trace ~flag:"assign" (seq [  compile  value; Slot.collect (`Ident var); drop 1; unit ])
-  else
-    trace ~flag:"assign" (seq [ trace (compile  value); Slot.set (`Ident var); unit])
+and compile_assign expr =
+  (*TODO merge with last used opt, do also for lets*)
+  let (Assign (Mut_var var, value)) = expr.desc in
+  if Set.mem expr.annotations.last_used_vars var
+     || Set.mem expr.annotations.remove_never_used_vars var
+  then
+    trace ~flag:"assign" (seq [ compile value; Slot.collect (`Ident var); drop 1; unit ])
+  else trace ~flag:"assign" (seq [ trace (compile value); Slot.set (`Ident var); unit ])
 
 and remove_unused (e : LLTZ.E.t) =
   let unused = e.annotations.remove_never_used_vars in
@@ -378,74 +438,106 @@ and remove_unused (e : LLTZ.E.t) =
 
 (* Compile an if-bool expression by compiling the condition, then applying the if-bool instruction to the condition and the true and false branches. *)
 and compile_if_bool condition if_true if_false =
-  seq [ compile  condition; if_ ~then_:(seq [remove_unused if_true; compile  if_true]) ~else_:(seq [remove_unused if_false; compile  if_false]) ]
+  seq
+    [ compile condition
+    ; if_
+        ~then_:(seq [ remove_unused if_true; compile if_true ])
+        ~else_:(seq [ remove_unused if_false; compile if_false ])
+    ]
 
 (* Compile an if-none expression by compiling the subject, then applying the if-none instruction to the subject and the none and some branches. *)
 and compile_if_none subject if_none_clause (var, some_clause) =
   seq
-    [ compile  subject
+    [ compile subject
     ; if_none
-        ~none:(seq [remove_unused if_none_clause; (compile  if_none_clause)])
-        ~some:(Slot.let_ (`Ident var) ~unused_set:(unused_set some_clause) ~in_:(seq[remove_unused some_clause; compile  some_clause]))
+        ~none:(seq [ remove_unused if_none_clause; compile if_none_clause ])
+        ~some:
+          (Slot.let_
+             (`Ident var)
+             ~unused_set:(unused_set some_clause)
+             ~in_:(seq [ remove_unused some_clause; compile some_clause ]))
     ]
 
 (* Compile an if-cons expression by compiling the subject, then applying the if-cons instruction to the subject and the empty and nonempty branches. *)
 and compile_if_cons subject if_empty (hd, tl, nonempty) =
   trace
     (seq
-       [ compile  subject
+       [ compile subject
        ; if_cons
-           ~empty:(seq [remove_unused if_empty; compile  if_empty])
-           ~nonempty:(Slot.let_all [ `Ident hd; `Ident tl ] ~unused_set:(unused_set nonempty) ~in_:(seq [remove_unused nonempty; compile  nonempty]))
+           ~empty:(seq [ remove_unused if_empty; compile if_empty ])
+           ~nonempty:
+             (Slot.let_all
+                [ `Ident hd; `Ident tl ]
+                ~unused_set:(unused_set nonempty)
+                ~in_:(seq [ remove_unused nonempty; compile nonempty ]))
        ])
 
 (* Compile an if-left expression by compiling the subject, then applying the if-left instruction to the subject and the left and right branches. *)
 and compile_if_left subject (left, l) (right, r) =
   seq
-    [ compile  subject
+    [ compile subject
     ; if_left
-        ~left:(Slot.let_ (`Ident left) ~unused_set:(unused_set l) ~in_:(seq [remove_unused l; compile  l]))
-        ~right:(Slot.let_ (`Ident right) ~unused_set:(unused_set r) ~in_:(seq [ remove_unused r; compile  r]))
+        ~left:
+          (Slot.let_
+             (`Ident left)
+             ~unused_set:(unused_set l)
+             ~in_:(seq [ remove_unused l; compile l ]))
+        ~right:
+          (Slot.let_
+             (`Ident right)
+             ~unused_set:(unused_set r)
+             ~in_:(seq [ remove_unused r; compile r ]))
     ]
 
 (* Compile a while expression by compiling the invariant, then applying the loop instruction to the body and invariant. *)
 and compile_while invariant body =
-  seq [ compile  invariant; loop (seq [ compile  body; drop 1; compile  invariant ]); unit ]
+  seq [ compile invariant; loop (seq [ compile body; drop 1; compile invariant ]); unit ]
 
 (* Compile a while-left expression by compiling the invariant, then applying the loop-left instruction to the body and invariant. *)
-and compile_while_left init_val var body_lambda res_ty=
-    seq [ compile  init_val; left (convert_type res_ty); loop_left (seq [ Slot.let_ (`Ident var) ~unused_set:(unused_set body_lambda) ~in_:(compile  body_lambda); ]); ]
+and compile_while_left init_val var body_lambda res_ty =
+  seq
+    [ compile init_val
+    ; left (convert_type res_ty)
+    ; loop_left
+        (seq
+           [ Slot.let_
+               (`Ident var)
+               ~unused_set:(unused_set body_lambda)
+               ~in_:(compile body_lambda)
+           ])
+    ]
 
 (* Compile a for expression by compiling the initial value, invariant, variant, and body,
    then applying the loop to the sequence of body, variant, and invariant. *)
 and compile_for index init invariant variant body =
-  let init_instr = compile  init in
-  let inv_instr = compile  invariant in
+  let init_instr = compile init in
+  let inv_instr = compile invariant in
   seq
-    [ init_instr;
-      Slot.let_ (`Ident index) ~in_:
-        (seq [
-          inv_instr
-          ; loop
-              (seq [ compile  body; drop 1; compile  variant; drop 1;  inv_instr ])
-          ]);
-      unit
+    [ init_instr
+    ; Slot.let_
+        (`Ident index)
+        ~in_:
+          (seq
+             [ inv_instr
+             ; loop (seq [ compile body; drop 1; compile variant; drop 1; inv_instr ])
+             ])
+    ; unit
     ]
 
 (* Compile a tuple expression by compiling each component and pairing them together. *)
 and compile_tuple row =
-  trace ~flag:"tuple" (match row with
-  | LLTZ.R.Node nodes ->
-    let compiled_nodes = List.map ~f:compile_tuple nodes in
-    seq ((List.rev_append (compiled_nodes))  [ pair_n (List.length compiled_nodes) ])
-  | LLTZ.R.Leaf (_, value) -> compile  value)
+  trace
+    ~flag:"tuple"
+    (match row with
+     | LLTZ.R.Node nodes ->
+       let compiled_nodes = List.map ~f:compile_tuple nodes in
+       seq ((List.rev_append compiled_nodes) [ pair_n (List.length compiled_nodes) ])
+     | LLTZ.R.Leaf (_, value) -> compile value)
 
 (* Compile a projection expression by compiling the tuple and then getting the nth element. *)
 and compile_proj tuple path =
   let _, gets, tuple_expanded_instr = expand_tuple tuple path false in
-  trace ~flag:"proj" 
-    (seq
-       ([ trace ~flag:"proj expansion" tuple_expanded_instr ]))
+  trace ~flag:"proj" (seq [ trace ~flag:"proj expansion" tuple_expanded_instr ])
 
 (* Compile an update expression by compiling the tuple row, getting the nth element, compiling the update value, and combining the values back together into tuple. *)
 and compile_update tuple component update =
@@ -456,7 +548,7 @@ and compile_update tuple component update =
        | LLTZ.R.Path.Here list ->
          List.mapi list ~f:(fun i num ->
            match List.nth lengths i with
-           | Some length -> (update_n num ~length;)
+           | Some length -> update_n num ~length
            | None ->
              raise_s
                [%message
@@ -464,7 +556,13 @@ and compile_update tuple component update =
                    (i : int)
                    (lengths : int list)]))
   in
-  trace ~flag:"update" (seq ([ compile  tuple ] @ [trace ~flag:"gets" (seq(gets))] @  [drop 1; compile  update ] @ [trace ~flag:"updates" (seq(updates))]))
+  trace
+    ~flag:"update"
+    (seq
+       ([ compile tuple ]
+        @ [ trace ~flag:"gets" (seq gets) ]
+        @ [ drop 1; compile update ]
+        @ [ trace ~flag:"updates" (seq updates) ]))
 
 and get_lengths_inner row path_list =
   match row with
@@ -485,7 +583,7 @@ and get_lengths_inner row path_list =
 (* Get the number of children for each node on the path *)
 and get_tuple_lengths tuple path =
   match LLTZ.E.(tuple.type_), path with
-  | {desc = LLTZ.T.Tuple row; _}, LLTZ.R.Path.Here list -> get_lengths_inner row list
+  | { desc = LLTZ.T.Tuple row; _ }, LLTZ.R.Path.Here list -> get_lengths_inner row list
   | _ -> raise_s [%message "Tuple expected"]
 
 (* Expand a tuple expression to a sequence of instructions that get the nth element *)
@@ -495,77 +593,87 @@ and expand_tuple tuple path keep_path =
     let (LLTZ.R.Path.Here list) = path in
     List.mapi list ~f:(fun i num ->
       match List.nth lengths i with
-      | Some length -> seq (
-        (if keep_path then [ dup 0; ] else []) @
-        [get_n num ~length])
+      | Some length -> seq ((if keep_path then [ dup 0 ] else []) @ [ get_n num ~length ])
       | None -> raise_s [%message "Index out of bounds" (i : int) (lengths : int list)])
   in
-  lengths, gets, seq ([ compile  tuple ] @ gets)
+  lengths, gets, seq ([ compile tuple ] @ gets)
 
 (* Compile let-tuple-in expression by compiling the right-hand side with the tuple, then binding the components to the variables in the inner expression. *)
 and compile_let_tuple_in expr =
-  let Let_tuple_in { components; rhs; in_ } = expr.desc in
-  let rhs_instr = compile  rhs in
+  let (Let_tuple_in { components; rhs; in_ }) = expr.desc in
+  let rhs_instr = compile rhs in
   let new_env = List.map components ~f:(fun (Var var) -> `Ident var) in
-  trace ~flag: "let tuple in" (seq
-    [ rhs_instr
-    ; unpair_n (List.length components)
-    ; trace (Slot.let_all new_env ~unused_set:(unused_set expr) ~in_:(seq [(compile  in_)]))])
+  trace
+    ~flag:"let tuple in"
+    (seq
+       [ rhs_instr
+       ; unpair_n (List.length components)
+       ; trace
+           (Slot.let_all new_env ~unused_set:(unused_set expr) ~in_:(seq [ compile in_ ]))
+       ])
 
 (* Compile lambda expression by compiling the body and creating a lambda instruction. *)
 and compile_lambda expr =
-  let Lambda { lam_var = Var var, lam_var_type; body } = expr.desc in
-
+  let (Lambda { lam_var = Var var, lam_var_type; body }) = expr.desc in
   let lam_var = var, convert_type lam_var_type in
   let return_type = convert_type body.type_ in
-
-  let environment =
-    LLTZ.Free_vars.free_vars_with_types expr
+  let environment = LLTZ.Free_vars.free_vars_with_types expr in
+  let partial_apps =
+    seq
+      (List.map (environment |> Map.to_alist) ~f:(fun (ident, var_ty) ->
+         seq
+           [ Slot.dup_or_dig
+               (`Ident ident)
+               (LLTZ.T.is_duppable var_ty
+                && Pervasives.not (Set.mem expr.annotations.last_used_vars ident))
+           ; apply
+           ]))
   in
-
-  let partial_apps = seq (
-    List.map (environment |> Map.to_alist) 
-    ~f:(fun (ident, var_ty) -> 
-      seq [ 
-        Slot.dup_or_dig (`Ident ident) (LLTZ.T.is_duppable var_ty && (Pervasives.not (Set.mem expr.annotations.last_used_vars ident))); 
-        apply ]
-      )
-    ) in
-
   seq
-    ([ lambda ~environment:(environment |> Map.map ~f:convert_type |> Map.to_alist) ~lam_var ~return_type (compile  body) ]
-    @ [partial_apps]
-    )
+    ([ lambda
+         ~environment:(environment |> Map.map ~f:convert_type |> Map.to_alist)
+         ~lam_var
+         ~return_type
+         (compile body)
+     ]
+     @ [ partial_apps ])
 
 (* Compile lambda-rec expression by compiling the body and creating a lambda-rec instruction. *)
 and compile_lambda_rec expr =
-  let Lambda_rec { mu_var = Var mu, mu_type; lambda = {lam_var = Var var, lam_var_type; body} } = expr.desc in
-
+  let (Lambda_rec
+        { mu_var = Var mu, mu_type; lambda = { lam_var = Var var, lam_var_type; body } })
+    =
+    expr.desc
+  in
   let lam_var = var, convert_type lam_var_type in
   let return_type = convert_type body.type_ in
-
-  let environment =
-    LLTZ.Free_vars.free_vars_with_types expr
+  let environment = LLTZ.Free_vars.free_vars_with_types expr in
+  let partial_apps =
+    seq
+      (List.map (environment |> Map.to_alist) ~f:(fun (ident, var_ty) ->
+         seq
+           [ Slot.dup_or_dig
+               (`Ident ident)
+               (LLTZ.T.is_duppable var_ty
+                && Pervasives.not (Set.mem expr.annotations.last_used_vars ident))
+           ; apply
+           ]))
   in
-
-  let partial_apps = seq (
-    List.map (environment |> Map.to_alist) 
-    ~f:(fun (ident, var_ty) -> 
-      seq [ 
-        Slot.dup_or_dig (`Ident ident) (LLTZ.T.is_duppable var_ty && (Pervasives.not (Set.mem expr.annotations.last_used_vars ident))); 
-        apply ]
-      )
-    ) 
-  in
-
   seq
-    ([ lambda_rec ~environment:(environment |> Map.map ~f:convert_type |> Map.to_alist) ~lam_var ~mu ~return_type ~partial_apps (compile  body) ]
-    @ [partial_apps]
-    )
+    ([ lambda_rec
+         ~environment:(environment |> Map.map ~f:convert_type |> Map.to_alist)
+         ~lam_var
+         ~mu
+         ~return_type
+         ~partial_apps
+         (compile body)
+     ]
+     @ [ partial_apps ])
 
 (* Compile an application by compiling a lambda and argument, then applying the EXEC instruction. *)
 and compile_app abs arg =
-    (Instruction.seq ([ trace (compile  arg); trace  (compile  abs)] @ [dig 1; trace ~flag:"exec" exec ]))
+  Instruction.seq
+    ([ trace (compile arg); trace (compile abs) ] @ [ dig 1; trace ~flag:"exec" exec ])
 
 (* Compile contract creation expression by compiling the delegate, initial balance, and initial storage, applying CREATE_CONTRACT instruction. *)
 and compile_create_contract
@@ -578,77 +686,106 @@ and compile_create_contract
   initial_storage
   =
   match binder_ty.desc with
-  | LLTZ.T.Tuple (LLTZ.R.Node [LLTZ.R.Leaf(_,param); LLTZ.R.Leaf(_, storage)]) ->
+  | LLTZ.T.Tuple (LLTZ.R.Node [ LLTZ.R.Leaf (_, param); LLTZ.R.Leaf (_, storage) ]) ->
     let storage_ty = convert_type storage in
     let param_ty = convert_type param in
-    let code_instr = seq[Slot.let_ (`Ident binder_var) ~unused_set:(unused_set code_body)  ~in_:(compile  code_body)] in
+    let code_instr =
+      seq
+        [ Slot.let_
+            (`Ident binder_var)
+            ~unused_set:(unused_set code_body)
+            ~in_:(compile code_body)
+        ]
+    in
     seq
-      [ compile  initial_storage
-      ; compile  initial_balance
-      ; compile  delegate
+      [ compile initial_storage
+      ; compile initial_balance
+      ; compile delegate
       ; create_contract ~storage:storage_ty ~parameter:param_ty ~code:(fun stack ->
           M.seq (code_instr stack).instructions)
       ; pair
-    ]
+      ]
   | _ -> raise_s [%message "Tuple expected"]
 
 (* Compile for-each expression by compiling the collection, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the body. *)
 and compile_for_each collection var body =
-  let coll_instr = compile  collection in
-  trace ~flag:"for_each " (seq
-    [ coll_instr
-    ; iter
-        (seq
-           [ 
-           Slot.let_ (`Ident var) ~unused_set:(unused_set body) ~in_:(seq [ compile  body; drop 1 ]);
-           ])
-    ; unit
-    ])
+  let coll_instr = compile collection in
+  trace
+    ~flag:"for_each "
+    (seq
+       [ coll_instr
+       ; iter
+           (seq
+              [ Slot.let_
+                  (`Ident var)
+                  ~unused_set:(unused_set body)
+                  ~in_:(seq [ compile body; drop 1 ])
+              ])
+       ; unit
+       ])
 
 (* Compile map expression by compiling the collection, then applying the MAP instruction that maps over the collection and binds the values to the variables in the function body. *)
 and compile_map collection var lam_body =
-  let coll_instr = compile  collection in
+  let coll_instr = compile collection in
   seq
     [ coll_instr
-    ; map_ (seq [ Slot.let_ (`Ident var) ~unused_set:(unused_set lam_body) ~in_:(compile  lam_body) ])
+    ; map_
+        (seq
+           [ Slot.let_
+               (`Ident var)
+               ~unused_set:(unused_set lam_body)
+               ~in_:(compile lam_body)
+           ])
     ]
 
 (* Compile fold-left expression by compiling the collection, initial value, and body, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the function body. *)
 and compile_fold_left collection init_body var fold_body =
-  let coll_instr = compile  collection in
-  let init_instr = compile  init_body in
+  let coll_instr = compile collection in
+  let init_instr = compile init_body in
   seq
     [ init_instr
     ; coll_instr
     ; iter
-        (seq [ 
-          swap;
-          pair; (* Creates pair (acc, val) *)
-          Slot.let_ (`Ident var) ~unused_set:(unused_set fold_body) ~in_:(compile  fold_body); ])
+        (seq
+           [ swap
+           ; pair
+           ; (* Creates pair (acc, val) *)
+             Slot.let_
+               (`Ident var)
+               ~unused_set:(unused_set fold_body)
+               ~in_:(compile fold_body)
+           ])
     ]
 
 (* Compile fold-right expression by compiling the collection, initial value, and body, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the function body. *)
 and compile_fold_right collection init_body var fold_body =
-  let coll_instr = compile  collection in
-  let init_instr = compile  init_body in
+  let coll_instr = compile collection in
+  let init_instr = compile init_body in
   seq
     [ init_instr
     ; coll_instr
     ; nil (convert_type (get_coll_elem_type collection))
     ; swap
+    ; iter (seq [ cons ])
     ; iter
-        (seq [ cons; ])
-    ;  iter
-        (seq [ 
-          pair; (* Creates pair (val, acc) *)
-          Slot.let_ (`Ident var) ~unused_set:(unused_set fold_body) ~in_:(compile  fold_body); ])
+        (seq
+           [ pair
+           ; (* Creates pair (val, acc) *)
+             Slot.let_
+               (`Ident var)
+               ~unused_set:(unused_set fold_body)
+               ~in_:(compile fold_body)
+           ])
     ]
 
 and get_coll_elem_type collection =
   match collection.type_.desc with
   | List ty -> ty
   | Set ty -> ty
-  | Map (key, value) -> LLTZ.Dsl.tuple_ty ~range:collection.range (LLTZ.R.Node[ LLTZ.R.Leaf (None,key); LLTZ.R.Leaf(None,value) ])
+  | Map (key, value) ->
+    LLTZ.Dsl.tuple_ty
+      ~range:collection.range
+      (LLTZ.R.Node [ LLTZ.R.Leaf (None, key); LLTZ.R.Leaf (None, value) ])
   | _ -> raise_s [%message "Collection expected"]
 
 and compile_inj context expr =
@@ -657,7 +794,7 @@ and compile_inj context expr =
   match context with
   | LLTZ.R.Context.Hole ty ->
     let mid_ty = convert_type ty in
-    seq [ compile  expr; left mid_ty ]
+    seq [ compile expr; left mid_ty ]
   | LLTZ.R.Context.Node (left_val, mid, right_val) ->
     let right_ty = Type.ors (List.map ~f:compile_row_types_for_or right_val) in
     let mid_ty = Type.ors (List.map ~f:compile_row_types_for_or [ mid ]) in
@@ -672,31 +809,29 @@ and compile_inj context expr =
           | [] -> raise_s [%message "Empty list"])
         ~init:[ Type.ors [ mid_ty; right_ty ] ]
     in
-    trace ~flag:"inj" (seq
-      ([ compile  expr; (* Left *) left mid_ty ]
-       (* Rights - traverses all right_instrs_types in reverse order except last and makes right*)
-       @
-       (
-        match right_instrs_types with
-        | [] -> []
-        | hd :: tl ->
-          List.map (List.rev tl) ~f:(fun ty -> right ty)
-       )
-      ))
+    trace
+      ~flag:"inj"
+      (seq
+         ([ compile expr; (* Left *) left mid_ty ]
+          (* Rights - traverses all right_instrs_types in reverse order except last and makes right*)
+          @
+          match right_instrs_types with
+          | [] -> []
+          | hd :: tl -> List.map (List.rev tl) ~f:(fun ty -> right ty)))
 
 and compile_row_of_lambdas row =
   match row with
   | LLTZ.R.Node nodes ->
     let compiled_nodes = List.map nodes ~f:compile_row_of_lambdas in
     Instruction.seq (compiled_nodes @ [ Instruction.pair_n (List.length compiled_nodes) ])
-  | LLTZ.R.Leaf (_, LLTZ.E.{lam_var = Var var, var_type; body}) -> 
-    compile  (LLTZ.Dsl_with_dummy.lambda (Var var, var_type) ~body)
+  | LLTZ.R.Leaf (_, LLTZ.E.{ lam_var = Var var, var_type; body }) ->
+    compile (LLTZ.Dsl_with_dummy.lambda (Var var, var_type) ~body)
 
 and compile_match subject cases =
   (* subject is a result of Inj *)
-  let subject_instr = compile  subject in
+  let subject_instr = compile subject in
   (* Compile subject, then unwrap it and apply corresponding lambda *)
-  trace ~flag:"match" (seq ([ subject_instr; compile_matching cases ]))
+  trace ~flag:"match" (seq [ subject_instr; compile_matching cases ])
 
 and compile_matching cases =
   match cases with
@@ -707,45 +842,60 @@ and compile_matching cases =
          [ if_left ~left:(compile_matching hd) ~right:(compile_matching (LLTZ.R.Node tl))
          ]
      | [] -> seq [])
-  | LLTZ.R.Leaf (_, {lam_var = Var var, var_type; body}) ->
-    seq [ compile  (LLTZ.Dsl_with_dummy.lambda (Var var, var_type) ~body); exec ]
-    (*seq [ Slot.let_ (`Ident var) ~in_:(compile  body); ]*)
+  | LLTZ.R.Leaf (_, { lam_var = Var var, var_type; body }) ->
+    seq [ compile (LLTZ.Dsl_with_dummy.lambda (Var var, var_type) ~body); exec ]
+(*seq [ Slot.let_ (`Ident var) ~in_:(compile  body); ]*)
 
 and compile_raw_michelson michelson args =
-  let michelson = Micheline.map_node (fun _ -> ()) (fun prim -> Michelson.Ast.Prim.of_string prim) michelson in
-  let args_instrs = List.map ~f:(compile ) args in
-  trace ~flag:"raw_michelson" (seq (List.rev_append (args_instrs) [ raw_michelson michelson args ]))
+  let michelson =
+    Micheline.map_node
+      (fun _ -> ())
+      (fun prim -> Michelson.Ast.Prim.of_string prim)
+      michelson
+  in
+  let args_instrs = List.map ~f:compile args in
+  trace
+    ~flag:"raw_michelson"
+    (seq (List.rev_append args_instrs [ raw_michelson michelson args ]))
 
 and compile_global_constant hash args return_ty =
-  let args_instrs = List.map ~f:(compile ) args in
+  let args_instrs = List.map ~f:compile args in
   match args with
   | [] ->
     (match return_ty with
-    | {desc = LLTZ.T.Function (parameter_type, return_type); _ } ->
-      seq [ lambda_raw ~parameter_type:(convert_type parameter_type) ~return_type:(convert_type return_type) (seq [global_constant hash []]) ]
-    | _ -> (global_constant hash []))
-  | _ ->
-    seq (List.rev_append (args_instrs) [ global_constant hash args ])
+     | { desc = LLTZ.T.Function (parameter_type, return_type); _ } ->
+       seq
+         [ lambda_raw
+             ~parameter_type:(convert_type parameter_type)
+             ~return_type:(convert_type return_type)
+             (seq [ global_constant hash [] ])
+         ]
+     | _ -> global_constant hash [])
+  | _ -> seq (List.rev_append args_instrs [ global_constant hash args ])
+;;
 
 (* Compile and additionally convert to a single micheline node *)
-let compile_to_micheline  ?(optimize = true) ?(strip_annots = true) expr stack=
+let compile_to_micheline ?(optimize = true) ?(strip_annots = true) expr stack =
   let expr = Last_vars.compute_last_vars expr in
-  let compiled = compile  expr in
+  let compiled = compile expr in
   let micheline = Michelson.Ast.seq (compiled stack).instructions in
+  if optimize
+  then Michelson_optimisations.Rewriter.optimise_micheline ~strip_annots micheline
+  else micheline
+;;
 
-  if optimize then
-    Michelson_optimisations.Rewriter.optimise_micheline ~strip_annots micheline
-  else
-    micheline
-
-let compile_contract_to_micheline  ?(optimize = true) ?(strip_annots = true) input_var input_ty expr stack=
+let compile_contract_to_micheline
+  ?(optimize = true)
+  ?(strip_annots = true)
+  input_var
+  input_ty
+  expr
+  stack
+  =
   let expr = Last_vars.compute_last_vars expr in
-  let compiled = compile_contract  input_var input_ty expr in
+  let compiled = compile_contract input_var input_ty expr in
   let micheline = Michelson.Ast.seq (compiled stack).instructions in
-
-  if optimize then
-    Michelson_optimisations.Rewriter.optimise_micheline ~strip_annots micheline
-  else
-    micheline
-
-
+  if optimize
+  then Michelson_optimisations.Rewriter.optimise_micheline ~strip_annots micheline
+  else micheline
+;;

@@ -1,4 +1,4 @@
-module M = Michelson.Ast 
+module M = Michelson.Ast
 module T = M.Type
 
 let tuple ?(annot = None) types =
@@ -11,13 +11,16 @@ let tuple ?(annot = None) types =
     | type_ :: types -> T.pair ~annot type_ (loop types)
   in
   loop types ~annot
+;;
 
 let ors ?(annot = None) types =
   (* Right-comb encoding of or-types (not efficient, but cheap) *)
   let rec loop ?(annot = None) types =
     match types with
-    | [] | [ _ ] -> assert false (* ors of less than 2 types not supported, ensured by frontend*)
+    | [] | [ _ ] ->
+      assert false (* ors of less than 2 types not supported, ensured by frontend*)
     | [ type1; type2 ] -> T.or_ ~annot type1 type2
     | type_ :: types -> T.or_ ~annot type_ (loop types)
   in
   loop types ~annot
+;;

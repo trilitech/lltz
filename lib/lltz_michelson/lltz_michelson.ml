@@ -7,7 +7,6 @@ module Stack = Stack
 module Type = Type
 module Instruction = Instruction
 module Slot = Slot
-
 open Core
 
 module LLTZ = struct
@@ -93,6 +92,7 @@ and convert_constant (const : LLTZ.E.constant) : Michelson.Ast.t =
   | Bls12_381_g2 s -> Michelson.Ast.string s
   | Bls12_381_fr s -> Michelson.Ast.string s
   | Signature s -> Michelson.Ast.string s
+;;
 
 let get_const_type (const : LLTZ.E.constant) : Michelson.Ast.t =
   match const with
@@ -112,6 +112,7 @@ let get_const_type (const : LLTZ.E.constant) : Michelson.Ast.t =
   | Bls12_381_g2 _ -> Michelson.T.bls12_381_g2
   | Bls12_381_fr _ -> Michelson.T.bls12_381_fr
   | Signature _ -> Michelson.T.signature
+;;
 
 let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   let open Michelson.Ast.Instruction in
@@ -205,6 +206,7 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Transfer_tokens -> transfer_tokens
   | Check_signature -> check_signature
   | Open_chest -> open_chest
+;;
 
 let rec compile : LLTZ.E.t -> t =
   fun expr ->
@@ -215,8 +217,9 @@ let rec compile : LLTZ.E.t -> t =
        | Lambda { lam_var = Var var, lam_var_type; body } ->
          compile_lambda var lam_var_type body
        | Lambda_rec
-           { mu_var = Var mu, mu_type; lambda = {lam_var = Var var, lam_var_type; body} } ->
-         compile_lambda_rec var lam_var_type mu body
+           { mu_var = Var mu, mu_type
+           ; lambda = { lam_var = Var var, lam_var_type; body }
+           } -> compile_lambda_rec var lam_var_type mu body
        | App { abs; arg } -> compile_app abs arg
        | Const constant -> compile_const constant
        | Prim (primitive, args) -> compile_prim primitive args
@@ -225,23 +228,39 @@ let rec compile : LLTZ.E.t -> t =
        | Assign (Mut_var var, value) -> compile_assign var value
        | If_bool { condition; if_true; if_false } ->
          compile_if_bool condition if_true if_false
-       | If_none { subject; if_none; if_some = {lam_var = Var var, var_type; body = some} } ->
+       | If_none
+           { subject; if_none; if_some = { lam_var = Var var, var_type; body = some } } ->
          compile_if_none subject if_none (var, some)
-       | If_cons { subject; if_empty; if_nonempty = { lam_var1 = Var hd, var1_ty; lam_var2 = Var tl, var2_ty; body =nonempty }} ->
-         compile_if_cons subject if_empty (hd, tl, nonempty)
-       | If_left { subject; if_left = {lam_var = Var left, left_ty; body =l}; if_right = {lam_var = Var right, right_ty; body = r} } ->
-         compile_if_left subject (left, l) (right, r)
+       | If_cons
+           { subject
+           ; if_empty
+           ; if_nonempty =
+               { lam_var1 = Var hd, var1_ty; lam_var2 = Var tl, var2_ty; body = nonempty }
+           } -> compile_if_cons subject if_empty (hd, tl, nonempty)
+       | If_left
+           { subject
+           ; if_left = { lam_var = Var left, left_ty; body = l }
+           ; if_right = { lam_var = Var right, right_ty; body = r }
+           } -> compile_if_left subject (left, l) (right, r)
        | While { cond; body } -> compile_while cond body
-       | While_left { cond; body = {lam_var = Var var, var_ty; body=body_lambda} } -> compile_while_left cond var body_lambda
+       | While_left { cond; body = { lam_var = Var var, var_ty; body = body_lambda } } ->
+         compile_while_left cond var body_lambda
        | For { index = Mut_var var; init; cond; update; body } ->
          compile_for var init cond update body
-       | For_each { collection; body = {lam_var = Var var, var_ty; body = lambda_body} } ->
-         compile_for_each collection var lambda_body
-       | Map { collection; map = {lam_var = Var var, var_ty; body=lam_body} } -> compile_map collection var lam_body
-       | Fold_left { collection; init = init_body; fold = {lam_var = Var var, var_ty; body = fold_body} } ->
-         compile_fold_left collection init_body var fold_body
-       | Fold_right { collection; init = init_body; fold = {lam_var = Var var, var_ty; body = fold_body} }
-         -> compile_fold_right collection init_body var fold_body
+       | For_each { collection; body = { lam_var = Var var, var_ty; body = lambda_body } }
+         -> compile_for_each collection var lambda_body
+       | Map { collection; map = { lam_var = Var var, var_ty; body = lam_body } } ->
+         compile_map collection var lam_body
+       | Fold_left
+           { collection
+           ; init = init_body
+           ; fold = { lam_var = Var var, var_ty; body = fold_body }
+           } -> compile_fold_left collection init_body var fold_body
+       | Fold_right
+           { collection
+           ; init = init_body
+           ; fold = { lam_var = Var var, var_ty; body = fold_body }
+           } -> compile_fold_right collection init_body var fold_body
        | Let_tuple_in { components; rhs; in_ } -> compile_let_tuple_in components rhs in_
        | Tuple row -> compile_tuple row
        | Proj (tuple, path) -> compile_proj tuple path
@@ -250,7 +269,12 @@ let rec compile : LLTZ.E.t -> t =
        | Match (subject, cases) -> compile_match subject cases
        | Raw_michelson node -> assert false
        | Create_contract
-           { storage; code = {lam_var = Var param_var, param_ty ;body =code_body}; delegate; initial_balance; initial_storage } ->
+           { storage
+           ; code = { lam_var = Var param_var, param_ty; body = code_body }
+           ; delegate
+           ; initial_balance
+           ; initial_storage
+           } ->
          compile_create_contract
            storage
            param_var
@@ -324,7 +348,11 @@ and compile_while invariant body =
 
 (* Compile a while-left expression by compiling the invariant, then applying the loop-left instruction to the body and invariant. *)
 and compile_while_left invariant var body_lambda =
-  seq [ compile invariant; loop_left (seq [ Slot.let_ (`Ident var) ~in_:(compile body_lambda); compile invariant ]) ]
+  seq
+    [ compile invariant
+    ; loop_left
+        (seq [ Slot.let_ (`Ident var) ~in_:(compile body_lambda); compile invariant ])
+    ]
 
 (* Compile a for expression by compiling the initial value, invariant, variant, and body,
    then applying the loop to the sequence of body, variant, and invariant. *)
@@ -448,7 +476,7 @@ and compile_create_contract
   =
   let storage_ty = convert_type storage in
   let param_ty = convert_type param_ty in
-  let code_instr = seq[Slot.let_ (`Ident param_var)  ~in_:(compile code_body)] in
+  let code_instr = seq [ Slot.let_ (`Ident param_var) ~in_:(compile code_body) ] in
   seq
     [ compile delegate (*TODO possibly needs triple lambda*)
     ; compile initial_balance
@@ -461,22 +489,12 @@ and compile_create_contract
 (* Compile for-each expression by compiling the collection, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the body. *)
 and compile_for_each collection var body =
   let coll_instr = compile collection in
-  seq
-    [ coll_instr
-    ; iter
-        (seq
-           [ 
-           Slot.let_ (`Ident var) ~in_:(compile body)
-           ])
-    ]
+  seq [ coll_instr; iter (seq [ Slot.let_ (`Ident var) ~in_:(compile body) ]) ]
 
 (* Compile map expression by compiling the collection, then applying the MAP instruction that maps over the collection and binds the values to the variables in the function body. *)
 and compile_map collection var lam_body =
   let coll_instr = compile collection in
-  seq
-    [ coll_instr
-    ; map_ (seq [ Slot.let_ (`Ident var) ~in_:(compile lam_body) ])
-    ]
+  seq [ coll_instr; map_ (seq [ Slot.let_ (`Ident var) ~in_:(compile lam_body) ]) ]
 
 (* Compile fold-left expression by compiling the collection, initial value, and body, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the function body. *)
 and compile_fold_left collection init_body var fold_body =
@@ -486,9 +504,11 @@ and compile_fold_left collection init_body var fold_body =
     [ init_instr
     ; coll_instr
     ; iter
-        (seq [ 
-          pair; (* Creates pair (acc, val) *)
-          Slot.let_ (`Ident var) ~in_:(compile fold_body); ])
+        (seq
+           [ pair
+           ; (* Creates pair (acc, val) *)
+             Slot.let_ (`Ident var) ~in_:(compile fold_body)
+           ])
     ]
 
 (* Compile fold-right expression by compiling the collection, initial value, and body, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the function body. *)
@@ -499,10 +519,7 @@ and compile_fold_right collection init_body var fold_body =
     [ init_instr
     ; coll_instr
     ; (*TODO: reverse the collection - once rest of the code is validated, it is easily done with dsl*)
-      iter
-        (seq [ 
-          pair;
-          Slot.let_ (`Ident var) ~in_:(compile fold_body); ])
+      iter (seq [ pair; Slot.let_ (`Ident var) ~in_:(compile fold_body) ])
     ]
 
 and compile_inj context expr =
@@ -515,7 +532,7 @@ and compile_inj context expr =
     let right_ty = Type.ors (List.map ~f:compile_row_types_for_or right_val) in
     let mid_ty = Type.ors (List.map ~f:compile_row_types_for_or [ mid ]) in
     (* Go(fold) through all elements in left part of the context (<- direction) and iteratively merge them
-      into a larger right-comb or type, record each intermediate merge *)
+       into a larger right-comb or type, record each intermediate merge *)
     let right_instrs_types =
       List.fold_right
         left_val
@@ -530,16 +547,15 @@ and compile_inj context expr =
        (* Rights - traverses all right_instrs_types in reverse order except last and makes right instructions*)
        @
        match right_instrs_types with
-        | hd::tl -> List.map (List.rev tl) ~f:(fun ty -> right ty)
-        | [] -> []
-      )
+       | hd :: tl -> List.map (List.rev tl) ~f:(fun ty -> right ty)
+       | [] -> [])
 
 and compile_row_of_lambdas row =
   match row with
   | LLTZ.R.Node nodes ->
     let compiled_nodes = List.map nodes ~f:compile_row_of_lambdas in
     Instruction.seq (compiled_nodes @ [ Instruction.pair_n (List.length compiled_nodes) ])
-  | LLTZ.R.Leaf (_, LLTZ.E.{lam_var = Var var, var_type; body}) -> 
+  | LLTZ.R.Leaf (_, LLTZ.E.{ lam_var = Var var, var_type; body }) ->
     compile (LLTZ.Dsl.lambda (Var var, var_type) ~body)
 
 and compile_match subject cases =
@@ -558,5 +574,6 @@ and compile_matching cases =
          [ if_left ~left:(compile_matching hd) ~right:(compile_matching (LLTZ.R.Node tl))
          ]
      | [] -> seq [])
-  | LLTZ.R.Leaf (_, {lam_var = Var var, var_type; body}) ->
+  | LLTZ.R.Leaf (_, { lam_var = Var var, var_type; body }) ->
     seq [ compile (LLTZ.Dsl.lambda (Var var, var_type) ~body); exec ]
+;;
