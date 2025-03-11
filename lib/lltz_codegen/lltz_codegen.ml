@@ -217,8 +217,8 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Or -> or_
   | Cons -> cons
   | Compare -> compare
-  | Concat1 -> concat
-  | Concat2 -> concat
+  | Concat1 -> concat1
+  | Concat2 -> concat2
   | Get -> get
   | Mem -> mem
   | Exec -> exec
@@ -370,44 +370,17 @@ and compile_const constant =
 
 (* Compile a primitive by compiling its arguments, then applying the primitive to the arguments. *)
 and compile_prim primitive args =
-  trace
-    ~flag:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))
-    (let args_instrs = List.map ~f:compile args in
-     match primitive with
-     | LLTZ.P.Failwith -> seq (List.rev_append args_instrs [ Instruction.failwith ])
-     | LLTZ.P.Never -> seq (List.rev_append args_instrs [ Instruction.never ])
-     | LLTZ.P.Concat2 ->
-       (match args with
-        | [ arg1; arg2 ] ->
-          seq
-            [ (* Concat2 not used so that arity is clear in optimisations *)
-              nil (convert_type arg2.type_)
-            ; compile arg2
-            ; cons
-            ; compile arg1
-            ; cons
-            ; prim ~message:"concat" 1 1 (convert_primitive primitive)
-              (* just one input arg *)
-            ]
-        | _ -> raise_s [%message "Concat2 expects 2 arguments" (args : LLTZ.E.t list)])
-     | LLTZ.P.Sub ->
-       seq
-         (List.rev args_instrs
-          @ [ prim
-                ~message:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))
-                (List.length args)
-                1
-                (convert_primitive primitive)
-            ])
-     | _ ->
-       seq
-         (List.rev args_instrs
-          @ [ prim
-                ~message:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))
-                (List.length args)
-                1
-                (convert_primitive primitive)
-            ]))
+  trace ~flag:((Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))) (
+    let args_instrs = List.map ~f:(compile ) args in
+    match primitive with
+    | LLTZ.P.Failwith -> 
+      seq (List.rev_append args_instrs [ Instruction.failwith ])
+    | LLTZ.P.Never -> seq (List.rev_append args_instrs [ Instruction.never ])
+    | LLTZ.P.Sub ->
+      (seq (List.rev(args_instrs) @ [ prim ~message:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive)) (List.length args) 1 (convert_primitive primitive) ]))
+    | _ -> 
+      (seq (List.rev(args_instrs) @ [ prim ~message:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive)) (List.length args) 1 (convert_primitive primitive) ]))
+  )
 
 (* Compile a dereference by duplicating the value of the mutable variable on the stack. *)
 and compile_deref name type_ annotations =

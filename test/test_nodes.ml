@@ -3485,29 +3485,30 @@ let%expect_test "cons to list" =
     { PUSH (list int) { 1 ; 2 ; 3 } } |}]
 
 let%expect_test "concat1 strings" =
-  let e = concat1 (string "Hello, ") (string "World!") in
+  let string_list = cons (string "Hello, ") (cons (string "World!") (nil string_ty)) in
+  let e = concat1 string_list in
   test_expr e;
   [%expect
     {|
-    { PUSH string "World!" ; PUSH string "Hello, " ; CONCAT }
+    { NIL string ;
+      PUSH string "World!" ;
+      CONS ;
+      PUSH string "Hello, " ;
+      CONS ;
+      CONCAT1 }
 
     Optimised:
-    { PUSH string "World!" ; PUSH string "Hello, " ; CONCAT } |}]
+    { PUSH (list string) { "Hello, " ; "World!" } ; CONCAT } |}]
 
 let%expect_test "concat2 bytes" =
   let e = concat2 (bytes "0xABCD") (bytes "0x1234") in
   test_expr e;
   [%expect
     {|
-    { NIL bytes ;
-      PUSH bytes 0x307831323334 ;
-      CONS ;
-      PUSH bytes 0x307841424344 ;
-      CONS ;
-      CONCAT }
+    { PUSH bytes 0x307831323334 ; PUSH bytes 0x307841424344 ; CONCAT2 }
 
     Optimised:
-    { PUSH (list bytes) { 0x307841424344 ; 0x307831323334 } ; CONCAT } |}]
+    { PUSH bytes 0x307831323334 ; PUSH bytes 0x307841424344 ; CONCAT } |}]
 
 let%expect_test "get from map" =
   let m = empty_map nat_ty bool_ty in
@@ -4106,7 +4107,7 @@ let%expect_test "failwith usage in else branch" =
     if_bool
       condition
       ~then_:(nat 1)
-      ~else_:(failwith (concat1 (string "Error: ") (string "String mismatch")))
+      ~else_:(failwith (concat2 (string "Error: ") (string "String mismatch")))
   in
   test_expr expr;
   [%expect
@@ -4116,7 +4117,7 @@ let%expect_test "failwith usage in else branch" =
       COMPARE ;
       EQ ;
       IF { PUSH nat 1 }
-         { PUSH string "String mismatch" ; PUSH string "Error: " ; CONCAT ; FAILWITH } }
+         { PUSH string "String mismatch" ; PUSH string "Error: " ; CONCAT2 ; FAILWITH } }
 
     Optimised:
     { PUSH string "fail" ;
