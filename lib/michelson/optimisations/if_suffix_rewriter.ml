@@ -1,5 +1,6 @@
 open Tezos_micheline.Micheline
-open Tezos_utils.Michelson
+
+type 'l michelson = ('l, string) node
 
 let is_cond = function
   | "IF" | "IF_NONE" | "IF_CONS" | "IF_LEFT" -> true

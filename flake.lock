@@ -18,13 +18,31 @@
         "type": "github"
       }
     },
+    "flake-utils_2": {
+      "inputs": {
+        "systems": "systems_2"
+      },
+      "locked": {
+        "lastModified": 1710146030,
+        "narHash": "sha256-SZ5L6eA7HJ/nmkzGG7/ISclqe6oZdOZTNoesiInkXPQ=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "b1d9ab70662946ef0850d488da1c9019f3a9752a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1718198959,
-        "narHash": "sha256-s04G4JzMhLmlxK56DRMimXZ0n/lCQYRNOusKIGdaYks=",
+        "lastModified": 1718991812,
+        "narHash": "sha256-myw2ur7Uenh4Vj91bjsZ1kl9zUurIFNnTzN7DSTlJDI=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "375801cfcba34b1b2d4360cf54817a114e1411f0",
+        "rev": "47ea5bd4873307fc2371ae1bdf508864f6a25ee8",
         "type": "github"
       },
       "original": {
@@ -33,45 +51,24 @@
         "type": "github"
       }
     },
-    "opam2nix": {
+    "ocaml-overlay": {
       "inputs": {
-        "flake-utils": [
-          "flake-utils"
-        ],
+        "flake-utils": "flake-utils_2",
         "nixpkgs": [
           "nixpkgs"
-        ],
-        "opam-repository": [
-          "opam-repository"
         ]
       },
       "locked": {
-        "lastModified": 1713905575,
-        "narHash": "sha256-1sxuQRnQIVo3+WABqvrPPoVfbEDUgsrFvyBWSjLDHUA=",
-        "owner": "vapourismo",
-        "repo": "opam-nix-integration",
-        "rev": "bd6e54fd7e180b7184c021397f730c71b6ccbf33",
+        "lastModified": 1718690539,
+        "narHash": "sha256-vBez7OQjPYRPCKfeLAhfDk3GegfjVwGB+5+Fdqtwc7g=",
+        "owner": "nix-ocaml",
+        "repo": "nix-overlays",
+        "rev": "b01faf38ae41888031b62e5fd15665c0db092a1d",
         "type": "github"
       },
       "original": {
-        "owner": "vapourismo",
-        "repo": "opam-nix-integration",
-        "type": "github"
-      }
-    },
-    "opam-repository": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1714054447,
-        "narHash": "sha256-M84UBjf191bFYhAnZZmZs+tVhtN8RPNEjmPStvd8qHM=",
-        "owner": "ocaml",
-        "repo": "opam-repository",
-        "rev": "56e6b1f095e3db3a86eab56327a4ba3af896e74d",
-        "type": "github"
-      },
-      "original": {
-        "owner": "ocaml",
-        "repo": "opam-repository",
+        "owner": "nix-ocaml",
+        "repo": "nix-overlays",
         "type": "github"
       }
     },
@@ -79,8 +76,8 @@
       "inputs": {
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs",
-        "opam-repository": "opam-repository",
-        "opam2nix": "opam2nix"
+        "ocaml-overlay": "ocaml-overlay",
+        "treefmt": "treefmt"
       }
     },
     "systems": {
@@ -95,6 +92,41 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
+        "type": "github"
+      }
+    },
+    "systems_2": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    },
+    "treefmt": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1718522839,
+        "narHash": "sha256-ULzoKzEaBOiLRtjeY3YoGFJMwWSKRYOic6VNw2UyTls=",
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "rev": "68eb1dc333ce82d0ab0c0357363ea17c31ea1f81",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "treefmt-nix",
         "type": "github"
       }
     }

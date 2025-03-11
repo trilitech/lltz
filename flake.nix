@@ -1,81 +1,74 @@
 {
+  description = "LLTZ Nix Flake";
+
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
-
-    opam-repository = {
-      flake = false;
-      url = "github:ocaml/opam-repository";
-    };
-    opam2nix = {
-      url = "github:vapourismo/opam-nix-integration";
+    treefmt = {
+      url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-utils.follows = "flake-utils";
-      inputs.opam-repository.follows = "opam-repository";
+    };
+    ocaml-overlay = {
+      url = "github:nix-ocaml/nix-overlays";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
-
   outputs = inputs:
     with inputs;
-      flake-utils.lib.eachDefaultSystem (system: let
-        pkgs = import nixpkgs {
-          inherit system;
-          overlays = [opam2nix.overlays.default];
-        };
+      flake-utils.lib.eachDefaultSystem (
+        system: let
+          lib = nixpkgs.legacyPackages.${system}.lib;
 
-        opamPackages = pkgs.opamPackages.overrideScope (
-          pkgs.lib.composeManyExtensions [
-            (final: prev: {
-              repository = prev.repository.override {src = opam-repository;};
-            })
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [
+              ocaml-overlay.overlays.default
+              (import ./nix/overlay.nix)
+              (_: prev:
+                with prev; {
+                  ocamlPackages = ocaml-ng.ocamlPackages_4_14;
+                })
+            ];
+          };
 
-            (
-              final: prev:
-                prev.repository.select {
-                  opams = [
-                    {
-                      name = "lltz";
-                      src = ./.;
-                      opam = ./lltz.opam;
-                    }
-                  ];
+          lltz = pkgs.callPackage ./nix/lltz.nix {};
 
-                  packageConstraints = ["fmt" "utop" "ocamlformat" "ocamlformat-rpc" "ocaml-lsp-server"];
-                }
-            )
+          fmt = treefmt.lib.evalModule pkgs {
+            projectRootFile = "dune-project";
 
-            # An override that patches opam packages that are missing dependencies from their opam files
-            (
-              final: prev: {
-                # Add ocp-indent to ocamlformat-lib
-                ocamlformat-lib = prev.ocamlformat-lib.overrideAttrs (old: {
-                  propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [prev.ocp-indent];
-                });
+            programs.ocamlformat.enable = true;
+            programs.alejandra.enable = true;
 
-                # Add fmt to logs
-                logs = prev.logs.overrideAttrs (old: {
-                  buildInputs = (old.buildInputs or []) ++ [prev.fmt];
-                });
+            settings.global.excludes = ["_build" "result" ".direnv" "vendors/*" "vendored-dune/*"];
+          };
+        in {
+          packages = {
+            lltz = lltz;
+            default = lltz;
+          };
 
-                # zarith = prev.zarith.overrideAttrs (old: {
-                #  buildInputs = (old.buildInputs or []) ++ [pkgs.gmp];
-                # });
+          devShells = rec {
+            default = pkgs.mkShell {
+              name = "lltz-dev-shell";
 
-                conf-gmp = final.lib.overrideNativeDepends prev.conf-gmp [pkgs.gmp];
-                conf-pkg-config = final.lib.overrideNativeDepends prev.conf-pkg-config [pkg-config];
-              }
-            )
-          ]
-        );
-      in {
-        packages.default = opamPackages.lltz;
+              inputsFrom = [lltz];
 
-        devShells.default = pkgs.mkShell {
-          name = "lltz-shell";
+              buildInputs = with pkgs; [
+                alejandra
+                shellcheck
+                ocamlformat
+                ocamlPackages.utop
+                ocamlPackages.ocaml-lsp
+                ocamlPackages.merlin
+              ];
 
-          inputsFrom = [opamPackages.lltz];
+              shellHook = ''
+                export MERLIN_PATH="${pkgs.ocamlPackages.merlin}";
+              '';
+            };
+          };
 
-          buildInputs = with pkgs; [alejandra gmp pkg-config] ++ (with opamPackages; [utop ocamlformat ocamlformat-rpc ocaml-lsp-server]);
-        };
-      });
+          formatter = fmt.config.build.wrapper;
+        }
+      );
 }
