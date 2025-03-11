@@ -1,4 +1,4 @@
-(lang dune 3.8)
+(lang dune 3.15)
 
 (name lltz)
 
@@ -19,10 +19,10 @@
   "A common compiler IR for targetting Michelson, the stack-based language of the Tezos blockchain.")
  (depends
   (ocaml
-   (= 4.14.2))
+   (>= 4.14.1))
   dune
   core
   ppx_jane
-  tezos-micheline
+  octez-libs
   ppxlib
   grace))
