@@ -994,8 +994,8 @@ let main (expr : instr_list) : (instr_list * instr_list) option =
       -> [ MIpush (mt_int, { literal = Int (Big_int.minus_big_int y) }); MI2 Add ] $ rest
     | MI1 Neg :: MIdig 1 :: MI2 Add :: rest -> [ MI2 Sub ] $ rest
     | MI1 Neg :: MIdig 1 :: MI2 Sub :: rest -> [ MI2 Add ] $ rest
-    (* Pushing the same thing twice (will be unfolded again): *)
-    | MIpush (t, l) :: MIdup 1 :: rest -> [ MIpush (t, l); MIpush (t, l) ] $ rest
+    (* Pushing the same thing twice (will be unfolded again). Commented out as it might be useful for SmartPy. *)
+    (*| MIpush (t, l) :: MIdup 1 :: rest -> [ MIpush (t, l); MIpush (t, l) ] $ rest*)
     | MIif (x, y) :: rest -> cond_check_last (fun x y -> MIif (x, y)) x y rest
     | MIif_none (x, y) :: rest -> cond_check_last (fun x y -> MIif_none (x, y)) x y rest
     | MIif_left (x, y) :: rest -> cond_check_last (fun x y -> MIif_left (x, y)) x y rest
