@@ -1785,7 +1785,7 @@ let name_of_instr_exn = function
 let two_field_annots = function
   | Some a1, Some a2 -> [ "%" ^ a1; "%" ^ a2 ]
   | Some a1, None -> [ "%" ^ a1 ]
-  | None, Some a2 -> [ "%"; "%" ^ a2 ]
+  | None, Some a2 -> [ "%" ^ a2 ]
   | None, None -> []
 ;;
 
