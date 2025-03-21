@@ -21,8 +21,8 @@ module LLTZ = struct
 end
 
 module Michelson = struct
-  module Ast = Michelson.Ast
-  module T = Michelson.Ast.Type
+  module Ast = Lltz_michelson.Ast
+  module T = Lltz_michelson.Ast.Type
 end
 
 open Instruction

@@ -1,5 +1,5 @@
 (library
- (name michelson)
+ (name lltz_michelson)
  (public_name lltz.michelson)
  (inline_tests)
  (libraries
