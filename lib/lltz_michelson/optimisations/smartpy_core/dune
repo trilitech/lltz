@@ -1,12 +1,12 @@
 (library
- (name oasis_core)
- (public_name lltz.michelson.optimisations.oasis_core)
+ (name smartpy_core)
+ (public_name lltz.michelson.optimisations.smartpy_core)
  (libraries
   core
   octez-libs.micheline
-  michelson
-  lltz.michelson.optimisations.utils
-  lltz.michelson.optimisations.michelson_base)
+  lltz.michelson
+  lltz.michelson.optimisations.smartpy_utils
+  lltz.michelson.optimisations.smartpy_michelson_base)
  (flags
   (:standard -w -9))
  (preprocess

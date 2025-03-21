@@ -1,4 +1,4 @@
-module M = Michelson.Ast
+module M = Lltz_michelson.Ast
 module T = M.Type
 
 let tuple ?(annot = None) types =
