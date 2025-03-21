@@ -5,7 +5,7 @@
    does not match instruction requirements.
 *)
 
-module M = Michelson.Ast
+module M = Lltz_michelson.Ast
 module I = M.Instruction
 module T = M.Type
 
@@ -697,7 +697,7 @@ let next_trace_point = ref (-1)
 
 (* Directly using michelson specified via micheline. Can take arbitrary number of args and return a single value. *)
 let rec micheline_fails
-  (node : (unit, Michelson.Ast.Prim.t) Tezos_micheline.Micheline.node)
+  (node : (unit, Lltz_michelson.Ast.Prim.t) Tezos_micheline.Micheline.node)
   =
   match node with
   | Prim (_, I Failwith, _, _) -> true

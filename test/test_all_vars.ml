@@ -523,7 +523,7 @@ let%expect_test "vars update overshadow" =
     u
   |}]
 
-module MA = Michelson.Ast
+module MA = Lltz_michelson.Ast
 
 let push_int n =
   Tezos_micheline.Micheline.Prim
