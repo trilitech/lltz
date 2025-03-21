@@ -4,7 +4,7 @@ open Core
 open Lltz_ir
 open Ast_builder.With_dummy
 module LV = Lltz_codegen.Last_vars
-module Michelson_base = Michelson_base
+module Michelson_base = Smartpy_michelson_base
 
 let rec print_annotations ?(indent = 0) (e : Expr.t) =
   let pad = String.make indent ' ' in
@@ -4264,7 +4264,7 @@ let%expect_test "update_tuple referencing multiple outside vars in update" =
       ADD ;
       UPDATE 2 } |}]
 
-module MA = Michelson.Ast
+module MA = Lltz_michelson.Ast
 
 let push_int n =
   Tezos_micheline.Micheline.Prim

@@ -22,7 +22,7 @@ let compile_and_collect_instructions ?(optimize = false) expr =
 let print_instructions instructions =
   List.iter
     ~f:(fun instruction ->
-      Michelson.Ast.pp Format.std_formatter instruction;
+      Lltz_michelson.Ast.pp Format.std_formatter instruction;
       Format.print_newline ())
     instructions;
   Format.print_flush ()

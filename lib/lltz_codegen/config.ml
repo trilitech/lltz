@@ -1,4 +1,4 @@
-module I = Michelson.Ast.Instruction
+module I = Lltz_michelson.Ast.Instruction
 
 module ExtStack = struct
   type t =

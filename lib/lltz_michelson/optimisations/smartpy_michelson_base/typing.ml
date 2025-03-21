@@ -14,7 +14,7 @@ let unify_annots pref ?tolerant a b =
 ;;
 
 let rec unify_types ?tolerant t u =
-  let open Utils.Control in
+  let open Smartpy_utils.Control in
   let unify_types = unify_types ?tolerant in
   let mk { mt; _ } =
     match

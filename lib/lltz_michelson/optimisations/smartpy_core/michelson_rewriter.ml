@@ -2,7 +2,7 @@
 
 (** Michelson-to-michelson code simplification. *)
 
-module Control = Utils.Control
+module Control = Smartpy_utils.Control
 module Big_int = Big_int
 open Michelson
 
