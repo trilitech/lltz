@@ -903,16 +903,17 @@ module Default = struct
   ;;
 
   let concat1 ~range val_list =
-    create ~range (LLTZ.E.Prim (LLTZ.P.Concat1, [val_list]))
-      (
-        match val_list.LLTZ.E.type_.LLTZ.T.desc with
-         | LLTZ.T.List ty -> ty
-         | _ -> raise_s [%message "Expected list or bytes type"]
-      )
+    create
+      ~range
+      (LLTZ.E.Prim (LLTZ.P.Concat1, [ val_list ]))
+      (match val_list.LLTZ.E.type_.LLTZ.T.desc with
+       | LLTZ.T.List ty -> ty
+       | _ -> raise_s [%message "Expected list or bytes type"])
+  ;;
 
   let concat2 ~range val1 val2 =
-    create ~range (LLTZ.E.Prim (LLTZ.P.Concat2, [val1; val2]))
-      val1.LLTZ.E.type_
+    create ~range (LLTZ.E.Prim (LLTZ.P.Concat2, [ val1; val2 ])) val1.LLTZ.E.type_
+  ;;
 
   let get ~range key collection =
     create

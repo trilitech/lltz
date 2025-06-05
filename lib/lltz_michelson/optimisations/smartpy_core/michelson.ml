@@ -2628,7 +2628,9 @@ let profile =
     | MIlambda _ -> return (0, Some 1)
     | MIlambda_rec _ -> return (0, Some 1)
     | MIconcat_unresolved -> error "profile: CONCAT arity undetermined"
-    | MIConstant _ -> assert false (* We don't need to profile constants as in that case has_arity returns false *)
+    | MIConstant _ ->
+      assert false
+      (* We don't need to profile constants as in that case has_arity returns false *)
     | MIerror _ -> return (0, Some 0)
     | i ->
       (match spec_of_instr i with
@@ -2640,9 +2642,11 @@ let profile =
 
 let has_profile pr instr = Ok pr = profile { instr }
 
-let has_arity  a instr =
-  if is_constant {instr} then false
-  else
-    match profile  {instr} with
+let has_arity a instr =
+  if is_constant { instr }
+  then false
+  else (
+    match profile { instr } with
     | Ok pr -> pr = profile_of_arity a
-    | Error _ -> false
+    | Error _ -> false)
+;;

@@ -359,17 +359,30 @@ and compile_const constant =
 
 (* Compile a primitive by compiling its arguments, then applying the primitive to the arguments. *)
 and compile_prim primitive args =
-  trace ~flag:((Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))) (
-    let args_instrs = List.map ~f:(compile ) args in
-    match primitive with
-    | LLTZ.P.Failwith -> 
-      seq (List.rev_append args_instrs [ Instruction.failwith ])
-    | LLTZ.P.Never -> seq (List.rev_append args_instrs [ Instruction.never ])
-    | LLTZ.P.Sub ->
-      (seq (List.rev(args_instrs) @ [ prim ~message:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive)) (List.length args) 1 (convert_primitive primitive) ]))
-    | _ -> 
-      (seq (List.rev(args_instrs) @ [ prim ~message:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive)) (List.length args) 1 (convert_primitive primitive) ]))
-  )
+  trace
+    ~flag:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))
+    (let args_instrs = List.map ~f:compile args in
+     match primitive with
+     | LLTZ.P.Failwith -> seq (List.rev_append args_instrs [ Instruction.failwith ])
+     | LLTZ.P.Never -> seq (List.rev_append args_instrs [ Instruction.never ])
+     | LLTZ.P.Sub ->
+       seq
+         (List.rev args_instrs
+          @ [ prim
+                ~message:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))
+                (List.length args)
+                1
+                (convert_primitive primitive)
+            ])
+     | _ ->
+       seq
+         (List.rev args_instrs
+          @ [ prim
+                ~message:(Sexp.to_string_hum (LLTZ.P.sexp_of_t primitive))
+                (List.length args)
+                1
+                (convert_primitive primitive)
+            ]))
 
 (* Compile a dereference by duplicating the value of the mutable variable on the stack. *)
 and compile_deref name type_ annotations =
