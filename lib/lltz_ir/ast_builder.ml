@@ -32,15 +32,15 @@ let rec get_proj_type (row : LLTZ.T.t LLTZ.R.t) (path : int list) : LLTZ.T.t =
   match path with
   | i :: path_tail ->
     (match row with
-     | LLTZ.R.Leaf (_, _) -> raise_s [%message "Invalid path" (path : int list)]
+     | LLTZ.R.Leaf (_, _) -> raise_s [%message "Invalid path: unexpected leaf" (path : int list)]
      | LLTZ.R.Node row_list ->
        (match List.nth row_list i with
         | Some expr -> get_proj_type expr path_tail
-        | None -> raise_s [%message "Invalid path" (path : int list)]))
+        | None -> raise_s [%message "Invalid path: out of bounds" (path : int list)]))
   | [] ->
     (match row with
      | LLTZ.R.Leaf (_, ty) -> ty
-     | LLTZ.R.Node _ -> raise_s [%message "Invalid path" (path : int list)])
+     | LLTZ.R.Node _ -> raise_s [%message "Invalid path: unexpected node" (path : int list)])
 ;;
 
 let get_inj_type (context : LLTZ.T.t LLTZ.R.Context.t) : LLTZ.T.desc =
