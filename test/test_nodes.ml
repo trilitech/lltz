@@ -3080,6 +3080,17 @@ let%expect_test "contract opt (bool_ty) address" =
     { PUSH address "KT1XYZ" ; CONTRACT bool } |}]
 ;;
 
+let%expect_test "contract with named ep opt (bool_ty) address" =
+  let e = contract (Some "%the_ep", bool_ty) (address_const "KT1XYZ") in
+  test_expr e;
+  [%expect
+    {|
+    { PUSH address "KT1XYZ" ; CONTRACT %the_ep bool }
+
+    Optimised:
+    { PUSH address "KT1XYZ" ; CONTRACT %the_ep bool } |}]
+;;
+
 let%expect_test "pack int" =
   let e = pack (int (-7)) in
   test_expr e;
