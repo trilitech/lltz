@@ -166,6 +166,7 @@ let rec may_fail = function
       | Size
       | Address
       | Implicit_account
+      | Is_implicit_account
       | Pack
       | Hash_key
       | Blake2b

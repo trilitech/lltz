@@ -1416,6 +1416,12 @@ let mi_implicit_account =
     | _ -> None)
 ;;
 
+let mi_is_implicit_account =
+  mk_spec_basic "IS_IMPLICIT_ACCOUNT" ~arities:(1, 1) (function
+    | { mt = MT0 Address; _ } :: _ -> Some [ mt_option mt_key_hash ]
+    | _ -> None)
+;;
+
 let mi_voting_power =
   mk_spec_basic "VOTING_POWER" ~arities:(1, 1) (function
     | { mt = MT0 Key_hash; _ } :: _ -> Some [ mt_nat ]
@@ -1516,6 +1522,7 @@ let spec_of_prim1 p =
   | Getn n -> mi_getn n
   | Address -> mi_address
   | Implicit_account -> mi_implicit_account
+  | Is_implicit_account -> mi_is_implicit_account
   | Voting_power -> mi_voting_power
   | Size -> mi_size
   | Car | Cdr -> assert false
@@ -1703,6 +1710,7 @@ let name_of_instr_exn = function
         | Size
         | Address
         | Implicit_account
+        | Is_implicit_account
         | Contract _
         | Pack
         | Unpack _
@@ -2125,6 +2133,7 @@ module Of_micheline = struct
          | "ADDRESS", [] -> MI1 Address
          | "SELF_ADDRESS", [] -> MI0 Self_address
          | "IMPLICIT_ACCOUNT", [] -> MI1 Implicit_account
+         | "IS_IMPLICIT_ACCOUNT", [] -> MI1 Is_implicit_account
          | "TRANSFER_TOKENS", [] -> MI3 Transfer_tokens
          | "CHECK_SIGNATURE", [] -> MI3 Check_signature
          | "SET_DELEGATE", [] -> MI1 Set_delegate
@@ -2486,6 +2495,7 @@ module To_micheline = struct
           | Size
           | Address
           | Implicit_account
+          | Is_implicit_account
           | Pack
           | Hash_key
           | Blake2b

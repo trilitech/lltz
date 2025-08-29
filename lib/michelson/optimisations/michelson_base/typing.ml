@@ -107,6 +107,7 @@ let type_prim1 = function
   | Size
   | Address
   | Implicit_account
+  | Is_implicit_account
   | Pack
   | Set_delegate
   | Read_ticket

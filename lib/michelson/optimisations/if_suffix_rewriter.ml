@@ -27,6 +27,7 @@ let is_injective : string -> bool = function
   | "CHECK_SIGNATURE"
   | "CONS"
   | "IMPLICIT_ACCOUNT"
+  | "IS_IMPLICIT_ACCOUNT"
   | "EMPTY_MAP"
   | "EMPTY_SET"
   | "HASH_KEY"

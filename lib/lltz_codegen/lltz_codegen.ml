@@ -184,6 +184,7 @@ let convert_primitive (prim : LLTZ.P.t) : Michelson.Ast.t =
   | Size -> size
   | Address -> address
   | Implicit_account -> implicit_account
+  | Is_implicit_account -> is_implicit_account
   | Contract (annot, ty) -> contract ~annot (convert_type ty)
   | Pack -> pack
   | Unpack ty -> unpack (convert_type ty)

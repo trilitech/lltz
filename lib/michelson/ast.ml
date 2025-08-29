@@ -55,6 +55,7 @@ module Prim = struct
       | Create_account
       | Create_contract
       | Implicit_account
+      | Is_implicit_account
       | Dip
       | Drop
       | Dup
@@ -168,6 +169,7 @@ module Prim = struct
       | Create_account -> "CREATE_ACCOUNT"
       | Create_contract -> "CREATE_CONTRACT"
       | Implicit_account -> "IMPLICIT_ACCOUNT"
+      | Is_implicit_account -> "IS_IMPLICIT_ACCOUNT"
       | Dip -> "DIP"
       | Drop -> "DROP"
       | Dup -> "DUP"
@@ -281,6 +283,7 @@ module Prim = struct
       | "CREATE_ACCOUNT" -> Create_account
       | "CREATE_CONTRACT" -> Create_contract
       | "IMPLICIT_ACCOUNT" -> Implicit_account
+      | "IS_IMPLICIT_ACCOUNT" -> Is_implicit_account
       | "DIP" -> Dip
       | "DROP" -> Drop
       | "DUP" -> Dup
@@ -781,6 +784,7 @@ module Instruction = struct
   let if_left ~then_ ~else_ = prim ~arguments:[ seq then_; seq else_ ] (I If_left)
   let if_none ~then_ ~else_ = prim ~arguments:[ seq then_; seq else_ ] (I If_none)
   let implicit_account = prim (I Implicit_account)
+  let is_implicit_account = prim (I Is_implicit_account)
   let is_nat = prim (I Is_nat)
   let iter instrs = prim ~arguments:[ seq instrs ] (I Iter)
   let join_tickets = prim (I Join_tickets)
