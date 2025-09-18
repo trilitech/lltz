@@ -578,6 +578,13 @@ module Default = struct
       (mk_type ~range (LLTZ.T.Contract (mk_type ~range LLTZ.T.Unit)))
   ;;
 
+  let is_implicit_account ~range address =
+    create
+      ~range
+      (LLTZ.E.Prim (LLTZ.P.Is_implicit_account, [ address ]))
+      (mk_type ~range (LLTZ.T.Option (mk_type ~range LLTZ.T.Key_hash)))
+  ;;
+
   let contract ~range (opt, ty) address =
     create
       ~range
@@ -1234,6 +1241,7 @@ module With_dummy = struct
   let size container = Default.size ~range:v container
   let address contract = Default.address ~range:v contract
   let implicit_account key_hash = Default.implicit_account ~range:v key_hash
+  let is_implicit_account address = Default.is_implicit_account ~range:v address
   let contract (opt, ty) address = Default.contract ~range:v (opt, ty) address
   let pack value = Default.pack ~range:v value
   let unpack ty value = Default.unpack ~range:v ty value

@@ -46,6 +46,7 @@ type 'ty prim1 =
   | Size (** Size / Length.*)
   | Address (** Address of a contract.*)
   | Implicit_account (** Implicit Account of a key_hash.*)
+  | Is_implicit_account (** Is_implicit Account of an address.*)
   | Contract of string option * 'ty (** Contract of an address and entrypoint.*)
   | Pack (** Packing values.*)
   | Unpack of 'ty (** Unpacking values.*)

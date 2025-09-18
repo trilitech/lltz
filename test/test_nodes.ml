@@ -2921,6 +2921,18 @@ let%expect_test "implicit_account key_hash" =
 
     Optimised:
     { PUSH key_hash "tz1ABC123" ; IMPLICIT_ACCOUNT } |}]
+;;
+
+let%expect_test "is_implicit_account address" =
+  let e = is_implicit_account (address_const "tz1ABC123") in
+  test_expr e;
+  [%expect
+    {|
+    { PUSH address "tz1ABC123" ; IS_IMPLICIT_ACCOUNT }
+
+    Optimised:
+    { PUSH address "tz1ABC123" ; IS_IMPLICIT_ACCOUNT } |}]
+;;
 
 let%expect_test "contract opt (bool_ty) address" =
   let e = contract (None, bool_ty) (address_const "KT1XYZ") in

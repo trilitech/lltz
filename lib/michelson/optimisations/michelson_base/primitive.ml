@@ -45,6 +45,7 @@ type 'ty prim1 =
   | Size
   | Address
   | Implicit_account
+  | Is_implicit_account
   | Contract of string option * 'ty
   | Pack
   | Unpack of 'ty

@@ -43,6 +43,7 @@ type t =
   | Size
   | Address
   | Implicit_account
+  | Is_implicit_account
   | Contract of string option * Type.t
   | Pack
   | Unpack of Type.t
