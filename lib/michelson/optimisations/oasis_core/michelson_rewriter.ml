@@ -167,6 +167,8 @@ let rec may_fail = function
       | Address
       | Implicit_account
       | Is_implicit_account
+      | Index_address (* what about if the global cache fills up? *)
+      | Get_address_index
       | Pack
       | Hash_key
       | Blake2b

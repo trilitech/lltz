@@ -47,6 +47,9 @@ type 'ty prim1 =
   | Address (** Address of a contract.*)
   | Implicit_account (** Implicit Account of a key_hash.*)
   | Is_implicit_account (** Is_implicit Account of an address.*)
+  | Index_address (** Index address and add to global cache if not already present *)
+  | Get_address_index
+  (** Get Some(index) for an address or None if not present in global cache *)
   | Contract of string option * 'ty (** Contract of an address and entrypoint.*)
   | Pack (** Packing values.*)
   | Unpack of 'ty (** Unpacking values.*)

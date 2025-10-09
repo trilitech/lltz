@@ -28,6 +28,7 @@ let is_injective : string -> bool = function
   | "CONS"
   | "IMPLICIT_ACCOUNT"
   | "IS_IMPLICIT_ACCOUNT"
+  | "GET_ADDRESS_INDEX" (* INDEX_ADDRESS is not pure ? *)
   | "EMPTY_MAP"
   | "EMPTY_SET"
   | "HASH_KEY"
