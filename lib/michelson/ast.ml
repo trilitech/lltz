@@ -56,6 +56,8 @@ module Prim = struct
       | Create_contract
       | Implicit_account
       | Is_implicit_account
+      | Index_address
+      | Get_address_index
       | Dip
       | Drop
       | Dup
@@ -170,6 +172,8 @@ module Prim = struct
       | Create_contract -> "CREATE_CONTRACT"
       | Implicit_account -> "IMPLICIT_ACCOUNT"
       | Is_implicit_account -> "IS_IMPLICIT_ACCOUNT"
+      | Index_address -> "INDEX_ADDRESS"
+      | Get_address_index -> "GET_ADDRESS_INDEX"
       | Dip -> "DIP"
       | Drop -> "DROP"
       | Dup -> "DUP"
@@ -284,6 +288,8 @@ module Prim = struct
       | "CREATE_CONTRACT" -> Create_contract
       | "IMPLICIT_ACCOUNT" -> Implicit_account
       | "IS_IMPLICIT_ACCOUNT" -> Is_implicit_account
+      | "INDEX_ADDRESS" -> Index_address
+      | "GET_ADDRESS_INDEX" -> Get_address_index
       | "DIP" -> Dip
       | "DROP" -> Drop
       | "DUP" -> Dup
@@ -785,6 +791,8 @@ module Instruction = struct
   let if_none ~then_ ~else_ = prim ~arguments:[ seq then_; seq else_ ] (I If_none)
   let implicit_account = prim (I Implicit_account)
   let is_implicit_account = prim (I Is_implicit_account)
+  let index_address = prim (I Index_address)
+  let get_address_index = prim (I Get_address_index)
   let is_nat = prim (I Is_nat)
   let iter instrs = prim ~arguments:[ seq instrs ] (I Iter)
   let join_tickets = prim (I Join_tickets)

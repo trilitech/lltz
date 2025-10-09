@@ -44,6 +44,8 @@ type t =
   | Address
   | Implicit_account
   | Is_implicit_account
+  | Index_address
+  | Get_address_index
   | Contract of string option * Type.t
   | Pack
   | Unpack of Type.t

@@ -108,6 +108,8 @@ let type_prim1 = function
   | Address
   | Implicit_account
   | Is_implicit_account
+  | Index_address
+  | Get_address_index
   | Pack
   | Set_delegate
   | Read_ticket
