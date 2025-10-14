@@ -4667,3 +4667,69 @@ let%expect_test "deeper let_in overshadowing environment var" =
     { LAMBDA (pair int int) int { UNPAIR ; ADD ; PUSH int 100 ; ADD } ;
       PUSH int 1 ;
       APPLY } |}]
+;;
+
+(* *)
+let%expect_test "smartpy weirdness" =
+  let param_ty =
+    or_ty
+      (Node
+         [ Leaf (Option.some @@ Row.Label "endorsement", list_ty nat_ty)
+         ; Leaf (Option.some @@ Row.Label "proposal", nat_ty)
+         ])
+  in
+  let lst = cons (nat 1) (cons (nat 2) (nil nat_ty)) in
+  let param = left (Some "endorsement", Some "proposal", param_ty) lst in
+  let storage_ty = unit_ty in
+  let lmbda =
+    lambda
+      (var "y", nat_ty)
+      ~body:(let_in (var "x") ~rhs:(variable (var "y") nat_ty) ~in_:unit)
+  in
+  let expr =
+    let_in
+      (var "parameter")
+      ~rhs:param
+      ~in_:
+        (let_mut_in
+           (mut_var "__storage__")
+           ~rhs:unit
+           ~in_:
+             (let_mut_in
+                (mut_var "registerEndorsement")
+                ~rhs:lmbda
+                ~in_:
+                  (let_in
+                     (var "_")
+                     ~rhs:
+                       (if_left
+                          (variable (var "parameter") param_ty)
+                          ~left:
+                            { lam_var = var "_left", list_ty nat_ty
+                            ; body =
+                                let_mut_in
+                                  (mut_var "__parameter__")
+                                  ~rhs:(variable (var "_left") (list_ty nat_ty))
+                                  ~in_:
+                                    (for_each
+                                       (deref (mut_var "__parameter__") (list_ty nat_ty))
+                                       ~body:
+                                         { lam_var = var "s", nat_ty
+                                         ; body =
+                                             exec
+                                               (variable (var "s") nat_ty)
+                                               (deref
+                                                  (mut_var "registerEndorsement")
+                                                  lmbda.type_)
+                                         })
+                            }
+                          ~right:{ lam_var = var "_right", nat_ty; body = unit })
+                     ~in_:
+                       (pair
+                          (None, None)
+                          (nil operation_ty)
+                          (deref (mut_var "__storage__") storage_ty)))))
+  in
+  test_expr expr;
+  [%expect {||}]
+;;
