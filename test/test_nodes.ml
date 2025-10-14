@@ -4670,6 +4670,17 @@ let%expect_test "deeper let_in overshadowing environment var" =
 ;;
 
 (* *)
+(* let parameter = Endorsement [1;2] in *)
+(* let __storage__ := () in *)
+(* let registerEndorsement = 0 in *)
+(* let _ = if_left parameter then *)
+(*   \l -> let __parameter__ := l in *)
+(*         for_each s in !__parameter__: *)
+(*           s + registerEndorsement *)
+(*   \r -> () *)
+(* in *)
+(* return ([], !__storage__) *)
+(*  *)
 let%expect_test "smartpy weirdness" =
   let param_ty =
     or_ty
@@ -4681,7 +4692,7 @@ let%expect_test "smartpy weirdness" =
   let lst = cons (nat 1) (cons (nat 2) (nil nat_ty)) in
   let param = left (Some "endorsement", Some "proposal", param_ty) lst in
   let storage_ty = unit_ty in
-  let lmbda =
+  let _lmbda =
     lambda
       (var "y", nat_ty)
       ~body:(let_in (var "x") ~rhs:(variable (var "y") nat_ty) ~in_:unit)
@@ -4695,9 +4706,9 @@ let%expect_test "smartpy weirdness" =
            (mut_var "__storage__")
            ~rhs:unit
            ~in_:
-             (let_mut_in
-                (mut_var "registerEndorsement")
-                ~rhs:lmbda
+             (let_in
+                (var "registerEndorsement")
+                ~rhs:(nat 0)
                 ~in_:
                   (let_in
                      (var "_")
@@ -4716,11 +4727,11 @@ let%expect_test "smartpy weirdness" =
                                        ~body:
                                          { lam_var = var "s", nat_ty
                                          ; body =
-                                             exec
+                                             add
                                                (variable (var "s") nat_ty)
-                                               (deref
-                                                  (mut_var "registerEndorsement")
-                                                  lmbda.type_)
+                                               (variable
+                                                  (var "registerEndorsement")
+                                                  nat_ty)
                                          })
                             }
                           ~right:{ lam_var = var "_right", nat_ty; body = unit })
