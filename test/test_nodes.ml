@@ -4708,7 +4708,7 @@ let%expect_test "smartpy weirdness" =
            ~in_:
              (let_in
                 (var "registerEndorsement")
-                ~rhs:(nat 0)
+                ~rhs:_lmbda
                 ~in_:
                   (let_in
                      (var "_")
@@ -4727,11 +4727,11 @@ let%expect_test "smartpy weirdness" =
                                        ~body:
                                          { lam_var = var "s", nat_ty
                                          ; body =
-                                             add
+                                             exec
                                                (variable (var "s") nat_ty)
                                                (variable
                                                   (var "registerEndorsement")
-                                                  nat_ty)
+                                                  _lmbda.type_)
                                          })
                             }
                           ~right:{ lam_var = var "_right", nat_ty; body = unit })
@@ -4746,7 +4746,8 @@ let%expect_test "smartpy weirdness" =
                                (deref (mut_var "__storage__") storage_ty))))))
   in
   test_expr expr;
-  [%expect {|
+  [%expect
+    {|
     { NIL nat ;
       PUSH nat 2 ;
       CONS ;
@@ -4754,9 +4755,9 @@ let%expect_test "smartpy weirdness" =
       CONS ;
       LEFT (or (list %endorsement nat) (nat %proposal)) ;
       UNIT ;
-      PUSH nat 0 ;
+      LAMBDA nat unit { DROP ; UNIT } ;
       DIG 2 ;
-      IF_LEFT { ITER { DUP 2 ; SWAP ; ADD ; DROP } ; UNIT } { DROP ; UNIT } ;
+      IF_LEFT { ITER { DUP 2 ; SWAP ; EXEC ; DROP } ; UNIT } { DROP ; UNIT } ;
       DROP ;
       DROP ;
       NIL operation ;
@@ -4766,9 +4767,9 @@ let%expect_test "smartpy weirdness" =
     { PUSH (list nat) { 1 ; 2 } ;
       LEFT (or (list nat) nat) ;
       UNIT ;
-      PUSH nat 0 ;
+      LAMBDA nat unit { DROP ; UNIT } ;
       DIG 2 ;
-      IF_LEFT { ITER { DUP 2 ; ADD ; DROP } ; DROP } { DROP 2 } ;
+      IF_LEFT { ITER { DUP 2 ; SWAP ; EXEC ; DROP } ; DROP } { DROP 2 } ;
       NIL operation ;
       PAIR } |}]
 ;;
