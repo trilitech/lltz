@@ -4736,11 +4736,39 @@ let%expect_test "smartpy weirdness" =
                             }
                           ~right:{ lam_var = var "_right", nat_ty; body = unit })
                      ~in_:
-                       (pair
-                          (None, None)
-                          (nil operation_ty)
-                          (deref (mut_var "__storage__") storage_ty)))))
+                       (let_in
+                          (var "_1")
+                          ~rhs:(deref (mut_var "registerEndorsement") _lmbda.type_)
+                          ~in_:
+                            (pair
+                               (None, None)
+                               (nil operation_ty)
+                               (deref (mut_var "__storage__") storage_ty))))))
   in
   test_expr expr;
-  [%expect {||}]
+  [%expect {|
+    { NIL nat ;
+      PUSH nat 2 ;
+      CONS ;
+      PUSH nat 1 ;
+      CONS ;
+      LEFT (or (list %endorsement nat) (nat %proposal)) ;
+      UNIT ;
+      PUSH nat 0 ;
+      DIG 2 ;
+      IF_LEFT { ITER { DUP 2 ; SWAP ; ADD ; DROP } ; UNIT } { DROP ; UNIT } ;
+      DROP ;
+      DROP ;
+      NIL operation ;
+      PAIR }
+
+    Optimised:
+    { PUSH (list nat) { 1 ; 2 } ;
+      LEFT (or (list nat) nat) ;
+      UNIT ;
+      PUSH nat 0 ;
+      DIG 2 ;
+      IF_LEFT { ITER { DUP 2 ; ADD ; DROP } ; DROP } { DROP 2 } ;
+      NIL operation ;
+      PAIR } |}]
 ;;
