@@ -4570,3 +4570,43 @@ let%expect_test "test_global_constant" =
 
     Optimised:
     { PUSH int 99 ; PUSH int 1 ; constant "SomeGlobalHash" } |}]
+
+let%expect_test "smartpy weirdness" =
+  let param_ty =
+    or_ty
+      (Node
+         [ Leaf (Option.some @@ Row.Label "endorsement", list_ty nat_ty)
+         ; Leaf (Option.some @@ Row.Label "proposal", nat_ty)
+         ])
+  in
+  let lst = cons (nat 1) (cons (nat 2) (nil nat_ty)) in
+  let param = left (Some "endorsement", Some "proposal", param_ty) lst in
+  let expr =
+    let_in
+      (var "PROBLEM")
+      ~rhs:(nat 0)
+      ~in_:
+        (let_in
+           (var "_ignore")
+           ~rhs:
+             (if_left
+                param
+                ~left:
+                  { lam_var = var "left_", list_ty nat_ty
+                  ; body =
+                      for_each
+                        (variable (var "left_") (list_ty nat_ty))
+                        ~body:
+                          { lam_var = var "_iter", nat_ty
+                          ; body = variable (var "PROBLEM") nat_ty
+                          }
+                  }
+                ~right:
+                  { lam_var = var "right_", nat_ty
+                  ; body = variable (var "PROBLEM") nat_ty
+                  })
+           (*~in_:(variable (var "PROBLEM") nat_ty))*)
+           ~in_:unit) 
+  in
+  test_and_print "test_smartpy-weirdness" expr;
+  [%expect {||}]
