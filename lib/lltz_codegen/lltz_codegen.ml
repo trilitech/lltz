@@ -271,8 +271,8 @@ let rec compile : LLTZ.E.t -> t =
          compile_while_left cond var body_lambda expr.type_
        | For { index = Mut_var var; init; cond; update; body } ->
          compile_for var init cond update body
-       | For_each _ ->
-         compile_for_each expr
+       | For_each { collection; body = { lam_var = Var var, _; body = lambda_body } } ->
+         compile_for_each collection var lambda_body
        | Map { collection; map = { lam_var = Var var, _; body = lam_body } } ->
          compile_map collection var lam_body
        | Fold_left
@@ -409,11 +409,6 @@ and remove_unused (e : LLTZ.E.t) =
   let unused = e.annotations.remove_never_used_vars in
   let unused_list = Set.elements unused in
   Slot.collect_all (List.map ~f:(fun x -> `Ident x) unused_list)
-
-and remove_last_used (e : LLTZ.E.t) =
-  let last_used = e.annotations.last_used_vars in
-  let last_used_list = Set.elements last_used in
-  Slot.collect_all (List.map ~f:(fun x -> `Ident x) last_used_list)
 
 (* Compile an if-bool expression by compiling the condition, then applying the if-bool instruction to the condition and the true and false branches. *)
 and compile_if_bool condition if_true if_false =
@@ -693,25 +688,21 @@ and compile_create_contract
   | _ -> raise_s [%message "Tuple expected"]
 
 (* Compile for-each expression by compiling the collection, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the body. *)
-and compile_for_each expr =
-  match expr.desc with
-  | For_each { collection; body = { lam_var = Var var, _; body = body } } ->
-    let coll_instr = compile collection in
-    trace
-      ~flag:"for_each "
-      (seq
-         [ coll_instr
-         ; iter
-             (seq
-                [ Slot.let_
-                    (`Ident var)
-                    ~unused_set:(unused_set body)
-                    ~in_:(seq [ compile body; drop 1 ])
-                ])
-         ; remove_last_used expr
-         ; unit
-         ])
-  | _ -> assert false
+and compile_for_each collection var body =
+  let coll_instr = compile collection in
+  trace
+    ~flag:"for_each "
+    (seq
+       [ coll_instr
+       ; iter
+           (seq
+              [ Slot.let_
+                  (`Ident var)
+                  ~unused_set:(unused_set body)
+                  ~in_:(seq [ compile body; drop 1 ])
+              ])
+       ; unit
+       ])
 
 (* Compile map expression by compiling the collection, then applying the MAP instruction that maps over the collection and binds the values to the variables in the function body. *)
 and compile_map collection var lam_body =
