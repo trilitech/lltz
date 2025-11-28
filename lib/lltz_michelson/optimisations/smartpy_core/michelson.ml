@@ -2,11 +2,11 @@
 module Big_int = Big_int
 module Option = Core.Option
 module List = Core.List
-include Michelson_base.Primitive
-include Michelson_base.Typing
-include Michelson_base.Type
+include Smartpy_michelson_base.Primitive
+include Smartpy_michelson_base.Typing
+include Smartpy_michelson_base.Type
 open Printf
-open Utils.Control
+open Smartpy_utils.Control
 
 (*List operations*)
 let rec map_some f = function
@@ -195,7 +195,7 @@ type ('instr, 'literal) literal_f =
 
 let sequence_literal_f =
   let open Result in
-  let open Utils.Control in
+  let open Smartpy_utils.Control in
   function
   | (Int _ | Bool _ | String _ | Bytes _ | Unit | None_ | Constant _) as l -> Ok l
   | Pair (x, y) -> map2 (fun x y -> Pair (x, y)) x y
@@ -1452,7 +1452,7 @@ let mi_create_contract =
 
 let spec_of_prim0 p =
   let mk name =
-    let t = Michelson_base.Typing.type_prim0 p in
+    let t = Smartpy_michelson_base.Typing.type_prim0 p in
     mk_spec_const name t
   in
   match p with
@@ -1478,7 +1478,7 @@ let spec_of_prim0 p =
 
 let spec_of_prim1 p =
   let mk name =
-    let t1, t = Michelson_base.Typing.type_prim1 p in
+    let t1, t = Smartpy_michelson_base.Typing.type_prim1 p in
     let f = function
       | x :: _ when unifiable_types x t1 -> Some [ t ]
       | _ -> None
@@ -1530,7 +1530,7 @@ let spec_of_prim1 p =
 
 let spec_of_prim2 p =
   let mk ?commutative name =
-    match Michelson_base.Typing.type_prim2 p with
+    match Smartpy_michelson_base.Typing.type_prim2 p with
     | [ ((t1, t2), t) ] ->
       let f = function
         | x1 :: x2 :: _ when unifiable_types x1 t1 && unifiable_types x2 t2 -> Some [ t ]
@@ -1576,7 +1576,7 @@ let spec_of_prim2 p =
 
 let spec_of_prim3 p =
   let mk name =
-    let t1, t2, t3, t = Michelson_base.Typing.type_prim3 p in
+    let t1, t2, t3, t = Smartpy_michelson_base.Typing.type_prim3 p in
     let f = function
       | x1 :: x2 :: x3 :: _
         when unifiable_types x1 t1 && unifiable_types x2 t2 && unifiable_types x3 t3 ->
@@ -2628,7 +2628,9 @@ let profile =
     | MIlambda _ -> return (0, Some 1)
     | MIlambda_rec _ -> return (0, Some 1)
     | MIconcat_unresolved -> error "profile: CONCAT arity undetermined"
-    | MIConstant _ -> assert false (* We don't need to profile constants as in that case has_arity returns false *)
+    | MIConstant _ ->
+      assert false
+      (* We don't need to profile constants as in that case has_arity returns false *)
     | MIerror _ -> return (0, Some 0)
     | i ->
       (match spec_of_instr i with
@@ -2640,9 +2642,11 @@ let profile =
 
 let has_profile pr instr = Ok pr = profile { instr }
 
-let has_arity  a instr =
-  if is_constant {instr} then false
-  else
-    match profile  {instr} with
+let has_arity a instr =
+  if is_constant { instr }
+  then false
+  else (
+    match profile { instr } with
     | Ok pr -> pr = profile_of_arity a
-    | Error _ -> false
+    | Error _ -> false)
+;;

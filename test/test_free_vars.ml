@@ -1,9 +1,9 @@
-(* In this file, we test the free_vars function that computes the free variables of an expression for each LLTZ node type and interesting cases. 
+(* In this file, we test the free_vars function that computes the free variables of an expression for each LLTZ node type and interesting cases.
 
-  The concrete syntaxes are written with a OCaml-like syntax. 
-  In LLTZ, we can only copy the value of variables not their reference,
-  therefore even for mutable variable we don't use 'ref' which is present in OCaml
-  to simplify the syntax. Assignments are done with the '<-' operator.
+   The concrete syntaxes are written with a OCaml-like syntax.
+   In LLTZ, we can only copy the value of variables not their reference,
+   therefore even for mutable variable we don't use 'ref' which is present in OCaml
+   to simplify the syntax. Assignments are done with the '<-' operator.
 *)
 open Core
 open Lltz_ir.Ast_builder.With_dummy
@@ -16,16 +16,15 @@ module Ast_builder = Lltz_ir.Ast_builder
 let print_map_str_ty map =
   Map.to_alist map
   |> List.map ~f:(fun (k, v) ->
-         Printf.sprintf
-           "%s : %s"
-           k
-           (Sexplib.Sexp.to_string_hum (Lltz_ir.Type.sexp_of_t v)))
+    Printf.sprintf "%s : %s" k (Sexplib.Sexp.to_string_hum (Lltz_ir.Type.sexp_of_t v)))
   |> String.concat ~sep:", "
+;;
 
 let print_free_vars expr =
   let fv_map = FV.free_vars_with_types expr in
   print_string (print_map_str_ty fv_map);
   Format.print_newline ()
+;;
 
 (* let x = 10 in x + (-5) *)
 let%expect_test "fv simple var + constant (no free vars)" =
@@ -35,6 +34,7 @@ let%expect_test "fv simple var + constant (no free vars)" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* x + 5 *)
 let%expect_test "fv simple var + constant (one free var)" =
@@ -45,6 +45,7 @@ let%expect_test "fv simple var + constant (one free var)" =
     x : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let z = 5 in let z = 99 in z + z *)
 let%expect_test "fv overshadowed variable (no free var)" =
@@ -61,6 +62,7 @@ let%expect_test "fv overshadowed variable (no free var)" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* let z = 5 in z + unboundZ *)
 let%expect_test "fv overshadowed variable (one free var)" =
@@ -76,6 +78,7 @@ let%expect_test "fv overshadowed variable (one free var)" =
     unboundZ : ((desc Int)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let a = 10 in fun (x: nat) -> x + a *)
 let%expect_test "fv lambda capturing outer var (no free var)" =
@@ -91,6 +94,7 @@ let%expect_test "fv lambda capturing outer var (no free var)" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* fun (x: nat) -> x + b *)
 let%expect_test "fv lambda referencing free var (one free var)" =
@@ -105,6 +109,7 @@ let%expect_test "fv lambda referencing free var (one free var)" =
     b : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let rec fact n = if n <= 1 then 1 else n * fact(n-1) *)
 let%expect_test "fv lambda_rec no free var" =
@@ -126,6 +131,7 @@ let%expect_test "fv lambda_rec no free var" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* let rec f n = if n <= 0 then outer_val else f(n-1) *)
 let%expect_test "fv lambda_rec referencing a free var" =
@@ -148,27 +154,41 @@ let%expect_test "fv lambda_rec referencing a free var" =
     outer_val : ((desc Int)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let x = (fun y -> y * x) in x *)
 let%expect_test "fv lambda with outside var overshadowing" =
   (* let x = (fun y -> y x)*)
-  let lam_expr = lambda (var "y", nat_ty) ~body:(mul (variable (var "y") nat_ty) (variable (var "x") nat_ty)) in
-  let let_expr = let_in (var "x") ~rhs:lam_expr ~in_:(variable (var "x") (function_ty nat_ty nat_ty)) in
+  let lam_expr =
+    lambda
+      (var "y", nat_ty)
+      ~body:(mul (variable (var "y") nat_ty) (variable (var "x") nat_ty))
+  in
+  let let_expr =
+    let_in (var "x") ~rhs:lam_expr ~in_:(variable (var "x") (function_ty nat_ty nat_ty))
+  in
   print_free_vars let_expr;
   [%expect
     {|
       x : ((desc Nat)
        (range ((start 0) (stop 0) (source (String ((name ("")) (content ""))))))) |}]
+;;
 
 (* let x = (fun y -> y) y in x *)
 let%expect_test "fv app self applied lambda overshadowing" =
   let lam_expr = lambda (var "y", nat_ty) ~body:(variable (var "y") nat_ty) in
-  let let_expr = let_in (var "x") ~rhs:(app lam_expr (variable (var "y") nat_ty)) ~in_:(variable (var "x") nat_ty) in
+  let let_expr =
+    let_in
+      (var "x")
+      ~rhs:(app lam_expr (variable (var "y") nat_ty))
+      ~in_:(variable (var "x") nat_ty)
+  in
   print_free_vars let_expr;
   [%expect
     {|
       y : ((desc Nat)
        (range ((start 0) (stop 0) (source (String ((name ("")) (content ""))))))) |}]
+;;
 
 (* let f = fun (x: nat) -> x+1 in f 42 *)
 let%expect_test "fv app no free var" =
@@ -183,6 +203,7 @@ let%expect_test "fv app no free var" =
   in
   print_free_vars expr;
   [%expect {||}]
+;;
 
 (* (fun x -> x + glo) 100 *)
 let%expect_test "fv app with free var in abs" =
@@ -198,6 +219,7 @@ let%expect_test "fv app with free var in abs" =
     glo : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* lam_expr = fun x -> x*2 in lam_expr argFree *)
 let%expect_test "fv app with free var in arg" =
@@ -211,18 +233,21 @@ let%expect_test "fv app with free var in arg" =
     argFree : ((desc Int)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* 42 *)
 let%expect_test "fv const no free var" =
   let expr = int 42 in
   print_free_vars expr;
   [%expect {||}]
+;;
 
 (* 1 + 2 *)
 let%expect_test "fv prim no free var (e.g. Add of 2 constants)" =
   let expr = add (int 1) (int 2) in
   print_free_vars expr;
   [%expect {||}]
+;;
 
 (* x == 3 *)
 let%expect_test "fv prim with one free var in arg" =
@@ -233,6 +258,7 @@ let%expect_test "fv prim with one free var in arg" =
     x : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* x + y *)
 let%expect_test "fv prim with multiple free vars in args" =
@@ -244,6 +270,7 @@ let%expect_test "fv prim with multiple free vars in args" =
      (range ((start 0) (stop 0) (source (String ((name ("")) (content ""))))))), y : ((desc Int)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let mut m=10 in m <- m + 1 *)
 let%expect_test "fv let_mut_in no free var" =
@@ -255,6 +282,7 @@ let%expect_test "fv let_mut_in no free var" =
   in
   print_free_vars expr;
   [%expect {||}]
+;;
 
 (* let mut mm=1 in mm <- mm + z *)
 let%expect_test "fv let_mut_in free var in body" =
@@ -273,6 +301,7 @@ let%expect_test "fv let_mut_in free var in body" =
     z : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let mut mm = x in mm *)
 let%expect_test "fv let_mut_in free var in rhs" =
@@ -288,12 +317,14 @@ let%expect_test "fv let_mut_in free var in rhs" =
     x : ((desc Int)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let mut mm=3 in mm *)
 let%expect_test "fv deref no free var" =
   let expr = let_mut_in (mut_var "mm") ~rhs:(nat 3) ~in_:(deref (mut_var "mm") nat_ty) in
   print_free_vars expr;
   [%expect {||}]
+;;
 
 (* mm *)
 let%expect_test "fv deref is free" =
@@ -304,6 +335,7 @@ let%expect_test "fv deref is free" =
     mm : ((desc Int)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let mut m=99 in m <- m + x *)
 let%expect_test "fv mutable var assignment (one free var)" =
@@ -322,6 +354,7 @@ let%expect_test "fv mutable var assignment (one free var)" =
     x : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let outer=2 in let mut m=99 in m <- m + outer *)
 let%expect_test "fv mutable var assignment no free var" =
@@ -341,12 +374,13 @@ let%expect_test "fv mutable var assignment no free var" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
-(* let c=999 in 
-   match some(5) 
-    with 
-      None->0 
-    | Some(k)->k + c *)
+(* let c=999 in
+   match some(5)
+   with
+   None->0
+   | Some(k)->k + c *)
 let%expect_test "fv if_none capturing var in some branch (no free var)" =
   let expr =
     let_in
@@ -364,10 +398,11 @@ let%expect_test "fv if_none capturing var in some branch (no free var)" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
-(* match some(5) with 
-      None->0+unb 
-    | Some(k)->999 *)
+(* match some(5) with
+   None->0+unb
+   | Some(k)->999 *)
 let%expect_test "fv if_none referencing free var in none branch" =
   let expr =
     if_none
@@ -381,10 +416,11 @@ let%expect_test "fv if_none referencing free var in none branch" =
     unb : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
-(* match 2::4::[] with 
-    []->0 
-  | hd::tl-> hd + some_free_var *)
+(* match 2::4::[] with
+   []->0
+   | hd::tl-> hd + some_free_var *)
 let%expect_test "fv if_cons referencing an unbound var" =
   let lst = cons (nat 2) (cons (nat 4) (nil nat_ty)) in
   let expr =
@@ -403,10 +439,11 @@ let%expect_test "fv if_cons referencing an unbound var" =
     some_free_var : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
-(* match [] with 
-    []->999 
-  | hd::tl-> hd + 1 *)
+(* match [] with
+   []->999
+   | hd::tl-> hd + 1 *)
 let%expect_test "fv if_cons no free var" =
   let lst = nil nat_ty in
   let expr =
@@ -422,11 +459,12 @@ let%expect_test "fv if_cons no free var" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* match Left true with
-     Left flag -> let flag=false in flag
+   Left flag -> let flag=false in flag
    | Right x -> false
- *)
+*)
 let%expect_test "fv if_left overshadow var (no free var)" =
   let left_expr = left (None, None, bool_ty) (bool true) in
   let expr =
@@ -442,11 +480,12 @@ let%expect_test "fv if_left overshadow var (no free var)" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* match Left true with
-     Left flag -> true
+   Left flag -> true
    | Right x -> 0 + unbound_ifleft
- *)
+*)
 let%expect_test "fv if_left right branch free var" =
   let left_expr = left (None, None, bool_ty) (bool true) in
   let expr =
@@ -464,6 +503,7 @@ let%expect_test "fv if_left right branch free var" =
     unbound_ifleft : ((desc Int)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* if x>0 then x+1 else x-1 *)
 let%expect_test "fv if_bool same free var in both branches" =
@@ -480,6 +520,7 @@ let%expect_test "fv if_bool same free var in both branches" =
     x : ((desc Int)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* if true then varA+10 else varB*2 *)
 let%expect_test "fv if_bool with distinct free vars in each branch" =
@@ -497,10 +538,11 @@ let%expect_test "fv if_bool with distinct free vars in each branch" =
      (range ((start 0) (stop 0) (source (String ((name ("")) (content ""))))))), varB : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let x=1 in
    if x=1 then let x=2 in x + outer
-          else x + outer2
+   else x + outer2
 *)
 let%expect_test "fv nested if_bool overshadow" =
   let expr =
@@ -524,11 +566,12 @@ let%expect_test "fv nested if_bool overshadow" =
      (range ((start 0) (stop 0) (source (String ((name ("")) (content ""))))))), outer2 : ((desc Int)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let mut x=10 in
    for i from freeVarInit while i < freeCond do
-     x <- x + (i + freeBody);
-     i <- i + 1
+   x <- x + (i + freeBody);
+   i <- i + 1
    done
 *)
 let%expect_test "fv for with multiple free vars" =
@@ -558,6 +601,7 @@ let%expect_test "fv for with multiple free vars" =
      (range ((start 0) (stop 0) (source (String ((name ("")) (content ""))))))), freeVarInit : ((desc Int)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let mut x=0 in
    for i=1 while i<3 do x<-x+i; i<-i+1 done
@@ -579,6 +623,7 @@ let%expect_test "fv for no free vars" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* let outer=10 in
    for_each [1;2] do elem-> elem + outer
@@ -600,6 +645,7 @@ let%expect_test "fv for_each referencing outer var" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* for_each [1] do el-> el+unboundFe *)
 let%expect_test "fv for_each body free var" =
@@ -618,6 +664,7 @@ let%expect_test "fv for_each body free var" =
     unboundFe : ((desc Int)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let s="outerS" in map ["a";"b"] (s-> s^s) *)
 let%expect_test "fv map overshadowing var (no free var)" =
@@ -638,6 +685,7 @@ let%expect_test "fv map overshadowing var (no free var)" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* map [1;2] (n -> n + unboundMap) *)
 let%expect_test "fv map body free var" =
@@ -656,6 +704,7 @@ let%expect_test "fv map body free var" =
     unboundMap : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* fold_right [1;2] init=0 (fun elem_acc -> (car elem_acc) + (cdr elem_acc) + unbound) *)
 let%expect_test "fv fold_right referencing an unbound var in fold body" =
@@ -687,6 +736,7 @@ let%expect_test "fv fold_right referencing an unbound var in fold body" =
     unbound : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* fold_right [1] init=0 do (fun pair -> (car pair) + (cdr pair)) *)
 let%expect_test "fv fold_right no free var" =
@@ -707,6 +757,7 @@ let%expect_test "fv fold_right no free var" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* fold_left [1;2] init=0 do (fun acc_x -> car acc_x + cdr acc_x ) *)
 let%expect_test "fv fold_left no free var" =
@@ -733,6 +784,7 @@ let%expect_test "fv fold_left no free var" =
   print_free_vars expr;
   [%expect {|
   |}]
+;;
 
 (* fold_left [1;2] init=0 (fun acc_x -> car acc_x + cdr acc_x + freeFold) *)
 let%expect_test "fv fold_left free var in body" =
@@ -758,6 +810,7 @@ let%expect_test "fv fold_left free var in body" =
     freeFold : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let x=999 in let (x,y,z)=(1,2,3) in x + x *)
 let%expect_test "fv let_tuple_in overshadow (no free var)" =
@@ -777,6 +830,7 @@ let%expect_test "fv let_tuple_in overshadow (no free var)" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* let (a,b,c)=(10,20,30) in c + notBound *)
 let%expect_test "fv let_tuple_in body free var" =
@@ -795,6 +849,7 @@ let%expect_test "fv let_tuple_in body free var" =
     notBound : ((desc Int)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* ( (1,2,3)[1] ) + outer *)
 let%expect_test "fv proj referencing free var" =
@@ -809,6 +864,7 @@ let%expect_test "fv proj referencing free var" =
     outer : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let a=10 in let triple=(a,11,12) in triple[1] + 100 *)
 let%expect_test "fv proj fully bound, no free var" =
@@ -829,6 +885,7 @@ let%expect_test "fv proj fully bound, no free var" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* let big_val=9999 in create_contract param=(nat,nat) code=fun (p,s)-> ([], p + big_val) *)
 let%expect_test "fv create_contract referencing outer var (no free var leftover)" =
@@ -861,6 +918,7 @@ let%expect_test "fv create_contract referencing outer var (no free var leftover)
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* create_contract param=(int,nat) code=fun (p,s)-> ([], p + freeU) *)
 let%expect_test "fv create_contract referencing unbound var in code" =
@@ -892,7 +950,7 @@ let%expect_test "fv create_contract referencing unbound var in code" =
     freeU : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
-
+;;
 
 let michelson_push_int n =
   Tezos_micheline.Micheline.Prim
@@ -900,6 +958,7 @@ let michelson_push_int n =
     , "PUSH"
     , [ Tezos_micheline.Micheline.Int (Ast_builder.Dummy_range.v, Z.of_int n) ]
     , [] )
+;;
 
 (* raw_michelson { PUSH 42 } [] : int *)
 let%expect_test "fv raw_michelson no arguments" =
@@ -910,6 +969,7 @@ let%expect_test "fv raw_michelson no arguments" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* raw_michelson { PUSH 100 } [freeArg] : int *)
 let%expect_test "fv raw_michelson single free var in argument" =
@@ -923,6 +983,7 @@ let%expect_test "fv raw_michelson single free var in argument" =
     freeArg : ((desc Int)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let x=123 in raw_michelson { PUSH 999 } [x, unboundVar] : int *)
 let%expect_test "fv raw_michelson mixed arguments" =
@@ -945,6 +1006,7 @@ let%expect_test "fv raw_michelson mixed arguments" =
     unboundVar : ((desc Int)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;
 
 (* let a=10, b=20 in raw_michelson { PUSH 1 } [a,b] : int *)
 let%expect_test "fv raw_michelson all bound arguments" =
@@ -968,6 +1030,7 @@ let%expect_test "fv raw_michelson all bound arguments" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* global_constant "someHash" [10] : int *)
 let%expect_test "fv global_constant no free var" =
@@ -975,6 +1038,7 @@ let%expect_test "fv global_constant no free var" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* let outer=42 in global_constant "expruHash" [outer] : int *)
 let%expect_test "fv global_constant referencing outer var" =
@@ -987,6 +1051,7 @@ let%expect_test "fv global_constant referencing outer var" =
   print_free_vars expr;
   [%expect {|
     |}]
+;;
 
 (* global_constant "hashX" [unG, 9] : nat *)
 let%expect_test "fv global_constant unbound var" =
@@ -997,3 +1062,4 @@ let%expect_test "fv global_constant unbound var" =
     unG : ((desc Nat)
      (range ((start 0) (stop 0) (source (String ((name ("")) (content "")))))))
   |}]
+;;

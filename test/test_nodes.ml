@@ -1,11 +1,11 @@
-(* In this file, we test the compilation of various expressions to Michelson, 
-  with each type of LLTZ node tested atleast once. We check that both optimised and unptimised michelson output is correct. 
-  
-  The concrete syntaxes are written with a OCaml-like syntax. 
-  In LLTZ, we can only copy the value of variables not their reference,
-  therefore even for mutable variable we don't use 'ref' which is present in OCaml
-  to simplify the syntax. Assignments are done with the '<-' operator.
-  *)
+(* In this file, we test the compilation of various expressions to Michelson,
+   with each type of LLTZ node tested atleast once. We check that both optimised and unptimised michelson output is correct.
+
+   The concrete syntaxes are written with a OCaml-like syntax.
+   In LLTZ, we can only copy the value of variables not their reference,
+   therefore even for mutable variable we don't use 'ref' which is present in OCaml
+   to simplify the syntax. Assignments are done with the '<-' operator.
+*)
 open Core
 open Lltz_ir.Ast_builder.With_dummy
 module Ast_builder = Lltz_ir.Ast_builder
@@ -18,14 +18,16 @@ let empty_stack : LM.Stack.t = []
 let compile_and_collect_instructions ?(optimize = false) expr =
   let compiled_instruction = LM.compile_to_micheline ~optimize expr in
   [ compiled_instruction empty_stack ]
+;;
 
 let print_instructions instructions =
   List.iter
     ~f:(fun instruction ->
-      Michelson.Ast.pp Format.std_formatter instruction;
+      Lltz_michelson.Ast.pp Format.std_formatter instruction;
       Format.print_newline ())
     instructions;
   Format.print_flush ()
+;;
 
 let test_expr ?(optimize = true) expr =
   let instructions = compile_and_collect_instructions expr in
@@ -36,6 +38,7 @@ let test_expr ?(optimize = true) expr =
     let optimised_instructions = compile_and_collect_instructions ~optimize expr in
     print_instructions optimised_instructions)
   else ()
+;;
 
 let%expect_test "unit" =
   test_expr unit;
@@ -44,6 +47,7 @@ let%expect_test "unit" =
 
     Optimised:
     { UNIT } |}]
+;;
 
 (* Bool Tests *)
 let%expect_test "bool true" =
@@ -53,6 +57,7 @@ let%expect_test "bool true" =
 
     Optimised:
     { PUSH bool True } |}]
+;;
 
 let%expect_test "bool false" =
   test_expr (bool false);
@@ -61,6 +66,7 @@ let%expect_test "bool false" =
 
     Optimised:
     { PUSH bool False } |}]
+;;
 
 (* Nat Tests *)
 let%expect_test "nat zero" =
@@ -70,6 +76,7 @@ let%expect_test "nat zero" =
 
     Optimised:
     { PUSH nat 0 } |}]
+;;
 
 let%expect_test "nat 42" =
   test_expr (nat 42);
@@ -78,6 +85,7 @@ let%expect_test "nat 42" =
 
     Optimised:
     { PUSH nat 42 } |}]
+;;
 
 let%expect_test "nat large" =
   test_expr (nat 999999999999999999);
@@ -87,6 +95,7 @@ let%expect_test "nat large" =
 
     Optimised:
     { PUSH nat 999999999999999999 } |}]
+;;
 
 (* Int Tests *)
 let%expect_test "int zero" =
@@ -96,6 +105,7 @@ let%expect_test "int zero" =
 
     Optimised:
     { PUSH int 0 } |}]
+;;
 
 let%expect_test "int positive" =
   test_expr (int 123456);
@@ -104,6 +114,7 @@ let%expect_test "int positive" =
 
     Optimised:
     { PUSH int 123456 } |}]
+;;
 
 let%expect_test "int negative" =
   test_expr (int (-999999));
@@ -112,6 +123,7 @@ let%expect_test "int negative" =
 
     Optimised:
     { PUSH int -999999 } |}]
+;;
 
 (* Mutez Tests *)
 let%expect_test "mutez zero" =
@@ -121,6 +133,7 @@ let%expect_test "mutez zero" =
 
     Optimised:
     { PUSH mutez 0 } |}]
+;;
 
 let%expect_test "mutez small" =
   test_expr (mutez 123);
@@ -129,6 +142,7 @@ let%expect_test "mutez small" =
 
     Optimised:
     { PUSH mutez 123 } |}]
+;;
 
 let%expect_test "mutez large" =
   test_expr (mutez 10000000);
@@ -137,6 +151,7 @@ let%expect_test "mutez large" =
 
     Optimised:
     { PUSH mutez 10000000 } |}]
+;;
 
 (* String Tests *)
 let%expect_test "string empty" =
@@ -146,6 +161,7 @@ let%expect_test "string empty" =
 
     Optimised:
     { PUSH string "" } |}]
+;;
 
 let%expect_test "string ascii" =
   test_expr (string "hello");
@@ -154,6 +170,7 @@ let%expect_test "string ascii" =
 
     Optimised:
     { PUSH string "hello" } |}]
+;;
 
 let%expect_test "string unicode" =
   test_expr (string "こんにちは");
@@ -162,6 +179,7 @@ let%expect_test "string unicode" =
 
     Optimised:
     { PUSH string "こんにちは" } |}]
+;;
 
 (* Key Tests *)
 let%expect_test "key example1" =
@@ -172,6 +190,7 @@ let%expect_test "key example1" =
 
     Optimised:
     { PUSH key "edpkExampleKeyString" } |}]
+;;
 
 (* Key_hash Tests *)
 let%expect_test "key_hash tz1" =
@@ -182,6 +201,7 @@ let%expect_test "key_hash tz1" =
 
     Optimised:
     { PUSH key_hash "tz1abc123abc123abc123" } |}]
+;;
 
 let%expect_test "key_hash tz2" =
   test_expr (key_hash "tz2xyz456xyz456xyz456");
@@ -191,6 +211,7 @@ let%expect_test "key_hash tz2" =
 
     Optimised:
     { PUSH key_hash "tz2xyz456xyz456xyz456" } |}]
+;;
 
 (* Bytes Tests *)
 let%expect_test "bytes empty" =
@@ -200,6 +221,7 @@ let%expect_test "bytes empty" =
 
     Optimised:
     { PUSH bytes 0x3078 } |}]
+;;
 
 let%expect_test "bytes small" =
   test_expr (bytes "0xFF");
@@ -209,6 +231,7 @@ let%expect_test "bytes small" =
 
     Optimised:
     { PUSH bytes 0x30784646 } |}]
+;;
 
 let%expect_test "bytes bigger" =
   test_expr (bytes "0xDEADBEEF");
@@ -218,6 +241,7 @@ let%expect_test "bytes bigger" =
 
     Optimised:
     { PUSH bytes 0x30784445414442454546 } |}]
+;;
 
 (* Chain_id Tests *)
 let%expect_test "chain_id mainnet" =
@@ -228,6 +252,7 @@ let%expect_test "chain_id mainnet" =
 
     Optimised:
     { PUSH chain_id "NetXdQprcVkpaWU" } |}]
+;;
 
 let%expect_test "chain_id ghostnet" =
   test_expr (chain_id "NetXnHfVqm9iesp");
@@ -237,6 +262,7 @@ let%expect_test "chain_id ghostnet" =
 
     Optimised:
     { PUSH chain_id "NetXnHfVqm9iesp" } |}]
+;;
 
 (* Address Tests *)
 let%expect_test "address kt1 contract" =
@@ -247,6 +273,7 @@ let%expect_test "address kt1 contract" =
 
     Optimised:
     { PUSH address "KT1ExampleContractAddress" } |}]
+;;
 
 let%expect_test "address tz1 implicit" =
   test_expr (address_const "tz1ExampleImplicitAddress");
@@ -256,6 +283,7 @@ let%expect_test "address tz1 implicit" =
 
     Optimised:
     { PUSH address "tz1ExampleImplicitAddress" } |}]
+;;
 
 (* Timestamp Tests *)
 let%expect_test "timestamp epoch" =
@@ -265,6 +293,7 @@ let%expect_test "timestamp epoch" =
 
     Optimised:
     { PUSH timestamp 0 } |}]
+;;
 
 (* Large future date, or something well beyond typical usage. *)
 let%expect_test "timestamp far-future" =
@@ -275,6 +304,7 @@ let%expect_test "timestamp far-future" =
 
     Optimised:
     { PUSH timestamp 253402300799 } |}]
+;;
 
 (* BLS12-381 G1, G2, FR Tests *)
 let%expect_test "bls12_381_g1 short" =
@@ -285,6 +315,7 @@ let%expect_test "bls12_381_g1 short" =
 
     Optimised:
     { PUSH bls12_381_g1 0x424c5331325f3338315f473153686f72744578616d706c65 } |}]
+;;
 
 let%expect_test "bls12_381_g2 short" =
   test_expr (bls12_381_g2 "BLS12_381_G2ShortExample");
@@ -294,6 +325,7 @@ let%expect_test "bls12_381_g2 short" =
 
     Optimised:
     { PUSH bls12_381_g2 0x424c5331325f3338315f473253686f72744578616d706c65 } |}]
+;;
 
 let%expect_test "bls12_381_fr short" =
   test_expr (bls12_381_fr "BLS12_381_FRShortExample");
@@ -303,6 +335,7 @@ let%expect_test "bls12_381_fr short" =
 
     Optimised:
     { PUSH bls12_381_fr 0x424c5331325f3338315f465253686f72744578616d706c65 } |}]
+;;
 
 (* Signature Tests *)
 let%expect_test "signature short" =
@@ -313,6 +346,7 @@ let%expect_test "signature short" =
 
     Optimised:
     { PUSH signature "edsigShortExampleSignature" } |}]
+;;
 
 let%expect_test "signature typical" =
   test_expr
@@ -326,6 +360,7 @@ let%expect_test "signature typical" =
     Optimised:
     { PUSH signature
            "edsigthT3ab6iK1ZPw6u9JN7nUeadfZtQ1Qvo8CeCD3ScH7GpdiQA69rVbX7fNCRbs6Sr9aBii1qmuXun5qRmEuA9N2Dg9LGQdN" } |}]
+;;
 
 (* let x = 1 in x *)
 let%expect_test "variable x" =
@@ -335,6 +370,7 @@ let%expect_test "variable x" =
 
     Optimised:
     { PUSH nat 1 } |}]
+;;
 
 (* let x = -42 in x *)
 let%expect_test "variable usage: let_in (bind + reference)" =
@@ -345,7 +381,7 @@ let%expect_test "variable usage: let_in (bind + reference)" =
 
   Optimised:
   { PUSH int -42 } |}]
-
+;;
 
 (* let x = 42 in
    let y = x + 1 in
@@ -368,6 +404,7 @@ let%expect_test "nested let_in (two bindings, referencing each other)" =
 
     Optimised:
     { PUSH nat 42 ; PUSH nat 1 ; ADD } |}]
+;;
 
 (* let x = 10 in
    let x = x + 5 in
@@ -390,6 +427,7 @@ let%expect_test "let_in variable shadowing" =
 
     Optimised:
     { PUSH nat 10 ; PUSH nat 5 ; ADD } |}]
+;;
 
 (* let mut x = 0 in
    let _ = x <- 1 in
@@ -412,12 +450,12 @@ let%expect_test "let_mut_in usage (assign, reassign, read)" =
 
     Optimised:
     { PUSH nat 1 } |}]
-
+;;
 
 (* let mut x = 10 in
    let ignore1 = x <- (x + 1) in
    let ignore2 = x <- (x + 2) in
-     x *)
+   x *)
 let%expect_test "multiple sequential assign" =
   let mut_x = mut_var "x" in
   let expr =
@@ -457,13 +495,13 @@ let%expect_test "multiple sequential assign" =
 
     Optimised:
     { PUSH nat 10 ; PUSH nat 1 ; ADD ; PUSH nat 2 ; ADD } |}]
-
+;;
 
 (* let mut x = 0 in
    let ignored = if 1 = 2 then (x <- x + 100)
-                 else if 3 < 4 then (x <- x + 200)
-                 else (x <- x + 300) in
-     x *)
+   else if 3 < 4 then (x <- x + 200)
+   else (x <- x + 300) in
+   x *)
 let%expect_test "assign inside nested if_bool" =
   let mut_x = mut_var "x" in
   let nested_if =
@@ -503,11 +541,12 @@ let%expect_test "assign inside nested if_bool" =
 
     Optimised:
     { PUSH nat 0 ; PUSH nat 200 ; ADD } |}]
+;;
 
 (* let mut x = 5 in
    let ignore1 = x <- 5 in
    let ignore2 = x <- 5 in
-     x *)
+   x *)
 let%expect_test "assign same value repeatedly" =
   let mut_x = mut_var "x" in
   let expr =
@@ -543,11 +582,12 @@ let%expect_test "assign same value repeatedly" =
 
     Optimised:
     { PUSH nat 5 } |}]
+;;
 
 (* let mut x = 10 in
    let ignore1 = x <- (x + 10) in
    let ignore2 = x <- (x + x) in
-     x *)
+   x *)
 let%expect_test "assign referencing the updated var" =
   let mut_x = mut_var "x" in
   let first_assign = assign mut_x (add (deref mut_x nat_ty) (nat 10)) in
@@ -585,11 +625,12 @@ let%expect_test "assign referencing the updated var" =
 
     Optimised:
     { PUSH nat 10 ; DUP ; ADD ; DUP ; ADD } |}]
+;;
 
 (* let mut x = 0 in
    let ignore_while = while x < 3 do
-                         x <- (x + x + 1)
-                       done in
+   x <- (x + x + 1)
+   done in
    x *)
 let%expect_test "assign inside while" =
   let mut_x = mut_var "x" in
@@ -635,6 +676,7 @@ let%expect_test "assign inside while" =
       COMPARE ;
       LT ;
       LOOP { PUSH nat 1 ; SWAP ; DUP ; ADD ; ADD ; PUSH nat 3 ; DUP 2 ; COMPARE ; LT } } |}]
+;;
 
 (* let mut x = 100 in
    if x = 100 then x <- (x - 50)
@@ -669,14 +711,15 @@ let%expect_test "assign same var multiple branches" =
       EQ ;
       IF { PUSH int -50 ; ADD ; DROP } { PUSH int -10 ; ADD ; DROP } ;
       UNIT } |}]
+;;
 
 (* let mut x = 0 in
    let mut i = 0 in
-     let ignore_for = for i from 0 while i < 4 do
-                         x <- x + i;
-                         i <- i + 1
-                       done in
-     x *)
+   let ignore_for = for i from 0 while i < 4 do
+   x <- x + i;
+   i <- i + 1
+   done in
+   x *)
 let%expect_test "assign inside for loop" =
   let idx = mut_var "i" in
   let mut_x = mut_var "x" in
@@ -752,6 +795,7 @@ let%expect_test "assign inside for loop" =
              COMPARE ;
              LT } ;
       DROP 2 } |}]
+;;
 
 (* let mut x = 123 in
    x <- "changed" *)
@@ -766,6 +810,7 @@ let%expect_test "assign same var different type" =
 
     Optimised:
     { UNIT } |}]
+;;
 
 (* let b = true in if b then 10 else 20 *)
 let%expect_test "let_in + if_bool" =
@@ -782,10 +827,11 @@ let%expect_test "let_in + if_bool" =
 
     Optimised:
     { PUSH nat 10 } |}]
+;;
 
 (* let x = 1 in
    let y = 2 in
-     if true then x else y *)
+   if true then x else y *)
 let%expect_test "let_in referencing previous var inside if_bool" =
   let expr =
     let_in
@@ -811,10 +857,11 @@ let%expect_test "let_in referencing previous var inside if_bool" =
 
     Optimised:
     { PUSH nat 1 } |}]
+;;
 
 (* let x = 10 in
    let y = -5 in
-     (fun z -> z * 2) (y + x) *)
+   (fun z -> z * 2) (y + x) *)
 let%expect_test "nested let_in" =
   let expr =
     let_in
@@ -843,6 +890,7 @@ let%expect_test "nested let_in" =
 
     Optimised:
     { PUSH nat 10 ; PUSH int -5 ; ADD ; PUSH nat 2 ; SWAP ; MUL } |}]
+;;
 
 (* fun x -> let z = 5 in x + z *)
 let%expect_test "lambda that uses let_in" =
@@ -862,9 +910,10 @@ let%expect_test "lambda that uses let_in" =
 
     Optimised:
     { LAMBDA nat nat { PUSH nat 5 ; ADD } } |}]
+;;
 
 (* let rec f x =
-     if x <= 0 then 1 else 1 + f(x - 1)
+   if x <= 0 then 1 else 1 + f(x - 1)
    in f *)
 let%expect_test "recursive lambda usage" =
   let lam_rec_expr =
@@ -903,6 +952,7 @@ let%expect_test "recursive lambda usage" =
         INT ;
         LE ;
         IF { DROP 2 ; PUSH nat 1 } { PUSH int -1 ; ADD ; EXEC } } } |}]
+;;
 
 (* let mut x = 100 in
    if false then x := 200 else x := 300 *)
@@ -927,6 +977,7 @@ let%expect_test "let_mut_in + assign in if_bool" =
 
     Optimised:
     { UNIT } |}]
+;;
 
 (* fun (x: bool) -> x *)
 let%expect_test "lambda returning same type: bool -> bool" =
@@ -937,6 +988,7 @@ let%expect_test "lambda returning same type: bool -> bool" =
 
     Optimised:
     { LAMBDA bool bool {} } |}]
+;;
 
 (* fun (x: string) -> if x = "secret" then true else false *)
 let%expect_test "lambda returning different type: string -> bool" =
@@ -963,6 +1015,7 @@ let%expect_test "lambda returning different type: string -> bool" =
 
     Optimised:
     { LAMBDA string bool { PUSH string "secret" ; COMPARE ; EQ } } |}]
+;;
 
 (* fun (x: address) -> (now, x) *)
 let%expect_test "lambda returning tuple" =
@@ -979,11 +1032,11 @@ let%expect_test "lambda returning tuple" =
 
     Optimised:
     { LAMBDA address (pair timestamp address) { NOW ; PAIR } } |}]
+;;
 
-
-(* let rec f (n: int) = 
-     if n <= 1 then 1 
-     else n * f(n - 1)
+(* let rec f (n: int) =
+   if n <= 1 then 1
+   else n * f(n - 1)
    in f *)
 let%expect_test "lambda_rec factorial" =
   let n_var = var "n" in
@@ -1026,6 +1079,7 @@ let%expect_test "lambda_rec factorial" =
           LE ;
           IF { DROP 2 ; PUSH int 1 }
              { PUSH int 1 ; DUP 2 ; SUB ; DIG 2 ; SWAP ; EXEC ; SWAP ; MUL } } } |}]
+;;
 
 (* fun (x: nat) -> (fun (y: nat) -> y + 2) *)
 let%expect_test "nested lambda" =
@@ -1041,6 +1095,7 @@ let%expect_test "nested lambda" =
 
     Optimised:
     { LAMBDA nat (lambda nat nat) { DROP ; LAMBDA nat nat { PUSH nat 2 ; ADD } } } |}]
+;;
 
 (* let x = (fun (y: nat) -> 3 * y) in x 5 *)
 let%expect_test "lambda in let" =
@@ -1060,6 +1115,7 @@ let%expect_test "lambda in let" =
 
     Optimised:
     { LAMBDA nat nat { PUSH nat 3 ; MUL } ; PUSH nat 5 ; EXEC } |}]
+;;
 
 (* if 1 <> 2 then (fun (x: nat) -> x + 2)
    else (fun (y: nat) -> y - 3) *)
@@ -1086,6 +1142,7 @@ let%expect_test "if with lambda" =
       NEQ ;
       IF { LAMBDA nat nat { PUSH nat 2 ; ADD } }
          { LAMBDA nat int { PUSH int -3 ; ADD } } } |}]
+;;
 
 (* (fun (x: string) -> x = "hello") "test" *)
 let%expect_test "app: lambda (string->bool) applied to a string" =
@@ -1103,6 +1160,7 @@ let%expect_test "app: lambda (string->bool) applied to a string" =
 
     Optimised:
     { PUSH string "test" ; PUSH string "hello" ; COMPARE ; EQ } |}]
+;;
 
 (* let mut s = "hello" in
    let ignore = s <- "world" in s *)
@@ -1130,6 +1188,7 @@ let%expect_test "let_mut_in: assign string" =
 
     Optimised:
     { PUSH string "world" } |}]
+;;
 
 (* let mut counter = 0 in fun (u: unit) -> counter *)
 let%expect_test "deref inside lambda body" =
@@ -1150,6 +1209,7 @@ let%expect_test "deref inside lambda body" =
 
     Optimised:
     { LAMBDA (pair nat unit) nat { CAR } ; PUSH nat 0 ; APPLY } |}]
+;;
 
 (* let mut x = 42 in if true then x <- 100 else x <- 200 *)
 let%expect_test "assign inside if_bool" =
@@ -1174,10 +1234,11 @@ let%expect_test "assign inside if_bool" =
 
     Optimised:
     { UNIT } |}]
+;;
 
-(* let rec factorial (n: int) = 
-     if n <= 1 then 1 
-     else n * factorial(n - 1)
+(* let rec factorial (n: int) =
+   if n <= 1 then 1
+   else n * factorial(n - 1)
    in factorial 5 *)
 let%expect_test "app of lambda_rec factorial with let_in" =
   let n_var = var "n" in
@@ -1226,6 +1287,7 @@ let%expect_test "app of lambda_rec factorial with let_in" =
              { PUSH int 1 ; DUP 2 ; SUB ; DIG 2 ; SWAP ; EXEC ; SWAP ; MUL } } ;
       PUSH int 5 ;
       EXEC } |}]
+;;
 
 (* if true then "A" else "B" *)
 let%expect_test "if bool 1" =
@@ -1237,6 +1299,7 @@ let%expect_test "if bool 1" =
 
     Optimised:
     { PUSH string "A" } |}]
+;;
 
 (* if 2 = 2 then 100 else -1 *)
 let%expect_test "if bool 2" =
@@ -1252,6 +1315,7 @@ let%expect_test "if bool 2" =
 
     Optimised:
     { PUSH int 100 } |}]
+;;
 
 (* if 1 = 2 then (if 1 <= 10 then 1 else 2) else 3 *)
 let%expect_test "nested if_bool" =
@@ -1277,7 +1341,7 @@ let%expect_test "nested if_bool" =
 
     Optimised:
     { PUSH nat 3 } |}]
-
+;;
 
 (* match some 10 with
    | None -> "none"
@@ -1302,6 +1366,7 @@ let%expect_test "if none 1" =
     { PUSH nat 10 ;
       SOME ;
       IF_NONE { PUSH string "none" } { PUSH nat 5 ; ADD } } |}]
+;;
 
 (* match none with
    | None -> true
@@ -1321,7 +1386,7 @@ let%expect_test "if none 2" =
 
     Optimised:
     { NONE bool ; IF_NONE { PUSH bool True } { NOT } } |}]
-
+;;
 
 (* match [1;2] with
    | [] -> 0
@@ -1351,6 +1416,7 @@ let%expect_test "if cons 1" =
     Optimised:
     { PUSH (list nat) { 1 ; 2 } ;
       IF_CONS { DROP 2 ; PUSH string "nonempty" } { PUSH nat 0 } } |}]
+;;
 
 (* match [] with
    | [] -> "empty"
@@ -1376,7 +1442,7 @@ let%expect_test "if cons 2" =
     Optimised:
     { NIL string ;
       IF_CONS { DROP 2 ; PUSH string "nonempty" } { PUSH string "empty" } } |}]
-
+;;
 
 (* match Left false with
    | Left l -> "left"
@@ -1400,6 +1466,7 @@ let%expect_test "if left" =
     { PUSH bool False ;
       LEFT bool ;
       IF_LEFT { DROP ; PUSH string "left" } { DROP ; PUSH string "right" } } |}]
+;;
 
 (* match Right true with
    | Left l -> 0
@@ -1423,6 +1490,7 @@ let%expect_test "if left 2" =
     { PUSH bool True ;
       RIGHT bool ;
       IF_LEFT { DROP ; PUSH int 0 } { DROP ; PUSH int 1 } } |}]
+;;
 
 (* let mut i = 0 in while i < 3 do i := i + 1 done *)
 let%expect_test "while" =
@@ -1464,9 +1532,10 @@ let%expect_test "while" =
       LOOP { PUSH int 1 ; ADD ; PUSH int 3 ; DUP 2 ; COMPARE ; LT } ;
       DROP ;
       UNIT } |}]
+;;
 
 (* while 0 <= 10 do
-     let x = 7 in if x >= 5 then x := 2 else x := 2 done *)
+   let x = 7 in if x >= 5 then x := 2 else x := 2 done *)
 let%expect_test "while with complex body" =
   let body_expr =
     let_in
@@ -1502,10 +1571,11 @@ let%expect_test "while with complex body" =
 
     Optimised:
     { PUSH int -1 ; LE ; LOOP { PUSH int -1 ; LE } ; UNIT } |}]
+;;
 
 (* let start = Left false in
    while_left start do
-     if v then Right "done" else Left true done *)
+   if v then Right "done" else Left true done *)
 let%expect_test "while left" =
   let start_val = left (None, None, bool_ty) (bool false) in
   let e =
@@ -1535,6 +1605,7 @@ let%expect_test "while left" =
       LEFT string ;
       LOOP_LEFT
         { IF { PUSH string "done" ; RIGHT string } { PUSH bool True ; LEFT bool } } } |}]
+;;
 
 (* let mut i = 0 in
    for i from 0 while i < 3 do "looping" done *)
@@ -1585,7 +1656,7 @@ let%expect_test "for" =
       LOOP { PUSH nat 1 ; ADD ; PUSH nat 3 ; DUP 2 ; COMPARE ; LT } ;
       DROP ;
       UNIT } |}]
-
+;;
 
 (* for each s in ["one"; "two"] do true end *)
 let%expect_test "for each" =
@@ -1604,6 +1675,7 @@ let%expect_test "for each" =
 
     Optimised:
     { PUSH (list string) { "one" ; "two" } ; ITER { DROP } ; UNIT } |}]
+;;
 
 (* map (fun (x: int) -> x + 10) over [1;2] *)
 let%expect_test "map1" =
@@ -1625,6 +1697,7 @@ let%expect_test "map1" =
 
     Optimised:
     { PUSH (list int) { 1 ; 2 } ; MAP { PUSH int 10 ; ADD } } |}]
+;;
 
 (* map (fun (b: bool) -> not b) over some true *)
 let%expect_test "map2" =
@@ -1641,6 +1714,7 @@ let%expect_test "map2" =
 
     Optimised:
     { PUSH bool True ; SOME ; MAP { NOT } } |}]
+;;
 
 (* map (fun (x: nat) -> x + 10) over [1;2;3] *)
 let%expect_test "map with operations" =
@@ -1663,6 +1737,7 @@ let%expect_test "map with operations" =
 
     Optimised:
     { PUSH (list nat) { 1 ; 2 ; 3 } ; MAP { PUSH nat 10 ; ADD } } |}]
+;;
 
 (* fold_left [2;3] ~init:1 ~fold:(fun acc_x -> (car acc_x) * (cdr acc_x)) *)
 let%expect_test "fold left" =
@@ -1699,6 +1774,7 @@ let%expect_test "fold left" =
 
     Optimised:
     { PUSH nat 1 ; PUSH (list nat) { 2 ; 3 } ; ITER { SWAP ; MUL } } |}]
+;;
 
 (* fold_left [1;2;3] ~init:0 ~fold:(fun acc_x -> (car acc_x) + (cdr acc_x)) *)
 let%expect_test "fold_left with operations" =
@@ -1734,6 +1810,7 @@ let%expect_test "fold_left with operations" =
 
     Optimised:
     { PUSH nat 0 ; PUSH (list nat) { 1 ; 2 ; 3 } ; ITER { ADD } } |}]
+;;
 
 (* fold_right [1;2] ~init:0 ~fold:(fun (elem_acc: int * int) -> fst elem_acc + snd elem_acc) *)
 let%expect_test "fold right" =
@@ -1777,6 +1854,7 @@ let%expect_test "fold right" =
       PUSH (list int) { 1 ; 2 } ;
       ITER { CONS } ;
       ITER { ADD } } |}]
+;;
 
 (* fold_right [1;2;3] ~init:0 ~fold:(fun (x_acc: nat * nat) -> snd x_acc - fst x_acc) *)
 let%expect_test "fold_right with operations" =
@@ -1819,6 +1897,7 @@ let%expect_test "fold_right with operations" =
       PUSH (list nat) { 1 ; 2 ; 3 } ;
       ITER { CONS } ;
       ITER { SWAP ; SUB } } |}]
+;;
 
 (* let (x, b) = (1, true) in if b then x + 10 else 0 *)
 let%expect_test "let tuple in basic" =
@@ -1845,6 +1924,7 @@ let%expect_test "let tuple in basic" =
 
     Optimised:
     { PUSH nat 1 ; PUSH nat 10 ; ADD } |}]
+;;
 
 (* let (p, flag) = ((2, 5), false) in if flag then fst p else snd p *)
 let%expect_test "let tuple in nested" =
@@ -1884,6 +1964,7 @@ let%expect_test "let tuple in nested" =
 
     Optimised:
     { PUSH nat 5 } |}]
+;;
 
 (* let (x, y, z) = (1,2,3) in let a = (y, z)[0] in a + x *)
 let%expect_test "nested tuple and projection" =
@@ -1925,6 +2006,7 @@ let%expect_test "nested tuple and projection" =
 
     Optimised:
     { PUSH nat 3 ; PUSH nat 2 ; PUSH nat 1 ; DIG 2 ; DROP ; ADD } |}]
+;;
 
 (* ("hello", 42, false)[1] *)
 let%expect_test "proj second element" =
@@ -1942,6 +2024,7 @@ let%expect_test "proj second element" =
 
     Optimised:
     { PUSH bool False ; PUSH int 42 ; PUSH string "hello" ; PAIR 3 ; GET 3 } |}]
+;;
 
 (* ("s", (10, 20))[1][0] *)
 let%expect_test "proj nested element" =
@@ -1956,6 +2039,7 @@ let%expect_test "proj nested element" =
 
     Optimised:
     { PUSH nat 10 } |}]
+;;
 
 (* update (true, 123) at index 1 with 999 *)
 let%expect_test "update tuple index" =
@@ -1976,6 +2060,7 @@ let%expect_test "update tuple index" =
 
     Optimised:
     { PUSH nat 123 ; PUSH bool True ; PAIR ; PUSH nat 999 ; UPDATE 2 } |}]
+;;
 
 (* TODO: INJ/MATCH used in SmartPY
 let%expect_test "inj two branch" =
@@ -2065,6 +2150,7 @@ let push_int n =
       ; Int (Ast_builder.Dummy_range.v, Z.of_int n)
       ]
     , [] )
+;;
 
 let seq_of_prim prim = Tezos_micheline.Micheline.Seq (Ast_builder.Dummy_range.v, [ prim ])
 let seq instrs = Tezos_micheline.Micheline.Seq (Ast_builder.Dummy_range.v, instrs)
@@ -2079,6 +2165,7 @@ let%expect_test "raw michelson single push int" =
 
     Optimised:
     { PUSH int 42 } |}]
+;;
 
 (* raw_michelson { PUSH int 3 ; PUSH int 5 ; ADD } : int *)
 let%expect_test "raw michelson multiple instructions" =
@@ -2096,6 +2183,7 @@ let%expect_test "raw michelson multiple instructions" =
 
     Optimised:
     { PUSH int 8 } |}]
+;;
 
 (* raw_michelson (args=[2; 8]) { MUL } : int *)
 let%expect_test "raw michelson with arguments" =
@@ -2109,6 +2197,7 @@ let%expect_test "raw michelson with arguments" =
 
     Optimised:
     { PUSH int 16 } |}]
+;;
 
 (* raw_michelson { PUSH string "hello" } : string *)
 let%expect_test "raw michelson returning string" =
@@ -2134,6 +2223,7 @@ let%expect_test "raw michelson returning string" =
 
     Optimised:
     { PUSH string "hello" } |}]
+;;
 
 (* raw_michelson { PUSH int 10 ; PUSH int 20 ; PAIR ; DUP } : (int * int) *)
 let%expect_test "raw michelson complex seq" =
@@ -2160,12 +2250,14 @@ let%expect_test "raw michelson complex seq" =
 
     Optimised:
     { PUSH int 10 ; PUSH int 20 ; PAIR ; DUP } |}]
+;;
 
 let operation_list_ty = list_ty operation_ty
 
 let return_no_ops stg_expr stg_ty =
   ( tuple (mk_row [ Leaf (None, nil operation_ty); Leaf (None, stg_expr) ])
   , mk_tuple_ty [ operation_list_ty; stg_ty ] )
+;;
 
 (* create_contract:
    { parameter unit; storage nat }
@@ -2174,7 +2266,7 @@ let return_no_ops stg_expr stg_ty =
    code = fun (p, s) ->
             let new_s = s + 1 in
             ([], new_s)
- *)
+*)
 let%expect_test "create contract unit nat increment" =
   let storage_ty = nat_ty in
   let initial_storage_expr = nat 100 in
@@ -2217,7 +2309,7 @@ let%expect_test "create contract unit nat increment" =
           storage nat ;
           code { CDR ; PUSH nat 1 ; ADD ; NIL operation ; PAIR } } ;
       PAIR } |}]
-
+;;
 
 (* create_contract:
    { parameter bool; storage string }
@@ -2228,7 +2320,7 @@ let%expect_test "create contract unit nat increment" =
             if flag
             then ([], "param was true")
             else ([], "param was false")
- *)
+*)
 let%expect_test "create contract bool string conditional" =
   let storage_ty = string_ty in
   let initial_storage_expr = string "init" in
@@ -2287,6 +2379,7 @@ let%expect_test "create contract bool string conditional" =
                  NIL operation ;
                  PAIR } } ;
       PAIR } |}]
+;;
 
 (* create_contract:
    { parameter int; storage int }
@@ -2296,7 +2389,7 @@ let%expect_test "create contract bool string conditional" =
             if p = 0
             then ([], 999)
             else let new_s = p + s in ([], new_s)
- *)
+*)
 let%expect_test "create contract int int accumulation" =
   let storage_ty = int_ty in
   let initial_storage_expr = int 5 in
@@ -2356,13 +2449,14 @@ let%expect_test "create contract int int accumulation" =
                  NIL operation ;
                  PAIR } } ;
       PAIR } |}]
+;;
 
 (* create_contract:
    { parameter nat; storage address }
    initial_balance = 1234567 mutez
    initial_storage = KT1InitialAddress
    code = fun (p, st) -> ([], st)
- *)
+*)
 let%expect_test "create contract nat address no change" =
   let storage_ty = address_ty in
   let initial_storage_expr = address_const "KT1InitialAddress" in
@@ -2404,7 +2498,7 @@ let%expect_test "create contract nat address no change" =
       CREATE_CONTRACT
         { parameter nat ; storage address ; code { CDR ; NIL operation ; PAIR } } ;
       PAIR } |}]
-
+;;
 
 (* create_contract:
    { parameter unit; storage bool }
@@ -2414,7 +2508,7 @@ let%expect_test "create contract nat address no change" =
             if s
             then ([], true)
             else ([], true)
- *)
+*)
 let%expect_test "create contract bool flip storage" =
   let storage_ty = bool_ty in
   let initial_storage_expr = bool false in
@@ -2468,6 +2562,7 @@ let%expect_test "create contract bool flip storage" =
                  NIL operation ;
                  PAIR } } ;
       PAIR } |}]
+;;
 
 (* create_contract:
    { parameter nat; storage nat }
@@ -2477,7 +2572,7 @@ let%expect_test "create contract bool flip storage" =
             let x = 1 in
             let new_s = x + 2 in
             ([], new_s)
- *)
+*)
 let%expect_test "create contract complex" =
   let storage_ty = nat_ty in
   let param_storage_ty = mk_tuple_ty [ nat_ty; nat_ty ] in
@@ -2535,6 +2630,7 @@ let%expect_test "create contract complex" =
         storage nat ;
         code { DROP ; PUSH nat 1 ; PUSH nat 2 ; ADD ; NIL operation ; PAIR } } ;
     PAIR } |}]
+;;
 
 (* ARITY 0 PRIMITIVES *)
 
@@ -2546,6 +2642,7 @@ let%expect_test "amount basic" =
 
     Optimised:
     { AMOUNT } |}]
+;;
 
 let%expect_test "balance basic" =
   let e = balance in
@@ -2555,6 +2652,7 @@ let%expect_test "balance basic" =
 
     Optimised:
     { BALANCE } |}]
+;;
 
 let%expect_test "chain_id basic" =
   let e = chain_id_prim in
@@ -2564,6 +2662,7 @@ let%expect_test "chain_id basic" =
 
     Optimised:
     { CHAIN_ID } |}]
+;;
 
 let%expect_test "level basic" =
   let e = level in
@@ -2573,6 +2672,7 @@ let%expect_test "level basic" =
 
     Optimised:
     { LEVEL } |}]
+;;
 
 let%expect_test "now basic" =
   let e = now in
@@ -2582,6 +2682,7 @@ let%expect_test "now basic" =
 
     Optimised:
     { NOW } |}]
+;;
 
 let%expect_test "self without entrypoint" =
   let contract_type = contract_ty unit_ty in
@@ -2592,6 +2693,7 @@ let%expect_test "self without entrypoint" =
 
     Optimised:
     { SELF } |}]
+;;
 
 let%expect_test "self with entrypoint" =
   let contract_type = contract_ty nat_ty in
@@ -2602,6 +2704,7 @@ let%expect_test "self with entrypoint" =
 
     Optimised:
     { SELF %test_entry } |}]
+;;
 
 let%expect_test "self_address basic" =
   let e = self_address in
@@ -2611,6 +2714,7 @@ let%expect_test "self_address basic" =
 
     Optimised:
     { SELF_ADDRESS } |}]
+;;
 
 let%expect_test "sender basic" =
   let e = sender in
@@ -2620,6 +2724,7 @@ let%expect_test "sender basic" =
 
     Optimised:
     { SENDER } |}]
+;;
 
 let%expect_test "source basic" =
   let e = source in
@@ -2629,6 +2734,7 @@ let%expect_test "source basic" =
 
     Optimised:
     { SOURCE } |}]
+;;
 
 let%expect_test "total_voting_power basic" =
   let e = total_voting_power in
@@ -2638,6 +2744,7 @@ let%expect_test "total_voting_power basic" =
 
     Optimised:
     { TOTAL_VOTING_POWER } |}]
+;;
 
 let%expect_test "empty_bigmap nat->int" =
   let e = empty_bigmap nat_ty int_ty in
@@ -2648,6 +2755,7 @@ let%expect_test "empty_bigmap nat->int" =
 
     Optimised:
     { EMPTY_BIG_MAP nat int } |}]
+;;
 
 let%expect_test "empty_map string->bool" =
   let e = empty_map string_ty bool_ty in
@@ -2658,6 +2766,7 @@ let%expect_test "empty_map string->bool" =
 
     Optimised:
     { EMPTY_MAP string bool } |}]
+;;
 
 let%expect_test "empty_set address" =
   let e = empty_set address_ty in
@@ -2667,6 +2776,7 @@ let%expect_test "empty_set address" =
 
     Optimised:
     { EMPTY_SET address } |}]
+;;
 
 let%expect_test "nil int" =
   let e = nil int_ty in
@@ -2676,6 +2786,7 @@ let%expect_test "nil int" =
 
     Optimised:
     { NIL int } |}]
+;;
 
 let%expect_test "none bool" =
   let e = none bool_ty in
@@ -2685,6 +2796,7 @@ let%expect_test "none bool" =
 
     Optimised:
     { NONE bool } |}]
+;;
 
 let%expect_test "sapling_empty_state memo8" =
   let e = sapling_empty_state 8 in
@@ -2695,6 +2807,7 @@ let%expect_test "sapling_empty_state memo8" =
 
     Optimised:
     { SAPLING_EMPTY_STATE 8 } |}]
+;;
 
 let%expect_test "unit prim" =
   let e = unit_prim in
@@ -2704,6 +2817,7 @@ let%expect_test "unit prim" =
 
     Optimised:
     { UNIT } |}]
+;;
 
 (* ARITY 1/2 PRIMITIVES *)
 
@@ -2717,6 +2831,7 @@ let%expect_test "car on pair" =
 
     Optimised:
     { PUSH int 1 } |}]
+;;
 
 let%expect_test "cdr on pair" =
   let pair_expr = pair (None, None) (int 1) (int 2) in
@@ -2728,6 +2843,7 @@ let%expect_test "cdr on pair" =
 
     Optimised:
     { PUSH int 2 } |}]
+;;
 
 let%expect_test "left constructor" =
   let e = left (None, None, string_ty) (int 42) in
@@ -2738,6 +2854,7 @@ let%expect_test "left constructor" =
 
     Optimised:
     { PUSH int 42 ; LEFT string } |}]
+;;
 
 let%expect_test "right constructor" =
   let e = right (None, None, bool_ty) (string "test") in
@@ -2748,6 +2865,7 @@ let%expect_test "right constructor" =
 
     Optimised:
     { PUSH string "test" ; RIGHT bool } |}]
+;;
 
 let%expect_test "some constructor" =
   let e = some (nat 999) in
@@ -2757,6 +2875,7 @@ let%expect_test "some constructor" =
 
     Optimised:
     { PUSH nat 999 ; SOME } |}]
+;;
 
 let%expect_test "abs on negative int" =
   let e = abs (int (-42)) in
@@ -2766,6 +2885,7 @@ let%expect_test "abs on negative int" =
 
     Optimised:
     { PUSH int -42 ; ABS } |}]
+;;
 
 let%expect_test "neg on nat (coerced to int)" =
   let e = neg (nat 10) in
@@ -2775,6 +2895,7 @@ let%expect_test "neg on nat (coerced to int)" =
 
     Optimised:
     { PUSH int -10 } |}]
+;;
 
 let%expect_test "nat_prim from int" =
   let e = nat_prim (int 50) in
@@ -2784,6 +2905,7 @@ let%expect_test "nat_prim from int" =
 
     Optimised:
     { PUSH int 50 ; NAT } |}]
+;;
 
 let%expect_test "int_prim from nat" =
   let e = int_prim (nat 123) in
@@ -2793,6 +2915,7 @@ let%expect_test "int_prim from nat" =
 
     Optimised:
     { PUSH nat 123 ; INT } |}]
+;;
 
 let%expect_test "bytes_prim from string" =
   let e = bytes_prim (string "raw") in
@@ -2803,6 +2926,7 @@ let%expect_test "bytes_prim from string" =
 
     Optimised:
     { PUSH string "raw" ; BYTES } |}]
+;;
 
 let%expect_test "is_nat with negative int" =
   let e = is_nat (int (-100)) in
@@ -2813,6 +2937,7 @@ let%expect_test "is_nat with negative int" =
 
     Optimised:
     { PUSH int -100 ; ISNAT } |}]
+;;
 
 let%expect_test "compare eq int" =
   let e = eq (int 2) (int 2) in
@@ -2823,6 +2948,7 @@ let%expect_test "compare eq int" =
 
     Optimised:
     { PUSH bool True } |}]
+;;
 
 let%expect_test "compare neq string" =
   let e = neq (string "hello") (string "world") in
@@ -2833,6 +2959,7 @@ let%expect_test "compare neq string" =
 
     Optimised:
     { PUSH string "world" ; PUSH string "hello" ; COMPARE ; NEQ } |}]
+;;
 
 let%expect_test "compare lt nat" =
   let e = lt (nat 5) (nat 10) in
@@ -2843,6 +2970,7 @@ let%expect_test "compare lt nat" =
 
     Optimised:
     { PUSH bool True } |}]
+;;
 
 let%expect_test "compare gt int" =
   let e = gt (int 10) (int 3) in
@@ -2853,6 +2981,7 @@ let%expect_test "compare gt int" =
 
     Optimised:
     { PUSH bool True } |}]
+;;
 
 let%expect_test "compare le int" =
   let e = le (int 1) (int 1) in
@@ -2863,6 +2992,7 @@ let%expect_test "compare le int" =
 
     Optimised:
     { PUSH int 0 ; LE } |}]
+;;
 
 let%expect_test "compare ge string" =
   let e = ge (string "a") (string "b") in
@@ -2873,6 +3003,7 @@ let%expect_test "compare ge string" =
 
     Optimised:
     { PUSH string "b" ; PUSH string "a" ; COMPARE ; GE } |}]
+;;
 
 let%expect_test "not bool" =
   let e = not (bool false) in
@@ -2882,6 +3013,7 @@ let%expect_test "not bool" =
 
     Optimised:
     { PUSH bool True } |}]
+;;
 
 let%expect_test "not int" =
   let e = not (int 123) in
@@ -2891,6 +3023,7 @@ let%expect_test "not int" =
 
     Optimised:
     { PUSH int 123 ; NOT } |}]
+;;
 
 let%expect_test "size on bytes" =
   let e = size (bytes "0xABCDEF") in
@@ -2901,6 +3034,7 @@ let%expect_test "size on bytes" =
 
     Optimised:
     { PUSH bytes 0x3078414243444546 ; SIZE } |}]
+;;
 
 let%expect_test "address of contract" =
   let contract_expr = self None (contract_ty unit_ty) in
@@ -2911,6 +3045,7 @@ let%expect_test "address of contract" =
 
     Optimised:
     { SELF_ADDRESS } |}]
+;;
 
 let%expect_test "implicit_account key_hash" =
   let e = implicit_account (key_hash "tz1ABC123") in
@@ -2943,6 +3078,18 @@ let%expect_test "contract opt (bool_ty) address" =
 
     Optimised:
     { PUSH address "KT1XYZ" ; CONTRACT bool } |}]
+;;
+
+let%expect_test "contract with named ep opt (bool_ty) address" =
+  let e = contract (Some "%the_ep", bool_ty) (address_const "KT1XYZ") in
+  test_expr e;
+  [%expect
+    {|
+    { PUSH address "KT1XYZ" ; CONTRACT %the_ep bool }
+
+    Optimised:
+    { PUSH address "KT1XYZ" ; CONTRACT %the_ep bool } |}]
+;;
 
 let%expect_test "pack int" =
   let e = pack (int (-7)) in
@@ -2952,6 +3099,7 @@ let%expect_test "pack int" =
 
     Optimised:
     { PUSH int -7 ; PACK } |}]
+;;
 
 let%expect_test "unpack string" =
   let e = unpack string_ty (bytes "0xDEADBEEF") in
@@ -2962,6 +3110,7 @@ let%expect_test "unpack string" =
 
     Optimised:
     { PUSH bytes 0x30784445414442454546 ; UNPACK string } |}]
+;;
 
 let%expect_test "hash_key key" =
   let e = hash_key (key "edpkExampleKey") in
@@ -2972,6 +3121,7 @@ let%expect_test "hash_key key" =
 
     Optimised:
     { PUSH key "edpkExampleKey" ; HASH_KEY } |}]
+;;
 
 let%expect_test "blake2b bytes" =
   let e = blake2b (bytes "0xAB12") in
@@ -2982,6 +3132,7 @@ let%expect_test "blake2b bytes" =
 
     Optimised:
     { PUSH bytes 0x307841423132 ; BLAKE2B } |}]
+;;
 
 let%expect_test "sha256 bytes" =
   let e = sha256 (bytes "0xAB12") in
@@ -2992,6 +3143,7 @@ let%expect_test "sha256 bytes" =
 
     Optimised:
     { PUSH bytes 0x307841423132 ; SHA256 } |}]
+;;
 
 let%expect_test "sha512 bytes" =
   let e = sha512 (bytes "0xAB12") in
@@ -3002,6 +3154,7 @@ let%expect_test "sha512 bytes" =
 
     Optimised:
     { PUSH bytes 0x307841423132 ; SHA512 } |}]
+;;
 
 let%expect_test "keccak bytes" =
   let e = keccak (bytes "0xAB12") in
@@ -3012,6 +3165,7 @@ let%expect_test "keccak bytes" =
 
     Optimised:
     { PUSH bytes 0x307841423132 ; KECCAK } |}]
+;;
 
 let%expect_test "sha3 bytes" =
   let e = sha3 (bytes "0xAB12") in
@@ -3022,6 +3176,7 @@ let%expect_test "sha3 bytes" =
 
     Optimised:
     { PUSH bytes 0x307841423132 ; SHA3 } |}]
+;;
 
 let%expect_test "set_delegate none" =
   let e = set_delegate (none key_hash_ty) in
@@ -3032,6 +3187,7 @@ let%expect_test "set_delegate none" =
 
     Optimised:
     { NONE key_hash ; SET_DELEGATE } |}]
+;;
 
 let%expect_test "read_ticket ticket" =
   let unwrap_ticket =
@@ -3060,6 +3216,7 @@ let%expect_test "read_ticket ticket" =
       IF_NONE { PUSH string "No ticket" ; FAILWITH } {} ;
       READ_TICKET ;
       PAIR } |}]
+;;
 
 let%expect_test "join_tickets same type" =
   let t1_opt = ticket (string "C1") (nat 2) in
@@ -3099,6 +3256,7 @@ let%expect_test "join_tickets same type" =
       TICKET ;
       IF_NONE { PUSH string "no ticket" ; FAILWITH } {} ;
       JOIN_TICKETS } |}]
+;;
 
 let%expect_test "pairing_check bls12 list" =
   let g1 = bls12_381_g1 "G1" in
@@ -3125,6 +3283,7 @@ let%expect_test "pairing_check bls12 list" =
       PAIR ;
       CONS ;
       PAIRING_CHECK } |}]
+;;
 
 let%expect_test "voting_power key_hash" =
   let e = voting_power (key_hash "tz1Example") in
@@ -3135,6 +3294,7 @@ let%expect_test "voting_power key_hash" =
 
     Optimised:
     { PUSH key_hash "tz1Example" ; VOTING_POWER } |}]
+;;
 
 (*let%expect_test "getn usage" =
   (* Commented out as getn is not implemented *)
@@ -3156,6 +3316,7 @@ let%expect_test "cast from int to int" =
 
     Optimised:
     { PUSH int 42 ; CAST int } |}]
+;;
 
 let%expect_test "cast from nat to int" =
   let e = cast int_ty (nat 999) in
@@ -3166,6 +3327,7 @@ let%expect_test "cast from nat to int" =
 
     Optimised:
     { PUSH nat 999 ; CAST int } |}]
+;;
 
 let%expect_test "cast from bool to bool" =
   let e = cast bool_ty (bool true) in
@@ -3176,6 +3338,7 @@ let%expect_test "cast from bool to bool" =
 
     Optimised:
     { PUSH bool True ; CAST bool } |}]
+;;
 
 let%expect_test "emit basic" =
   let e = emit (None, None) (string "Event data") in
@@ -3186,6 +3349,7 @@ let%expect_test "emit basic" =
 
     Optimised:
     { PUSH string "Event data" ; EMIT } |}]
+;;
 
 let%expect_test "emit with no annotation" =
   let e = emit (None, Some string_ty) (string "Event data") in
@@ -3196,6 +3360,7 @@ let%expect_test "emit with no annotation" =
 
     Optimised:
     { PUSH string "Event data" ; EMIT string } |}]
+;;
 
 let%expect_test "emit with no data" =
   let e = emit (Some "LabelX", None) (string "Data2") in
@@ -3206,6 +3371,7 @@ let%expect_test "emit with no data" =
 
     Optimised:
     { PUSH string "Data2" ; EMIT LabelX } |}]
+;;
 
 let%expect_test "emit with label" =
   let e = emit (Some "LabelX", Some string_ty) (string "Data2") in
@@ -3216,6 +3382,7 @@ let%expect_test "emit with label" =
 
     Optimised:
     { PUSH string "Data2" ; EMIT LabelX string } |}]
+;;
 
 let%expect_test "failwith basic" =
   let e = failwith (string "Something went wrong") in
@@ -3226,6 +3393,7 @@ let%expect_test "failwith basic" =
 
     Optimised:
     { PUSH string "Something went wrong" ; FAILWITH } |}]
+;;
 
 let%expect_test "never basic" =
   let e = never (int 100) in
@@ -3236,6 +3404,7 @@ let%expect_test "never basic" =
 
     Optimised:
     { PUSH int 100 ; NEVER } |}]
+;;
 
 let%expect_test "pair simple" =
   let e = pair (None, None) (int 1) (int 2) in
@@ -3246,6 +3415,7 @@ let%expect_test "pair simple" =
 
     Optimised:
     { PUSH int 2 ; PUSH int 1 ; PAIR } |}]
+;;
 
 let%expect_test "pair with annotation" =
   let e = pair (Some "fst", Some "snd") (string "hi") (bool false) in
@@ -3256,6 +3426,7 @@ let%expect_test "pair with annotation" =
 
     Optimised:
     { PUSH bool False ; PUSH string "hi" ; PAIR } |}]
+;;
 
 let%expect_test "add nat nat" =
   let e = add (nat 3) (nat 5) in
@@ -3266,6 +3437,7 @@ let%expect_test "add nat nat" =
 
     Optimised:
     { PUSH nat 5 ; PUSH nat 3 ; ADD } |}]
+;;
 
 let%expect_test "add int nat" =
   let e = add (int (-2)) (nat 7) in
@@ -3276,6 +3448,7 @@ let%expect_test "add int nat" =
 
     Optimised:
     { PUSH nat 7 ; PUSH int -2 ; ADD } |}]
+;;
 
 let%expect_test "add timestamp int" =
   let e = add (timestamp "2023-01-01T00:00:00Z") (int 60) in
@@ -3286,6 +3459,7 @@ let%expect_test "add timestamp int" =
 
     Optimised:
     { PUSH int 60 ; PUSH timestamp 1672531200 ; ADD } |}]
+;;
 
 let%expect_test "mul nat nat" =
   let e = mul (nat 2) (nat 10) in
@@ -3296,6 +3470,7 @@ let%expect_test "mul nat nat" =
 
     Optimised:
     { PUSH nat 10 ; PUSH nat 2 ; MUL } |}]
+;;
 
 let%expect_test "mul int nat" =
   let e = mul (int 3) (nat 10) in
@@ -3306,6 +3481,7 @@ let%expect_test "mul int nat" =
 
     Optimised:
     { PUSH nat 10 ; PUSH int 3 ; MUL } |}]
+;;
 
 let%expect_test "mul mutez nat" =
   let e = mul (mutez 1000) (nat 2) in
@@ -3316,6 +3492,7 @@ let%expect_test "mul mutez nat" =
 
     Optimised:
     { PUSH nat 2 ; PUSH mutez 1000 ; MUL } |}]
+;;
 
 let%expect_test "sub int int" =
   let e = sub (int 5) (int 10) in
@@ -3326,6 +3503,7 @@ let%expect_test "sub int int" =
 
     Optimised:
     { PUSH int -5 } |}]
+;;
 
 let%expect_test "sub nat nat" =
   let e = sub (nat 10) (nat 3) in
@@ -3336,6 +3514,7 @@ let%expect_test "sub nat nat" =
 
     Optimised:
     { PUSH nat 3 ; PUSH nat 10 ; SUB } |}]
+;;
 
 let%expect_test "sub timestamp int" =
   let e = sub (timestamp "2023-01-01T00:00:00Z") (int 3600) in
@@ -3346,6 +3525,7 @@ let%expect_test "sub timestamp int" =
 
     Optimised:
     { PUSH int 3600 ; PUSH timestamp 1672531200 ; SUB } |}]
+;;
 
 let%expect_test "sub mutez" =
   let e = sub (mutez 2000) (mutez 500) in
@@ -3356,6 +3536,7 @@ let%expect_test "sub mutez" =
 
     Optimised:
     { PUSH mutez 500 ; PUSH mutez 2000 ; SUB_MUTEZ } |}]
+;;
 
 let%expect_test "sub_mutez direct" =
   let e = sub_mutez (mutez 2000) (mutez 1999) in
@@ -3366,6 +3547,7 @@ let%expect_test "sub_mutez direct" =
 
     Optimised:
     { PUSH mutez 1999 ; PUSH mutez 2000 ; SUB_MUTEZ } |}]
+;;
 
 let%expect_test "lsr nat" =
   let e = lsr_ (nat 16) (nat 1) in
@@ -3376,6 +3558,7 @@ let%expect_test "lsr nat" =
 
     Optimised:
     { PUSH nat 1 ; PUSH nat 16 ; LSR } |}]
+;;
 
 let%expect_test "lsl nat" =
   let e = lsl_ (nat 4) (nat 2) in
@@ -3386,6 +3569,7 @@ let%expect_test "lsl nat" =
 
     Optimised:
     { PUSH nat 2 ; PUSH nat 4 ; LSL } |}]
+;;
 
 let%expect_test "xor on nat" =
   let e = xor (nat 0b1010) (nat 0b0011) in
@@ -3396,6 +3580,7 @@ let%expect_test "xor on nat" =
 
     Optimised:
     { PUSH nat 3 ; PUSH nat 10 ; XOR } |}]
+;;
 
 let%expect_test "ediv nat nat" =
   let e = ediv (nat 10) (nat 3) in
@@ -3406,6 +3591,7 @@ let%expect_test "ediv nat nat" =
 
     Optimised:
     { PUSH nat 3 ; PUSH nat 10 ; EDIV } |}]
+;;
 
 let%expect_test "ediv mutez nat" =
   let e = ediv (mutez 1000) (nat 10) in
@@ -3416,6 +3602,7 @@ let%expect_test "ediv mutez nat" =
 
     Optimised:
     { PUSH nat 10 ; PUSH mutez 1000 ; EDIV } |}]
+;;
 
 let%expect_test "div_ with if_none" =
   let e = div_ (int 10) (int 0) in
@@ -3432,6 +3619,7 @@ let%expect_test "div_ with if_none" =
       PUSH int 10 ;
       EDIV ;
       IF_NONE { PUSH string "DIV by 0" ; FAILWITH } { CAR } } |}]
+;;
 
 let%expect_test "mod_ with if_none" =
   let e = mod_ (nat 9) (nat 0) in
@@ -3448,6 +3636,7 @@ let%expect_test "mod_ with if_none" =
       PUSH nat 9 ;
       EDIV ;
       IF_NONE { PUSH string "MOD by 0" ; FAILWITH } { CDR } } |}]
+;;
 
 let%expect_test "and_ bool bool" =
   let e = and_ (bool true) (bool false) in
@@ -3458,6 +3647,7 @@ let%expect_test "and_ bool bool" =
 
     Optimised:
     { PUSH bool False } |}]
+;;
 
 let%expect_test "and_ int int" =
   let e = and_ (int 0xF0) (int 0xCC) in
@@ -3468,6 +3658,7 @@ let%expect_test "and_ int int" =
 
     Optimised:
     { PUSH int 204 ; PUSH int 240 ; AND } |}]
+;;
 
 let%expect_test "or_ bool bool" =
   let e = or_ (bool false) (bool false) in
@@ -3478,6 +3669,7 @@ let%expect_test "or_ bool bool" =
 
     Optimised:
     { PUSH bool False } |}]
+;;
 
 let%expect_test "or_ nat nat" =
   let e = or_ (nat 0b1010) (nat 0b0101) in
@@ -3488,6 +3680,7 @@ let%expect_test "or_ nat nat" =
 
     Optimised:
     { PUSH nat 5 ; PUSH nat 10 ; OR } |}]
+;;
 
 let%expect_test "cons to list" =
   let tail_list = cons (int 2) (cons (int 3) (nil int_ty)) in
@@ -3499,6 +3692,7 @@ let%expect_test "cons to list" =
 
     Optimised:
     { PUSH (list int) { 1 ; 2 ; 3 } } |}]
+;;
 
 let%expect_test "concat1 strings" =
   let string_list = cons (string "Hello, ") (cons (string "World!") (nil string_ty)) in
@@ -3515,6 +3709,7 @@ let%expect_test "concat1 strings" =
 
     Optimised:
     { PUSH (list string) { "Hello, " ; "World!" } ; CONCAT } |}]
+;;
 
 let%expect_test "concat2 bytes" =
   let e = concat2 (bytes "0xABCD") (bytes "0x1234") in
@@ -3525,6 +3720,7 @@ let%expect_test "concat2 bytes" =
 
     Optimised:
     { PUSH bytes 0x307831323334 ; PUSH bytes 0x307841424344 ; CONCAT } |}]
+;;
 
 let%expect_test "get from map" =
   let m = empty_map nat_ty bool_ty in
@@ -3536,6 +3732,7 @@ let%expect_test "get from map" =
 
     Optimised:
     { EMPTY_MAP nat bool ; PUSH nat 10 ; GET } |}]
+;;
 
 let%expect_test "get from big_map" =
   let bm = empty_bigmap string_ty int_ty in
@@ -3547,6 +3744,7 @@ let%expect_test "get from big_map" =
 
     Optimised:
     { EMPTY_BIG_MAP string int ; PUSH string "hello" ; GET } |}]
+;;
 
 (* mem(999, empty_map(nat, bool)) *)
 let%expect_test "mem in map" =
@@ -3559,7 +3757,7 @@ let%expect_test "mem in map" =
 
     Optimised:
     { EMPTY_MAP nat bool ; PUSH nat 999 ; MEM } |}]
-
+;;
 
 (* mem(5, empty_bigmap(nat, address)) *)
 let%expect_test "mem in big_map" =
@@ -3572,6 +3770,7 @@ let%expect_test "mem in big_map" =
 
     Optimised:
     { EMPTY_BIG_MAP nat address ; PUSH nat 5 ; MEM } |}]
+;;
 
 (* mem(42, empty_set(int)) *)
 let%expect_test "mem in set" =
@@ -3584,6 +3783,7 @@ let%expect_test "mem in set" =
 
     Optimised:
     { EMPTY_SET int ; PUSH int 42 ; MEM } |}]
+;;
 
 (* exec(10, fun (x: nat) -> x + 1) *)
 let%expect_test "exec function" =
@@ -3596,12 +3796,13 @@ let%expect_test "exec function" =
 
     Optimised:
     { LAMBDA nat nat { PUSH nat 1 ; ADD } ; PUSH nat 10 ; EXEC } |}]
+;;
 
 (* partial application:
    let f = fun (pair: (int*int)) -> fst pair + snd pair
    let partial = apply f to 5
    exec(7, partial)
- *)
+*)
 let%expect_test "apply partial function" =
   let two_arg_fun =
     lambda
@@ -3629,6 +3830,7 @@ let%expect_test "apply partial function" =
       APPLY ;
       PUSH int 7 ;
       EXEC } |}]
+;;
 
 (* sapling_verify_update(cast (sapling_transaction 8) 0xDEADBEEF, sapling_empty_state(8)) *)
 let%expect_test "sapling_verify_update correct types" =
@@ -3652,6 +3854,7 @@ let%expect_test "sapling_verify_update correct types" =
       PUSH bytes 0x30784445414442454546 ;
       CAST (sapling_transaction 8) ;
       SAPLING_VERIFY_UPDATE } |}]
+;;
 
 (* ticket("TicketContent", 3) *)
 let%expect_test "ticket creation" =
@@ -3663,6 +3866,7 @@ let%expect_test "ticket creation" =
 
     Optimised:
     { PUSH nat 3 ; PUSH string "TicketContent" ; TICKET } |}]
+;;
 
 (* ticket_deprecated(42, 2) *)
 let%expect_test "ticket_deprecated usage" =
@@ -3674,12 +3878,13 @@ let%expect_test "ticket_deprecated usage" =
 
     Optimised:
     { PUSH nat 2 ; PUSH int 42 ; TICKET_DEPRECATED } |}]
+;;
 
 (* read_ticket (
-    if_none (ticket("content",10)) 
-    none => 
-      failwith("No ticket") 
-    some tk => tk) *)
+   if_none (ticket("content",10))
+   none =>
+   failwith("No ticket")
+   some tk => tk) *)
 let%expect_test "ticket then read_ticket" =
   let maybe_ticket = ticket (string "content") (nat 10) in
   let unwrapped =
@@ -3708,11 +3913,11 @@ let%expect_test "ticket then read_ticket" =
       IF_NONE { PUSH string "No ticket" ; FAILWITH } {} ;
       READ_TICKET ;
       PAIR } |}]
+;;
 
-
-(* split_ticket (if_none (ticket(123,10)) 
-  none => failwith("No ticket") 
-  some tk => tk) (3,7) *)
+(* split_ticket (if_none (ticket(123,10))
+   none => failwith("No ticket")
+   some tk => tk) (3,7) *)
 let%expect_test "split_ticket usage" =
   let maybe_ticket = ticket (nat 123) (nat 10) in
   let unwrapped =
@@ -3747,14 +3952,15 @@ let%expect_test "split_ticket usage" =
       TICKET ;
       IF_NONE { PUSH string "No ticket" ; FAILWITH } {} ;
       SPLIT_TICKET } |}]
+;;
 
 (*
-  Commented out as updaten is not implemented.
-  let%expect_test "updaten usage" =
-  let pair_expr = pair (None,None) (int 5) (bool true) in
-  let expr = updaten 1 (string "replacement") pair_expr in
-  test_expr expr;
-  [%expect {||}]*)
+   Commented out as updaten is not implemented.
+   let%expect_test "updaten usage" =
+   let pair_expr = pair (None,None) (int 5) (bool true) in
+   let expr = updaten 1 (string "replacement") pair_expr in
+   test_expr expr;
+   [%expect {||}]*)
 
 (* view "myView" ~return=nat ~d=7 ~address=KT1SampleAddress *)
 let%expect_test "view usage" =
@@ -3772,6 +3978,7 @@ let%expect_test "view usage" =
 
     Optimised:
     { PUSH address "KT1SampleAddress" ; PUSH int 7 ; VIEW "myView" nat } |}]
+;;
 
 (* slice(s="Hello", offset=1, length=3) *)
 let%expect_test "slice on string" =
@@ -3786,6 +3993,7 @@ let%expect_test "slice on string" =
 
     Optimised:
     { PUSH string "Hello" ; PUSH nat 3 ; PUSH nat 1 ; SLICE } |}]
+;;
 
 (* slice(b=0xDEADBEEF, offset=2, length=4) *)
 let%expect_test "slice on bytes" =
@@ -3800,6 +4008,7 @@ let%expect_test "slice on bytes" =
 
     Optimised:
     { PUSH bytes 0x30784445414442454546 ; PUSH nat 4 ; PUSH nat 2 ; SLICE } |}]
+;;
 
 (* update(7, Some 100) in empty_map(nat,int) *)
 let%expect_test "update in a map" =
@@ -3812,6 +4021,7 @@ let%expect_test "update in a map" =
 
     Optimised:
     { PUSH (map nat int) { Elt 7 100 } } |}]
+;;
 
 (* update("test", None) in empty_map(string,bool) *)
 let%expect_test "update remove key in a map" =
@@ -3824,6 +4034,7 @@ let%expect_test "update remove key in a map" =
 
     Optimised:
     { EMPTY_MAP string bool ; NONE bool ; PUSH string "test" ; UPDATE } |}]
+;;
 
 (* update(3, true) in empty_set(int) *)
 let%expect_test "update in a set" =
@@ -3837,6 +4048,7 @@ let%expect_test "update in a set" =
 
     Optimised:
     { PUSH (set int) { 3 } } |}]
+;;
 
 (* get_and_update(false, Some 42) in empty_map(bool,nat) *)
 let%expect_test "get_and_update in map" =
@@ -3858,6 +4070,7 @@ let%expect_test "get_and_update in map" =
       PUSH bool False ;
       GET_AND_UPDATE ;
       PAIR } |}]
+;;
 
 (* get_and_update(99, None) in empty_bigmap(nat,string) *)
 let%expect_test "get_and_update removing from big_map" =
@@ -3877,6 +4090,7 @@ let%expect_test "get_and_update removing from big_map" =
       PUSH nat 99 ;
       GET_AND_UPDATE ;
       PAIR } |}]
+;;
 
 (* transfer_tokens(param=unit, amount=1000000mutez, contract=KT1Example:unit) *)
 let%expect_test "transfer_tokens simple" =
@@ -3899,6 +4113,7 @@ let%expect_test "transfer_tokens simple" =
       PUSH mutez 1000000 ;
       UNIT ;
       TRANSFER_TOKENS } |}]
+;;
 
 (* check_signature(key="edpkExample", sig="edsigExampleSig", msg=0xDEADBEEF) *)
 let%expect_test "check_signature usage" =
@@ -3919,6 +4134,7 @@ let%expect_test "check_signature usage" =
       PUSH signature "edsigExampleSig" ;
       PUSH key "edpkExample" ;
       CHECK_SIGNATURE } |}]
+;;
 
 (* open_chest(chest_key=0xAB, chest=0xCD, time=100) *)
 let%expect_test "open_chest usage" =
@@ -3939,6 +4155,7 @@ let%expect_test "open_chest usage" =
       PUSH bytes 0x30784344 ;
       PUSH bytes 0x30784142 ;
       OPEN_CHEST } |}]
+;;
 
 (* convert_list [1;2;3] => (1,2,3) as row/tuple *)
 let%expect_test "convert_list usage" =
@@ -3952,6 +4169,7 @@ let%expect_test "convert_list usage" =
 
     Optimised:
     { PUSH int 3 ; PUSH int 2 ; PUSH int 1 ; PAIR 3 } |}]
+;;
 
 (* x = gen_name;
    let x = 10 in x *)
@@ -3964,6 +4182,7 @@ let%expect_test "gen_name usage" =
 
     Optimised:
     { PUSH nat 10 } |}]
+;;
 
 (* global_constant "expruExampleHash" [42; false] : int *)
 let%expect_test "global_constant usage" =
@@ -3978,6 +4197,7 @@ let%expect_test "global_constant usage" =
 
     Optimised:
     { PUSH bool False ; PUSH nat 42 ; constant "expruExampleHash" } |}]
+;;
 
 (* cast(nat, -10) *)
 let%expect_test "cast int->nat with negative int" =
@@ -3990,7 +4210,7 @@ let%expect_test "cast int->nat with negative int" =
 
     Optimised:
     { PUSH int -10 ; CAST nat } |}]
-
+;;
 
 (* fun x -> fun y -> fun z -> if z then x+y else x-y
    (types: x:int, y:nat, z:bool) *)
@@ -4045,6 +4265,7 @@ let%expect_test "lambda -> lambda -> lambda" =
               APPLY } ;
           SWAP ;
           APPLY } } |}]
+;;
 
 (* partial application with 3-tuple param (int * (int * int)) => int *)
 let%expect_test "apply function with 3-tuple param" =
@@ -4088,13 +4309,13 @@ let%expect_test "apply function with 3-tuple param" =
       PUSH int 3 ;
       PAIR ;
       EXEC } |}]
-
+;;
 
 (* leftover partial application unused:
    f = fun (p: (nat * nat)) -> fst p + snd p
    partial = apply f 8
    partial not executed
- *)
+*)
 let%expect_test "apply leftover function unused" =
   let two_tuple_ty = mk_tuple_ty [ nat_ty; nat_ty ] in
   let two_tuple_fun =
@@ -4115,6 +4336,7 @@ let%expect_test "apply leftover function unused" =
 
     Optimised:
     { LAMBDA (pair nat nat) nat { UNPAIR ; ADD } ; PUSH nat 8 ; APPLY } |}]
+;;
 
 (* if "ok" = "fail" then 1 else failwith("Error: " ^ "String mismatch") *)
 let%expect_test "failwith usage in else branch" =
@@ -4143,6 +4365,7 @@ let%expect_test "failwith usage in else branch" =
       IF {}
          { PUSH string "String mismatch" ; PUSH string "Error: " ; CONCAT ; FAILWITH } ;
       PUSH nat 1 } |}]
+;;
 
 (* update 10 (Some(contract bool)) (empty_bigmap(nat, contract bool)) *)
 let%expect_test "update big_map of nat->contract(bool)" =
@@ -4166,6 +4389,8 @@ let%expect_test "update big_map of nat->contract(bool)" =
       SOME ;
       PUSH nat 10 ;
       UPDATE } |}]
+;;
+
 (* cast int (cast nat (cast int 99)) *)
 let%expect_test "chained cast" =
   let e = cast int_ty (cast nat_ty (cast int_ty (nat 99))) in
@@ -4176,6 +4401,7 @@ let%expect_test "chained cast" =
 
     Optimised:
     { PUSH nat 99 ; CAST int ; CAST nat ; CAST int } |}]
+;;
 
 (* global_constant "expruCustomHash" [2, -3] : (nat -> int) *)
 let%expect_test "global_constant returning function" =
@@ -4190,7 +4416,7 @@ let%expect_test "global_constant returning function" =
 
     Optimised:
     { PUSH int -3 ; PUSH nat 2 ; constant "expruCustomHash" } |}]
-
+;;
 
 (* apply (global_constant "expruFuncHash" : nat->int) 100 *)
 let%expect_test "apply global constant function" =
@@ -4207,6 +4433,7 @@ let%expect_test "apply global constant function" =
 
     Optimised:
     { PUSH nat 100 ; constant "expruFuncHash" } |}]
+;;
 
 (* let x = 10 in (fun (y: nat) -> x + y) 5 *)
 let%expect_test "lambda capturing external let var" =
@@ -4240,12 +4467,12 @@ let%expect_test "lambda capturing external let var" =
       APPLY ;
       SWAP ;
       EXEC } |}]
+;;
 
-
-(* let a = 2, 
-   let b = 3 in 
-   fun x -> fun y -> 
-    x + y + (a + b) *)
+(* let a = 2,
+   let b = 3 in
+   fun x -> fun y ->
+   x + y + (a + b) *)
 let%expect_test "nested lambdas referencing outer variable" =
   let expr =
     let_in
@@ -4311,6 +4538,7 @@ let%expect_test "nested lambdas referencing outer variable" =
       APPLY ;
       SWAP ;
       APPLY } |}]
+;;
 
 (* let factor = 10 in fun x -> fun y -> (x*y) * factor *)
 let%expect_test "nested lambdas returning another referencing an external var" =
@@ -4357,13 +4585,13 @@ let%expect_test "nested lambdas returning another referencing an external var" =
           APPLY } ;
       PUSH nat 10 ;
       APPLY } |}]
-
+;;
 
 (* let a = 42 in
    let f = fun p -> a + (fst p + snd p) in
    let applied = f 5 in
    applied 7
- *)
+*)
 
 let%expect_test "partial application capturing environment" =
   let pair_ty = mk_tuple_ty [ nat_ty; nat_ty ] in
@@ -4412,6 +4640,7 @@ let%expect_test "partial application capturing environment" =
       APPLY ;
       PUSH nat 7 ;
       EXEC } |}]
+;;
 
 (* let z = 9 in fun z -> z + 1 *)
 let%expect_test "inner param overshadowing outer var name" =
@@ -4428,6 +4657,7 @@ let%expect_test "inner param overshadowing outer var name" =
 
     Optimised:
     { LAMBDA nat nat { PUSH nat 1 ; ADD } } |}]
+;;
 
 (* let_mut m = 10 in fun x -> x + m *)
 let%expect_test "lambda capturing a mut var read" =
@@ -4451,11 +4681,12 @@ let%expect_test "lambda capturing a mut var read" =
 
     Optimised:
     { LAMBDA (pair nat nat) nat { UNPAIR ; ADD } ; PUSH nat 10 ; APPLY } |}]
+;;
 
 (* let_mut c = 0 in fun inc ->
-     let ignore_assign = c <- c + inc in
-     c
- *)
+   let ignore_assign = c <- c + inc in
+   c
+*)
 let%expect_test "lambda capturing mut var and assigning" =
   let mut_c = mut_var "c" in
   let expr =
@@ -4485,16 +4716,16 @@ let%expect_test "lambda capturing mut var and assigning" =
 
     Optimised:
     { LAMBDA (pair nat nat) nat { UNPAIR ; ADD } ; PUSH nat 0 ; APPLY } |}]
+;;
 
-
-(* 
+(*
    let a = 3 in
    let outer = fun (p: (int*int)) ->
-     let sum = (fst p + snd p) + a in
-     fun leftover -> sum + leftover
+   let sum = (fst p + snd p) + a in
+   fun leftover -> sum + leftover
    let applied_outer = outer(7,5)
    applied_outer(10)
- *)
+*)
 let%expect_test "partial apply nested lambda env capture" =
   let param_ty = mk_tuple_ty [ int_ty; int_ty ] in
   let outer_lam =
@@ -4587,6 +4818,7 @@ let%expect_test "partial apply nested lambda env capture" =
       EXEC ;
       PUSH int 10 ;
       EXEC } |}]
+;;
 
 (* let q = 123 in fun x -> fun y -> x + y + q *)
 let%expect_test "return environment capturing function unused" =
@@ -4633,11 +4865,12 @@ let%expect_test "return environment capturing function unused" =
           APPLY } ;
       PUSH int 123 ;
       APPLY } |}]
+;;
 
 (* let x=1 in fun (y:int) ->
-     let x = y + x in
-     x + 100
- *)
+   let x = y + x in
+   x + 100
+*)
 let%expect_test "deeper let_in overshadowing environment var" =
   let expr =
     let_in
@@ -4667,3 +4900,4 @@ let%expect_test "deeper let_in overshadowing environment var" =
     { LAMBDA (pair int int) int { UNPAIR ; ADD ; PUSH int 100 ; ADD } ;
       PUSH int 1 ;
       APPLY } |}]
+;;
