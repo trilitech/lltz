@@ -487,7 +487,7 @@ and compile_while_left expr =
 
 (* Compile a for expression by compiling the initial value, invariant, variant, and body,
    then applying the loop to the sequence of body, variant, and invariant. *)
-and compile_for expr (*index init invariant variant body*) =
+and compile_for expr =
   match expr.desc with
   | For { index = Mut_var index; init; cond; update; body } ->
     let init_instr = compile init in

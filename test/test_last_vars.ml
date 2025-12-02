@@ -2608,9 +2608,8 @@ let%expect_test "test_while" =
              DUP 2 ;
              COMPARE ;
              LT } ;
-      UNIT ;
-      SWAP ;
-      DROP }
+      DROP ;
+      UNIT }
 
     Optimised:
     { PUSH int 0 ;
@@ -2718,13 +2717,11 @@ let%expect_test "while referencing outside variables" =
              DUP 2 ;
              COMPARE ;
              LT } ;
-      UNIT ;
-      SWAP ;
       DROP ;
       SWAP ;
       DROP ;
-      SWAP ;
-      DROP }
+      DROP ;
+      UNIT }
 
     Optimised:
     { PUSH int 10 ;
@@ -3104,9 +3101,8 @@ let%expect_test "for_ partial apply overshadow in body" =
              COMPARE ;
              LT } ;
       DROP ;
-      UNIT ;
-      SWAP ;
-      DROP }
+      DROP ;
+      UNIT }
 
     Optimised:
     { PUSH int 0 ;
@@ -3209,9 +3205,8 @@ let%expect_test "test_for_each" =
       PUSH int 1 ;
       CONS ;
       ITER { PUSH int 999 ; DUP 3 ; SWAP ; ADD ; SWAP ; DROP ; DROP } ;
-      UNIT ;
-      SWAP ;
-      DROP }
+      DROP ;
+      UNIT }
 
     Optimised:
     { PUSH int 100 ;
@@ -4605,11 +4600,74 @@ let%expect_test "last used var in for each body" =
                   { lam_var = var "right_", nat_ty
                   ; body = variable (var "PROBLEM") nat_ty
                   })
-           (*~in_:(variable (var "PROBLEM") nat_ty))*)
            ~in_:unit) 
   in
   test_and_print "last used var in for each body" expr;
-  [%expect {||}]
+  [%expect {|
+    --- last used var in for each body ---
+    Node: Let_in
+      luv = {PROBLEM, _ignore, _iter, left_, right_} nuv = {}
+      let_var=PROBLEM
+      rhs:
+      Node: Const
+        luv = {} nuv = {}
+      in_:
+      Node: Let_in
+        luv = {PROBLEM, _ignore, _iter, left_, right_} nuv = {_ignore}
+        let_var=_ignore
+        rhs:
+        Node: If_left
+          luv = {PROBLEM, _iter, left_, right_} nuv = {}
+          subject:
+          Node: Prim
+            luv = {} nuv = {}
+            args:
+            Node: Prim
+              luv = {} nuv = {}
+              args:
+              Node: Const
+                luv = {} nuv = {}
+              Node: Prim
+                luv = {} nuv = {}
+                args:
+                Node: Const
+                  luv = {} nuv = {}
+                Node: Prim
+                  luv = {} nuv = {}
+                  args:
+          if_left lam_var=left_
+          Node: For_each
+            luv = {PROBLEM, _iter, left_} nuv = {}
+            collection:
+            Node: Variable
+              luv = {left_} nuv = {}
+              var=left_
+            lam_var=_iter
+            body:
+            Node: Variable
+              luv = {} nuv = {_iter}
+              var=PROBLEM
+          if_right lam_var=right_
+          Node: Variable
+            luv = {PROBLEM} nuv = {_iter, left_, right_}
+            var=PROBLEM
+        in_:
+        Node: Const
+          luv = {} nuv = {}
+
+    { PUSH nat 0 ;
+      NIL nat ;
+      PUSH nat 2 ;
+      CONS ;
+      PUSH nat 1 ;
+      CONS ;
+      LEFT (or (list %endorsement nat) (nat %proposal)) ;
+      IF_LEFT { ITER { DROP ; DUP 1 ; DROP } ; DROP ; UNIT } { DROP } ;
+      DROP ;
+      UNIT }
+
+    Optimised:
+    { UNIT } |}]
 
 let%expect_test "last used var in map body" =
   let param_ty =
@@ -4645,11 +4703,74 @@ let%expect_test "last used var in map body" =
                   { lam_var = var "right_", nat_ty
                   ; body = variable (var "PROBLEM") nat_ty
                   })
-           (*~in_:(variable (var "PROBLEM") nat_ty))*)
            ~in_:unit) 
   in
   test_and_print "last used var in map body" expr;
-  [%expect {||}]
+  [%expect {|
+    --- last used var in map body ---
+    Node: Let_in
+      luv = {PROBLEM, _ignore, _iter, left_, right_} nuv = {}
+      let_var=PROBLEM
+      rhs:
+      Node: Const
+        luv = {} nuv = {}
+      in_:
+      Node: Let_in
+        luv = {PROBLEM, _ignore, _iter, left_, right_} nuv = {_ignore}
+        let_var=_ignore
+        rhs:
+        Node: If_left
+          luv = {PROBLEM, _iter, left_, right_} nuv = {}
+          subject:
+          Node: Prim
+            luv = {} nuv = {}
+            args:
+            Node: Prim
+              luv = {} nuv = {}
+              args:
+              Node: Const
+                luv = {} nuv = {}
+              Node: Prim
+                luv = {} nuv = {}
+                args:
+                Node: Const
+                  luv = {} nuv = {}
+                Node: Prim
+                  luv = {} nuv = {}
+                  args:
+          if_left lam_var=left_
+          Node: Map
+            luv = {PROBLEM, _iter, left_} nuv = {}
+            collection:
+            Node: Variable
+              luv = {left_} nuv = {}
+              var=left_
+            lam_var=_iter
+            body:
+            Node: Variable
+              luv = {} nuv = {_iter}
+              var=PROBLEM
+          if_right lam_var=right_
+          Node: Variable
+            luv = {PROBLEM} nuv = {_iter, left_, right_}
+            var=PROBLEM
+        in_:
+        Node: Const
+          luv = {} nuv = {}
+
+    { PUSH nat 0 ;
+      NIL nat ;
+      PUSH nat 2 ;
+      CONS ;
+      PUSH nat 1 ;
+      CONS ;
+      LEFT (or (list %endorsement nat) (nat %proposal)) ;
+      IF_LEFT { MAP { DROP ; DUP 1 } ; SWAP ; DROP } { DROP } ;
+      DROP ;
+      UNIT }
+
+    Optimised:
+    { UNIT } |}]
 
 
 let%expect_test "last used var in fold_left body" =
@@ -4686,11 +4807,79 @@ let%expect_test "last used var in fold_left body" =
                   { lam_var = var "right_", nat_ty
                   ; body = variable (var "PROBLEM") nat_ty
                   })
-           (*~in_:(variable (var "PROBLEM") nat_ty))*)
            ~in_:unit) 
   in
   test_and_print "last used var in fold_left body" expr;
-  [%expect {||}]
+  [%expect {|
+    --- last used var in fold_left body ---
+    Node: Let_in
+      luv = {PROBLEM, _ignore, acc, left_, right_} nuv = {}
+      let_var=PROBLEM
+      rhs:
+      Node: Const
+        luv = {} nuv = {}
+      in_:
+      Node: Let_in
+        luv = {PROBLEM, _ignore, acc, left_, right_} nuv = {_ignore}
+        let_var=_ignore
+        rhs:
+        Node: If_left
+          luv = {PROBLEM, acc, left_, right_} nuv = {}
+          subject:
+          Node: Prim
+            luv = {} nuv = {}
+            args:
+            Node: Prim
+              luv = {} nuv = {}
+              args:
+              Node: Const
+                luv = {} nuv = {}
+              Node: Prim
+                luv = {} nuv = {}
+                args:
+                Node: Const
+                  luv = {} nuv = {}
+                Node: Prim
+                  luv = {} nuv = {}
+                  args:
+          if_left lam_var=left_
+          Node: Fold_left
+            luv = {PROBLEM, acc, left_} nuv = {}
+            collection:
+            Node: Variable
+              luv = {left_} nuv = {}
+              var=left_
+            init:
+            Node: Const
+              luv = {} nuv = {}
+            lam_var=acc
+            body:
+            Node: Variable
+              luv = {} nuv = {acc}
+              var=PROBLEM
+          if_right lam_var=right_
+          Node: Variable
+            luv = {PROBLEM} nuv = {acc, left_, right_}
+            var=PROBLEM
+        in_:
+        Node: Const
+          luv = {} nuv = {}
+
+    { PUSH nat 0 ;
+      NIL nat ;
+      PUSH nat 2 ;
+      CONS ;
+      PUSH nat 1 ;
+      CONS ;
+      LEFT (or (list %endorsement nat) (nat %proposal)) ;
+      IF_LEFT
+        { PUSH int 0 ; SWAP ; ITER { SWAP ; PAIR ; DROP ; DUP 1 } ; SWAP ; DROP }
+        { DROP } ;
+      DROP ;
+      UNIT }
+
+    Optimised:
+    { UNIT } |}]
 
 let%expect_test "last used var in fold_right body" =
   let param_ty =
@@ -4726,11 +4915,86 @@ let%expect_test "last used var in fold_right body" =
                   { lam_var = var "right_", nat_ty
                   ; body = variable (var "PROBLEM") nat_ty
                   })
-           (*~in_:(variable (var "PROBLEM") nat_ty))*)
            ~in_:unit) 
   in
   test_and_print "last used var in fold_right body" expr;
-  [%expect {||}]
+  [%expect {|
+    --- last used var in fold_right body ---
+    Node: Let_in
+      luv = {PROBLEM, _ignore, acc, left_, right_} nuv = {}
+      let_var=PROBLEM
+      rhs:
+      Node: Const
+        luv = {} nuv = {}
+      in_:
+      Node: Let_in
+        luv = {PROBLEM, _ignore, acc, left_, right_} nuv = {_ignore}
+        let_var=_ignore
+        rhs:
+        Node: If_left
+          luv = {PROBLEM, acc, left_, right_} nuv = {}
+          subject:
+          Node: Prim
+            luv = {} nuv = {}
+            args:
+            Node: Prim
+              luv = {} nuv = {}
+              args:
+              Node: Const
+                luv = {} nuv = {}
+              Node: Prim
+                luv = {} nuv = {}
+                args:
+                Node: Const
+                  luv = {} nuv = {}
+                Node: Prim
+                  luv = {} nuv = {}
+                  args:
+          if_left lam_var=left_
+          Node: Fold_right
+            luv = {PROBLEM, acc, left_} nuv = {}
+            collection:
+            Node: Variable
+              luv = {left_} nuv = {}
+              var=left_
+            init:
+            Node: Const
+              luv = {} nuv = {}
+            lam_var=acc
+            body:
+            Node: Variable
+              luv = {} nuv = {acc}
+              var=PROBLEM
+          if_right lam_var=right_
+          Node: Variable
+            luv = {PROBLEM} nuv = {acc, left_, right_}
+            var=PROBLEM
+        in_:
+        Node: Const
+          luv = {} nuv = {}
+
+    { PUSH nat 0 ;
+      NIL nat ;
+      PUSH nat 2 ;
+      CONS ;
+      PUSH nat 1 ;
+      CONS ;
+      LEFT (or (list %endorsement nat) (nat %proposal)) ;
+      IF_LEFT
+        { PUSH int 0 ;
+          SWAP ;
+          NIL nat ;
+          SWAP ;
+          ITER { CONS } ;
+          ITER { PAIR ; DROP ; DUP 1 } ;
+          SWAP ;
+          DROP }
+        { DROP } ;
+      DROP ;
+      UNIT }
+
+    Optimised:
+    { UNIT } |}]
 
 let%expect_test "last used var in while body" =
   let param_ty =
@@ -4763,11 +5027,101 @@ let%expect_test "last used var in while body" =
                   { lam_var = var "right_", nat_ty
                   ; body = variable (var "PROBLEM") nat_ty
                   })
-           (*~in_:(variable (var "PROBLEM") nat_ty))*)
            ~in_:unit) 
   in
   test_and_print "last used var in while body" expr;
-  [%expect {||}]
+  [%expect {|
+    --- last used var in while body ---
+    Node: Let_in
+      luv = {PROBLEM, _ignore, left_, right_} nuv = {}
+      let_var=PROBLEM
+      rhs:
+      Node: Const
+        luv = {} nuv = {}
+      in_:
+      Node: Let_in
+        luv = {PROBLEM, _ignore, left_, right_} nuv = {_ignore}
+        let_var=_ignore
+        rhs:
+        Node: If_left
+          luv = {PROBLEM, left_, right_} nuv = {}
+          subject:
+          Node: Prim
+            luv = {} nuv = {}
+            args:
+            Node: Prim
+              luv = {} nuv = {}
+              args:
+              Node: Const
+                luv = {} nuv = {}
+              Node: Prim
+                luv = {} nuv = {}
+                args:
+                Node: Const
+                  luv = {} nuv = {}
+                Node: Prim
+                  luv = {} nuv = {}
+                  args:
+          if_left lam_var=left_
+          Node: While
+            luv = {PROBLEM, left_} nuv = {}
+            cond:
+            Node: Prim
+              luv = {} nuv = {}
+              args:
+              Node: Prim
+                luv = {} nuv = {}
+                args:
+                Node: Variable
+                  luv = {} nuv = {}
+                  var=left_
+                Node: Const
+                  luv = {} nuv = {}
+            body:
+            Node: Variable
+              luv = {} nuv = {}
+              var=PROBLEM
+          if_right lam_var=right_
+          Node: Variable
+            luv = {PROBLEM} nuv = {left_, right_}
+            var=PROBLEM
+        in_:
+        Node: Const
+          luv = {} nuv = {}
+
+    { PUSH nat 0 ;
+      NIL nat ;
+      PUSH nat 2 ;
+      CONS ;
+      PUSH nat 1 ;
+      CONS ;
+      LEFT (or (list %endorsement nat) (nat %proposal)) ;
+      IF_LEFT
+        { PUSH int 10 ;
+          DUP 2 ;
+          COMPARE ;
+          LT ;
+          LOOP { DUP 2 ; DROP ; PUSH int 10 ; DUP 2 ; COMPARE ; LT } ;
+          SWAP ;
+          DROP ;
+          DROP ;
+          UNIT }
+        { DROP } ;
+      DROP ;
+      UNIT }
+
+    Optimised:
+    { PUSH (list nat) { 1 ; 2 } ;
+      LEFT (or (list nat) nat) ;
+      IF_LEFT
+        { PUSH int 10 ;
+          DUP 2 ;
+          COMPARE ;
+          LT ;
+          LOOP { PUSH int 10 ; DUP 2 ; COMPARE ; LT } ;
+          DROP }
+        { DROP } ;
+      UNIT } |}]
 
 let%expect_test "last used var in while_left body" =
   let param_ty =
@@ -4803,11 +5157,140 @@ let%expect_test "last used var in while_left body" =
                   { lam_var = var "right_", nat_ty
                   ; body = variable (var "PROBLEM") nat_ty
                   })
-           (*~in_:(variable (var "PROBLEM") nat_ty))*)
            ~in_:unit) 
   in
   test_and_print "last used var in while_left body" expr;
-  [%expect {||}]
+  [%expect {|
+    --- last used var in while_left body ---
+    Node: Let_in
+      luv = {PROBLEM, _ignore, _ignore2, _iter, left_, right_} nuv = {}
+      let_var=PROBLEM
+      rhs:
+      Node: Const
+        luv = {} nuv = {}
+      in_:
+      Node: Let_in
+        luv = {PROBLEM, _ignore, _ignore2, _iter, left_, right_} nuv = {_ignore}
+        let_var=_ignore
+        rhs:
+        Node: If_left
+          luv = {PROBLEM, _ignore2, _iter, left_, right_} nuv = {}
+          subject:
+          Node: Prim
+            luv = {} nuv = {}
+            args:
+            Node: Prim
+              luv = {} nuv = {}
+              args:
+              Node: Const
+                luv = {} nuv = {}
+              Node: Prim
+                luv = {} nuv = {}
+                args:
+                Node: Const
+                  luv = {} nuv = {}
+                Node: Prim
+                  luv = {} nuv = {}
+                  args:
+          if_left lam_var=left_
+          Node: While_left
+            luv = {PROBLEM, _ignore2, _iter} nuv = {left_}
+            cond:
+            Node: Prim
+              luv = {} nuv = {}
+              args:
+              Node: Prim
+                luv = {} nuv = {}
+                args:
+                Node: Const
+                  luv = {} nuv = {}
+                Node: Prim
+                  luv = {} nuv = {}
+                  args:
+                  Node: Const
+                    luv = {} nuv = {}
+                  Node: Prim
+                    luv = {} nuv = {}
+                    args:
+            lam_var=_iter
+            body:
+            Node: Let_in
+              luv = {_ignore2} nuv = {_ignore2, _iter}
+              let_var=_ignore2
+              rhs:
+              Node: Variable
+                luv = {} nuv = {}
+                var=PROBLEM
+              in_:
+              Node: Prim
+                luv = {} nuv = {}
+                args:
+                Node: Prim
+                  luv = {} nuv = {}
+                  args:
+                  Node: Const
+                    luv = {} nuv = {}
+                  Node: Prim
+                    luv = {} nuv = {}
+                    args:
+                    Node: Const
+                      luv = {} nuv = {}
+                    Node: Prim
+                      luv = {} nuv = {}
+                      args:
+          if_right lam_var=right_
+          Node: Variable
+            luv = {PROBLEM} nuv = {_ignore2, _iter, right_}
+            var=PROBLEM
+        in_:
+        Node: Const
+          luv = {} nuv = {}
+
+    { PUSH nat 0 ;
+      NIL nat ;
+      PUSH nat 2 ;
+      CONS ;
+      PUSH nat 1 ;
+      CONS ;
+      LEFT (or (list %endorsement nat) (nat %proposal)) ;
+      IF_LEFT
+        { DROP ;
+          NIL nat ;
+          PUSH nat 2 ;
+          CONS ;
+          PUSH nat 1 ;
+          CONS ;
+          LEFT (or (list %endorsement nat) (nat %proposal)) ;
+          LEFT (or (list %endorsement nat) (nat %proposal)) ;
+          LOOP_LEFT
+            { DROP ;
+              DUP 1 ;
+              DROP ;
+              NIL nat ;
+              PUSH nat 2 ;
+              CONS ;
+              PUSH nat 1 ;
+              CONS ;
+              LEFT (or (list %endorsement nat) (nat %proposal)) } ;
+          SWAP ;
+          DROP }
+        { DROP } ;
+      DROP ;
+      UNIT }
+
+    Optimised:
+    { PUSH nat 0 ;
+      PUSH (list nat) { 1 ; 2 } ;
+      LEFT (or (list nat) nat) ;
+      IF_LEFT
+        { DROP ;
+          PUSH (list nat) { 1 ; 2 } ;
+          LEFT (or (list nat) nat) ;
+          LEFT (or (list nat) nat) ;
+          LOOP_LEFT { DROP ; PUSH (list nat) { 1 ; 2 } ; LEFT (or (list nat) nat) } ;
+          DROP 2 }
+        { DROP 2 } ;
+      UNIT } |}]
 
 let%expect_test "last used var in for body" =
   let param_ty =
@@ -4843,8 +5326,131 @@ let%expect_test "last used var in for body" =
                   { lam_var = var "right_", nat_ty
                   ; body = variable (var "PROBLEM") nat_ty
                   })
-           (*~in_:(variable (var "PROBLEM") nat_ty))*)
            ~in_:unit) 
   in
   test_and_print "last used var in for body" expr;
-  [%expect {||}]
+  [%expect {|
+    --- last used var in for body ---
+    Node: Let_in
+      luv = {PROBLEM, _ignore, idx, left_, right_} nuv = {}
+      let_var=PROBLEM
+      rhs:
+      Node: Const
+        luv = {} nuv = {}
+      in_:
+      Node: Let_in
+        luv = {PROBLEM, _ignore, idx, left_, right_} nuv = {_ignore}
+        let_var=_ignore
+        rhs:
+        Node: If_left
+          luv = {PROBLEM, idx, left_, right_} nuv = {}
+          subject:
+          Node: Prim
+            luv = {} nuv = {}
+            args:
+            Node: Prim
+              luv = {} nuv = {}
+              args:
+              Node: Const
+                luv = {} nuv = {}
+              Node: Prim
+                luv = {} nuv = {}
+                args:
+                Node: Const
+                  luv = {} nuv = {}
+                Node: Prim
+                  luv = {} nuv = {}
+                  args:
+          if_left lam_var=left_
+          Node: For
+            luv = {PROBLEM, idx} nuv = {left_}
+            index=idx
+            init:
+            Node: Const
+              luv = {} nuv = {}
+            cond:
+            Node: Prim
+              luv = {} nuv = {}
+              args:
+              Node: Prim
+                luv = {} nuv = {}
+                args:
+                Node: Deref
+                  luv = {} nuv = {}
+                  mut_var=idx
+                Node: Const
+                  luv = {} nuv = {}
+            update:
+            Node: Assign
+              luv = {} nuv = {}
+              let_var=idx
+              value:
+              Node: Prim
+                luv = {} nuv = {}
+                args:
+                Node: Deref
+                  luv = {} nuv = {}
+                  mut_var=idx
+                Node: Const
+                  luv = {} nuv = {}
+            body:
+            Node: Variable
+              luv = {} nuv = {}
+              var=PROBLEM
+          if_right lam_var=right_
+          Node: Variable
+            luv = {PROBLEM} nuv = {idx, right_}
+            var=PROBLEM
+        in_:
+        Node: Const
+          luv = {} nuv = {}
+
+    { PUSH nat 0 ;
+      NIL nat ;
+      PUSH nat 2 ;
+      CONS ;
+      PUSH nat 1 ;
+      CONS ;
+      LEFT (or (list %endorsement nat) (nat %proposal)) ;
+      IF_LEFT
+        { DROP ;
+          PUSH int 0 ;
+          PUSH int 5 ;
+          DUP 2 ;
+          COMPARE ;
+          LT ;
+          LOOP { DUP 2 ;
+                 DROP ;
+                 PUSH int 1 ;
+                 DUP 2 ;
+                 ADD ;
+                 DUG 1 ;
+                 DIG 0 ;
+                 DROP ;
+                 UNIT ;
+                 DROP ;
+                 PUSH int 5 ;
+                 DUP 2 ;
+                 COMPARE ;
+                 LT } ;
+          DROP ;
+          DROP ;
+          UNIT }
+        { DROP } ;
+      DROP ;
+      UNIT }
+
+    Optimised:
+    { PUSH (list nat) { 1 ; 2 } ;
+      LEFT (or (list nat) nat) ;
+      IF_LEFT
+        { DROP ;
+          PUSH int 0 ;
+          PUSH int 5 ;
+          DUP 2 ;
+          COMPARE ;
+          LT ;
+          LOOP { PUSH int 1 ; ADD ; PUSH int 5 ; DUP 2 ; COMPARE ; LT } ;
+          DROP }
+        { DROP } ;
+      UNIT } |}]

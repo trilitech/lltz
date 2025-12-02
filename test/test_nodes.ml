@@ -727,10 +727,8 @@ let%expect_test "assign inside for loop" =
              COMPARE ;
              LT } ;
       DROP ;
-      UNIT ;
       DROP ;
-      SWAP ;
-      SWAP ;
+      UNIT ;
       DROP }
 
     Optimised:
@@ -1451,9 +1449,8 @@ let%expect_test "while" =
              DUP 2 ;
              COMPARE ;
              LT } ;
-      UNIT ;
-      SWAP ;
-      DROP }
+      DROP ;
+      UNIT }
 
     Optimised:
     { PUSH int 0 ;
@@ -1572,9 +1569,8 @@ let%expect_test "for" =
              COMPARE ;
              LT } ;
       DROP ;
-      UNIT ;
-      SWAP ;
-      DROP }
+      DROP ;
+      UNIT }
 
     Optimised:
     { PUSH nat 0 ;
