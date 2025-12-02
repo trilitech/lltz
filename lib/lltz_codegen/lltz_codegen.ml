@@ -266,25 +266,13 @@ let rec compile : LLTZ.E.t -> t =
            ; if_left = { lam_var = Var left, _; body = l }
            ; if_right = { lam_var = Var right, _; body = r }
            } -> compile_if_left subject (left, l) (right, r)
-       | While { cond; body } -> compile_while cond body
-       | While_left { cond; body = { lam_var = Var var, _; body = body_lambda } } ->
-         compile_while_left cond var body_lambda expr.type_
-       | For { index = Mut_var var; init; cond; update; body } ->
-         compile_for var init cond update body
-       | For_each { collection; body = { lam_var = Var var, _; body = lambda_body } } ->
-         compile_for_each collection var lambda_body
-       | Map { collection; map = { lam_var = Var var, _; body = lam_body } } ->
-         compile_map collection var lam_body
-       | Fold_left
-           { collection
-           ; init = init_body
-           ; fold = { lam_var = Var var, _; body = fold_body }
-           } -> compile_fold_left collection init_body var fold_body
-       | Fold_right
-           { collection
-           ; init = init_body
-           ; fold = { lam_var = Var var, _; body = fold_body }
-           } -> compile_fold_right collection init_body var fold_body
+       | While _ -> compile_while expr
+       | While_left _-> compile_while_left expr
+       | For _ -> compile_for expr
+       | For_each _ -> compile_for_each expr
+       | Map _ -> compile_map expr
+       | Fold_left _ -> compile_fold_left expr
+       | Fold_right _ -> compile_fold_right expr
        | Let_tuple_in _ -> compile_let_tuple_in expr
        | Tuple row -> compile_tuple row
        | Proj (tuple, path) -> compile_proj tuple path
@@ -410,6 +398,11 @@ and remove_unused (e : LLTZ.E.t) =
   let unused_list = Set.elements unused in
   Slot.collect_all (List.map ~f:(fun x -> `Ident x) unused_list)
 
+and remove_last_used (e : LLTZ.E.t) =
+  let last_used = e.annotations.last_used_vars in
+  let last_used_list = Set.elements last_used in
+  Slot.collect_all (List.map ~f:(fun x -> `Ident x) last_used_list)
+
 (* Compile an if-bool expression by compiling the condition, then applying the if-bool instruction to the condition and the true and false branches. *)
 and compile_if_bool condition if_true if_false =
   seq
@@ -464,39 +457,54 @@ and compile_if_left subject (left, l) (right, r) =
     ]
 
 (* Compile a while expression by compiling the invariant, then applying the loop instruction to the body and invariant. *)
-and compile_while invariant body =
-  seq [ compile invariant; loop (seq [ compile body; drop 1; compile invariant ]); unit ]
+and compile_while expr =
+  match expr.desc with
+  | While { cond = invariant; body } ->
+    seq [ compile invariant; 
+      loop (seq [ compile body; drop 1; compile invariant ]); 
+      remove_last_used expr;
+      unit 
+    ]
+  | _ -> assert false
 
 (* Compile a while-left expression by compiling the invariant, then applying the loop-left instruction to the body and invariant. *)
-and compile_while_left init_val var body_lambda res_ty =
-  seq
-    [ compile init_val
-    ; left (convert_type res_ty)
-    ; loop_left
-        (seq
-           [ Slot.let_
-               (`Ident var)
-               ~unused_set:(unused_set body_lambda)
-               ~in_:(compile body_lambda)
-           ])
-    ]
+and compile_while_left expr =
+  match expr.desc with
+  | While_left { cond = init_val; body = { lam_var = Var var, _; body = body_lambda } } ->
+    seq
+      [ compile init_val
+      ; left (convert_type expr.type_)
+      ; loop_left
+          (seq
+             [ Slot.let_
+                 (`Ident var)
+                 ~unused_set:(unused_set body_lambda)
+                 ~in_:(compile body_lambda)
+             ])
+      ; remove_last_used expr
+      ]
+  | _ -> assert false
 
 (* Compile a for expression by compiling the initial value, invariant, variant, and body,
    then applying the loop to the sequence of body, variant, and invariant. *)
-and compile_for index init invariant variant body =
-  let init_instr = compile init in
-  let inv_instr = compile invariant in
-  seq
-    [ init_instr
-    ; Slot.let_
-        (`Ident index)
-        ~in_:
-          (seq
-             [ inv_instr
-             ; loop (seq [ compile body; drop 1; compile variant; drop 1; inv_instr ])
-             ])
-    ; unit
-    ]
+and compile_for expr (*index init invariant variant body*) =
+  match expr.desc with
+  | For { index = Mut_var index; init; cond; update; body } ->
+    let init_instr = compile init in
+    let inv_instr = compile cond in
+    seq
+      [ init_instr
+      ; Slot.let_
+          (`Ident index)
+          ~in_:
+            (seq
+               [ inv_instr
+               ; loop (seq [ compile body; drop 1; compile update; drop 1; inv_instr ])
+               ])
+      ; remove_last_used expr
+      ; unit
+      ]
+  | _ -> assert false
 
 (* Compile a tuple expression by compiling each component and pairing them together. *)
 and compile_tuple row =
@@ -688,75 +696,91 @@ and compile_create_contract
   | _ -> raise_s [%message "Tuple expected"]
 
 (* Compile for-each expression by compiling the collection, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the body. *)
-and compile_for_each collection var body =
-  let coll_instr = compile collection in
-  trace
-    ~flag:"for_each "
-    (seq
-       [ coll_instr
-       ; iter
-           (seq
-              [ Slot.let_
-                  (`Ident var)
-                  ~unused_set:(unused_set body)
-                  ~in_:(seq [ compile body; drop 1 ])
-              ])
-       ; unit
-       ])
+and compile_for_each expr =
+  match expr.desc with
+  | For_each { collection; body = { lam_var = Var var, _; body = body } } ->
+    let coll_instr = compile collection in
+    trace
+      ~flag:"for_each "
+      (seq
+         [ coll_instr
+         ; iter
+             (seq
+                [ Slot.let_
+                    (`Ident var)
+                    ~unused_set:(unused_set body)
+                    ~in_:(seq [ compile body; drop 1 ])
+                ])
+         ; remove_last_used expr
+         ; unit
+         ])
+  | _ -> assert false
 
 (* Compile map expression by compiling the collection, then applying the MAP instruction that maps over the collection and binds the values to the variables in the function body. *)
-and compile_map collection var lam_body =
-  let coll_instr = compile collection in
-  seq
-    [ coll_instr
-    ; map_
-        (seq
+and compile_map expr =
+  match expr.desc with
+  | Map { collection; map = { lam_var = Var var, _; body = lam_body } } ->
+    let coll_instr = compile collection in
+    seq
+      [ coll_instr
+      ; map_
+          (seq
            [ Slot.let_
                (`Ident var)
                ~unused_set:(unused_set lam_body)
                ~in_:(compile lam_body)
            ])
+    ; remove_last_used expr
     ]
+  | _ -> assert false
 
 (* Compile fold-left expression by compiling the collection, initial value, and body, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the function body. *)
-and compile_fold_left collection init_body var fold_body =
-  let coll_instr = compile collection in
-  let init_instr = compile init_body in
-  seq
-    [ init_instr
-    ; coll_instr
-    ; iter
-        (seq
-           [ swap
-           ; pair
-           ; (* Creates pair (acc, val) *)
-             Slot.let_
-               (`Ident var)
-               ~unused_set:(unused_set fold_body)
-               ~in_:(compile fold_body)
-           ])
-    ]
+and compile_fold_left expr =
+  match expr.desc with
+  | Fold_left { collection; init = init_body; fold = { lam_var = Var var, _; body = fold_body } } -> 
+      let coll_instr = compile collection in
+      let init_instr = compile init_body in
+      seq
+      [ init_instr
+      ; coll_instr
+      ; iter
+          (seq
+             [ swap
+             ; pair
+             ; (* Creates pair (acc, val) *)
+               Slot.let_
+                 (`Ident var)
+                 ~unused_set:(unused_set fold_body)
+                 ~in_:(compile fold_body)
+             ])
+      ; remove_last_used expr
+      ]
+  | _ -> assert false
 
 (* Compile fold-right expression by compiling the collection, initial value, and body, then applying the ITER instruction that iterates over the collection and binds the values to the variables in the function body. *)
-and compile_fold_right collection init_body var fold_body =
-  let coll_instr = compile collection in
-  let init_instr = compile init_body in
-  seq
-    [ init_instr
-    ; coll_instr
-    ; nil (convert_type (get_coll_elem_type collection))
-    ; swap
-    ; iter (seq [ cons ])
-    ; iter
-        (seq
-           [ pair
-           ; (* Creates pair (val, acc) *)
-             Slot.let_
-               (`Ident var)
-               ~unused_set:(unused_set fold_body)
-               ~in_:(compile fold_body)
-           ])
-    ]
+and compile_fold_right expr =
+  match expr.desc with
+  | Fold_right { collection; init = init_body; fold = { lam_var = Var var, _; body = fold_body } } -> 
+      let coll_instr = compile collection in
+      let init_instr = compile init_body in
+      seq
+        [ init_instr
+        ; coll_instr
+        ; nil (convert_type (get_coll_elem_type collection))
+        ; swap
+        ; iter (seq [ cons ])
+        ; iter
+            (seq
+               [ pair
+               ; (* Creates pair (val, acc) *)
+                 Slot.let_
+                   (`Ident var)
+                   ~unused_set:(unused_set fold_body)
+                   ~in_:(compile fold_body)
+               ])
+        ; remove_last_used expr
+        ]
+  | _ -> assert false
 
 and get_coll_elem_type collection =
   match collection.type_.desc with

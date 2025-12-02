@@ -4570,3 +4570,281 @@ let%expect_test "test_global_constant" =
 
     Optimised:
     { PUSH int 99 ; PUSH int 1 ; constant "SomeGlobalHash" } |}]
+
+let%expect_test "last used var in for each body" =
+  let param_ty =
+    or_ty
+      (Node
+         [ Leaf (Option.some @@ Row.Label "endorsement", list_ty nat_ty)
+         ; Leaf (Option.some @@ Row.Label "proposal", nat_ty)
+         ])
+  in
+  let lst = cons (nat 1) (cons (nat 2) (nil nat_ty)) in
+  let param = left (Some "endorsement", Some "proposal", param_ty) lst in
+  let expr =
+    let_in
+      (var "PROBLEM")
+      ~rhs:(nat 0)
+      ~in_:
+        (let_in
+           (var "_ignore")
+           ~rhs:
+             (if_left
+                param
+                ~left:
+                  { lam_var = var "left_", list_ty nat_ty
+                  ; body =
+                      for_each
+                        (variable (var "left_") (list_ty nat_ty))
+                        ~body:
+                          { lam_var = var "_iter", nat_ty
+                          ; body = variable (var "PROBLEM") nat_ty
+                          }
+                  }
+                ~right:
+                  { lam_var = var "right_", nat_ty
+                  ; body = variable (var "PROBLEM") nat_ty
+                  })
+           (*~in_:(variable (var "PROBLEM") nat_ty))*)
+           ~in_:unit) 
+  in
+  test_and_print "last used var in for each body" expr;
+  [%expect {||}]
+
+let%expect_test "last used var in map body" =
+  let param_ty =
+    or_ty
+      (Node
+         [ Leaf (Option.some @@ Row.Label "endorsement", list_ty nat_ty)
+         ; Leaf (Option.some @@ Row.Label "proposal", nat_ty)
+         ])
+  in
+  let lst = cons (nat 1) (cons (nat 2) (nil nat_ty)) in
+  let param = left (Some "endorsement", Some "proposal", param_ty) lst in
+  let expr =
+    let_in
+      (var "PROBLEM")
+      ~rhs:(nat 0)
+      ~in_:
+        (let_in
+           (var "_ignore")
+           ~rhs:
+             (if_left
+                param
+                ~left:
+                  { lam_var = var "left_", list_ty nat_ty
+                  ; body =
+                      map
+                        (variable (var "left_") (list_ty nat_ty))
+                        ~map:
+                          { lam_var = var "_iter", nat_ty
+                          ; body = variable (var "PROBLEM") nat_ty
+                          }
+                  }
+                ~right:
+                  { lam_var = var "right_", nat_ty
+                  ; body = variable (var "PROBLEM") nat_ty
+                  })
+           (*~in_:(variable (var "PROBLEM") nat_ty))*)
+           ~in_:unit) 
+  in
+  test_and_print "last used var in map body" expr;
+  [%expect {||}]
+
+
+let%expect_test "last used var in fold_left body" =
+  let param_ty =
+    or_ty
+      (Node
+         [ Leaf (Option.some @@ Row.Label "endorsement", list_ty nat_ty)
+         ; Leaf (Option.some @@ Row.Label "proposal", nat_ty)
+         ])
+  in
+  let lst = cons (nat 1) (cons (nat 2) (nil nat_ty)) in
+  let param = left (Some "endorsement", Some "proposal", param_ty) lst in
+  let expr =
+    let_in
+      (var "PROBLEM")
+      ~rhs:(nat 0)
+      ~in_:
+        (let_in
+           (var "_ignore")
+           ~rhs:
+             (if_left
+                param
+                ~left:
+                  { lam_var = var "left_", list_ty nat_ty
+                  ; body =
+                    fold_left
+                      (variable (var "left_") (list_ty nat_ty))
+                      ~init:(int 0)
+                      ~fold:{ lam_var = var "acc", mk_tuple_ty [ int_ty; int_ty ]; body = 
+                        variable (var "PROBLEM") nat_ty
+                      }
+                  }
+                ~right:
+                  { lam_var = var "right_", nat_ty
+                  ; body = variable (var "PROBLEM") nat_ty
+                  })
+           (*~in_:(variable (var "PROBLEM") nat_ty))*)
+           ~in_:unit) 
+  in
+  test_and_print "last used var in fold_left body" expr;
+  [%expect {||}]
+
+let%expect_test "last used var in fold_right body" =
+  let param_ty =
+    or_ty
+      (Node
+         [ Leaf (Option.some @@ Row.Label "endorsement", list_ty nat_ty)
+         ; Leaf (Option.some @@ Row.Label "proposal", nat_ty)
+         ])
+  in
+  let lst = cons (nat 1) (cons (nat 2) (nil nat_ty)) in
+  let param = left (Some "endorsement", Some "proposal", param_ty) lst in
+  let expr =
+    let_in
+      (var "PROBLEM")
+      ~rhs:(nat 0)
+      ~in_:
+        (let_in
+           (var "_ignore")
+           ~rhs:
+             (if_left
+                param
+                ~left:
+                  { lam_var = var "left_", list_ty nat_ty
+                  ; body =
+                    fold_right
+                      (variable (var "left_") (list_ty nat_ty))
+                      ~init:(int 0)
+                      ~fold:{ lam_var = var "acc", mk_tuple_ty [ int_ty; int_ty ]; body = 
+                        variable (var "PROBLEM") nat_ty
+                      }
+                  }
+                ~right:
+                  { lam_var = var "right_", nat_ty
+                  ; body = variable (var "PROBLEM") nat_ty
+                  })
+           (*~in_:(variable (var "PROBLEM") nat_ty))*)
+           ~in_:unit) 
+  in
+  test_and_print "last used var in fold_right body" expr;
+  [%expect {||}]
+
+let%expect_test "last used var in while body" =
+  let param_ty =
+    or_ty
+      (Node
+         [ Leaf (Option.some @@ Row.Label "endorsement", list_ty nat_ty)
+         ; Leaf (Option.some @@ Row.Label "proposal", nat_ty)
+         ])
+  in
+  let lst = cons (nat 1) (cons (nat 2) (nil nat_ty)) in
+  let param = left (Some "endorsement", Some "proposal", param_ty) lst in
+  let expr =
+    let_in
+      (var "PROBLEM")
+      ~rhs:(nat 0)
+      ~in_:
+        (let_in
+           (var "_ignore")
+           ~rhs:
+             (if_left
+                param
+                ~left:
+                  { lam_var = var "left_", list_ty nat_ty
+                  ; body =
+                    while_
+                      (lt (variable (var "left_") (list_ty nat_ty)) (int 10))
+                      ~body:(variable (var "PROBLEM") nat_ty)
+                  }
+                ~right:
+                  { lam_var = var "right_", nat_ty
+                  ; body = variable (var "PROBLEM") nat_ty
+                  })
+           (*~in_:(variable (var "PROBLEM") nat_ty))*)
+           ~in_:unit) 
+  in
+  test_and_print "last used var in while body" expr;
+  [%expect {||}]
+
+let%expect_test "last used var in while_left body" =
+  let param_ty =
+    or_ty
+      (Node
+         [ Leaf (Option.some @@ Row.Label "endorsement", list_ty nat_ty)
+         ; Leaf (Option.some @@ Row.Label "proposal", nat_ty)
+         ])
+  in
+  let lst = cons (nat 1) (cons (nat 2) (nil nat_ty)) in
+  let param = left (Some "endorsement", Some "proposal", param_ty) lst in
+  let expr =
+    let_in
+      (var "PROBLEM")
+      ~rhs:(nat 0)
+      ~in_:
+        (let_in
+           (var "_ignore")
+           ~rhs:
+             (if_left
+                param
+                ~left:
+                  { lam_var = var "left_", list_ty nat_ty
+                  ; body =
+                    while_left
+                      param
+                      ~body:{ lam_var = var "_iter", nat_ty; body = (
+                        let_in (var "_ignore2") 
+                        ~rhs:(variable (var "PROBLEM") nat_ty) 
+                        ~in_:param) }
+                  }
+                ~right:
+                  { lam_var = var "right_", nat_ty
+                  ; body = variable (var "PROBLEM") nat_ty
+                  })
+           (*~in_:(variable (var "PROBLEM") nat_ty))*)
+           ~in_:unit) 
+  in
+  test_and_print "last used var in while_left body" expr;
+  [%expect {||}]
+
+let%expect_test "last used var in for body" =
+  let param_ty =
+    or_ty
+      (Node
+         [ Leaf (Option.some @@ Row.Label "endorsement", list_ty nat_ty)
+         ; Leaf (Option.some @@ Row.Label "proposal", nat_ty)
+         ])
+  in
+  let lst = cons (nat 1) (cons (nat 2) (nil nat_ty)) in
+  let param = left (Some "endorsement", Some "proposal", param_ty) lst in
+  let expr =
+    let_in
+      (var "PROBLEM")
+      ~rhs:(nat 0)
+      ~in_:
+        (let_in
+           (var "_ignore")
+           ~rhs:
+             (if_left
+                param
+                ~left:
+                  { lam_var = var "left_", list_ty nat_ty
+                  ; body =
+                    (for_
+                      (mut_var "idx")
+                      ~init:(int 0)
+                      ~cond:(lt (deref (mut_var "idx") int_ty) (int 5))
+                      ~update:(assign (mut_var "idx") (add (deref (mut_var "idx") int_ty) (int 1)))
+                      ~body:(variable (var "PROBLEM") nat_ty) )
+                  }
+                ~right:
+                  { lam_var = var "right_", nat_ty
+                  ; body = variable (var "PROBLEM") nat_ty
+                  })
+           (*~in_:(variable (var "PROBLEM") nat_ty))*)
+           ~in_:unit) 
+  in
+  test_and_print "last used var in for body" expr;
+  [%expect {||}]
