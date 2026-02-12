@@ -1,6 +1,6 @@
 module Tezos_micheline = Tezos_micheline
-module Michelson = Michelson
-module Oasis_core = Oasis_core
+module Michelson = Lltz_michelson
+module Oasis_core = Smartpy_core
 module If_suffix_rewriter = If_suffix_rewriter
 open Core
 

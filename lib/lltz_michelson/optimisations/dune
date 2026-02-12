@@ -4,10 +4,10 @@
  (libraries
   core
   octez-libs.micheline
-  michelson
-  lltz.michelson.optimisations.utils
-  lltz.michelson.optimisations.michelson_base
-  lltz.michelson.optimisations.oasis_core
+  lltz.michelson
+  lltz.michelson.optimisations.smartpy_utils
+  lltz.michelson.optimisations.smartpy_michelson_base
+  lltz.michelson.optimisations.smartpy_core
  )
  (preprocess
   (pps
