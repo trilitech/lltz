@@ -106,6 +106,8 @@ let type_prim1 = function
   | Concat1
   | Size
   | Address
+  | Index_address
+  | Get_address_index
   | Implicit_account
   | Is_implicit_account
   | Pack
