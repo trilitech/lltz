@@ -165,6 +165,8 @@ let rec may_fail = function
       | Concat1
       | Size
       | Address
+      | Index_address
+      | Get_address_index
       | Implicit_account
       | Is_implicit_account
       | Pack
@@ -235,10 +237,132 @@ let may_diverge instr =
   cata_instr { f_instr; f_literal } { instr }
 ;;
 
+(** Side effects not reflected in stack outputs. Currently only [Index_address],
+    which mutates the global address registry, and [Exec].
+
+    Recurses into sequences and control structures so that e.g.
+    [IF { INDEX_ADDRESS; ... } { ... }; DROP] is not treated as harmless. Does
+    not recurse into lambdas: an [INDEX_ADDRESS] inside a lambda only takes
+    effect if the lambda is executed (so [LAMBDA { INDEX_ADDRESS }; DROP] may
+    still be eliminated). DIG/DIP bubble rules below gate on this predicate. *)
+let rec may_have_side_effects = function
+  | MI1 Index_address | MI2 Exec -> true
+  | Michelson.MIseq l -> List.exists ~f:(fun x -> may_have_side_effects x.instr) l
+  | MIif (i1, i2) | MIif_cons (i1, i2) | MIif_none (i1, i2) | MIif_left (i1, i2) ->
+    may_have_side_effects i1.instr || may_have_side_effects i2.instr
+  | MIdip i | MIdipn (_, i) | MIloop i | MIloop_left i | MIiter i | MImap i ->
+    may_have_side_effects i.instr
+  | MIcomment _ | MIdrop | MIdropn _ | MIdup _ | MIdig _ | MIdug _
+  | MI0
+      ( Sender
+      | Source
+      | Amount
+      | Balance
+      | Level
+      | Now
+      | Self _
+      | Self_address
+      | Chain_id
+      | Total_voting_power
+      | Sapling_empty_state _
+      | Unit_
+      | None_ _
+      | Nil _
+      | Empty_set _
+      | Empty_map _
+      | Empty_bigmap _
+      | Min_block_time )
+  | MI1
+      ( Car
+      | Cdr
+      | Some_
+      | Eq
+      | Abs
+      | Neg
+      | Int
+      | Nat
+      | Bytes
+      | IsNat
+      | Neq
+      | Le
+      | Lt
+      | Ge
+      | Gt
+      | Not
+      | Concat1
+      | Size
+      | Address
+      | Get_address_index
+      | Implicit_account
+      | Is_implicit_account
+      | Pack
+      | Hash_key
+      | Blake2b
+      | Sha256
+      | Sha512
+      | Keccak
+      | Sha3
+      | Set_delegate
+      | Read_ticket
+      | Join_tickets
+      | Pairing_check
+      | Voting_power
+      | Left _
+      | Right _
+      | Contract _
+      | Unpack _
+      | Getn _
+      | Cast _
+      | Rename _
+      | Emit _ )
+  | MI1_fail _
+  | MI2
+      ( Pair _
+      | Xor
+      | Ediv
+      | And
+      | Or
+      | Cons
+      | Compare
+      | Concat2
+      | Get
+      | Mem
+      | Apply
+      | Sapling_verify_update
+      | Ticket
+      | Ticket_deprecated
+      | Split_ticket
+      | Updaten _
+      | Sub_mutez
+      | Lsl
+      | Lsr
+      | Add
+      | Sub
+      | Mul
+      | View _ )
+  | MI3 (Slice | Update | Get_and_update | Transfer_tokens | Check_signature | Open_chest)
+  | MIerror _
+  | MImich _
+  | MIswap
+  | MIpush _
+  | MIunpair _
+  | MIpairn _
+  | MIfield _
+  | MIsetField _
+  | MIlambda _
+  | MIlambda_rec _
+  | MIcreate_contract _
+  | MIconcat1
+  | MIconcat2
+  | MIconcat_unresolved
+  | MIConstant _ -> false
+;;
+
 (*
-   Checks if an instruction is harmless, meaning it neither fails nor diverges.
+   Checks if an instruction is harmless, meaning it neither fails, diverges,
+   nor has side effects outside the stack.
 *)
-let harmless i = not (may_fail i || may_diverge i)
+let harmless i = not (may_fail i || may_diverge i || may_have_side_effects i)
 
 let is_comparison = function
   | MI1 Eq | MI1 Neq | MI1 Ge | MI1 Gt | MI1 Le | MI1 Lt -> true
@@ -733,7 +857,7 @@ let main (expr : instr_list) : (instr_list * instr_list) option =
     | p1 :: p2 :: MIdig 1 :: rest when is_pure_push p1 && is_pure_push p2 ->
       [ p2; p1 ] $ rest
     | i :: (push :: MI1_fail Failwith :: _ as rest)
-      when is_pure_push push && not (may_fail i) -> [] $ rest
+      when is_pure_push push && not (may_fail i || may_have_side_effects i) -> [] $ rest
     | i :: MIdrop :: rest when is_pushy i && harmless i -> [] $ rest
     | i :: MIdrop :: rest when has_arity (1, 1) i && harmless i -> [ MIdrop ] $ rest
     | i :: MIdrop :: rest when has_arity (2, 1) i && harmless i ->
@@ -748,7 +872,8 @@ let main (expr : instr_list) : (instr_list * instr_list) option =
     | MIdip { instr = MIdrop } :: rest -> [ MIdig 1; MIdrop ] $ rest
     | MIdip { instr = Michelson.MIseq [] } :: rest -> [] $ rest
     | MIdip i1 :: MIdip i2 :: rest -> [ MIdip (iseq [ i1; i2 ]) ] $ rest
-    | MIdup 1 :: MIdip { instr } :: rest when has_arity (1, 1) instr ->
+    | MIdup 1 :: MIdip { instr } :: rest
+      when has_arity (1, 1) instr && not (may_have_side_effects instr) ->
       [ MIdup 1; instr; MIdig 1 ] $ rest
     (* Push literals: *)
     | MIpush (t, l) :: MI1 Some_ :: rest ->
@@ -817,14 +942,20 @@ let main (expr : instr_list) : (instr_list * instr_list) option =
     | MIdig 1 :: MIdrop :: MIdrop :: rest -> [ MIdrop; MIdrop ] $ rest
     | MIdip i :: MIdrop :: rest -> [ MIdrop; i.instr ] $ rest
     (* Bubble up DIP: *)
-    | mono :: MIdip i :: rest when has_arity (1, 1) mono -> [ MIdip i; mono ] $ rest
+    | mono :: MIdip i :: rest
+      when has_arity (1, 1) mono && not (may_have_side_effects mono) ->
+      [ MIdip i; mono ] $ rest
     | p :: MIdip { instr } :: rest when is_pure_push p -> [ instr; p ] $ rest
     (* Bubble up SWAP: *)
-    | p :: MIdig 1 :: mono :: rest when has_arity (1, 1) mono && is_pure_push p ->
-      [ mono; p; MIdig 1 ] $ rest
+    | p :: MIdig 1 :: mono :: rest
+      when has_arity (1, 1) mono
+           && (not (may_have_side_effects mono))
+           && is_pure_push p -> [ mono; p; MIdig 1 ] $ rest
     | m1 :: MIdig 1 :: m2 :: MIdig 1 :: rest
-      when has_arity (1, 1) m1 && has_arity (1, 1) m2 ->
-      [ MIdig 1; m2; MIdig 1; m1 ] $ rest
+      when has_arity (1, 1) m1
+           && has_arity (1, 1) m2
+           && (not (may_have_side_effects m1))
+           && not (may_have_side_effects m2) -> [ MIdig 1; m2; MIdig 1; m1 ] $ rest
     (* DIG & DUG: *)
     | MIdig n1 :: (MIcomment _ as c) :: MIdug n2 :: rest when n1 = n2 -> [ c ] $ rest
     | MIdug n1 :: (MIcomment _ as c) :: MIdig n2 :: rest when n1 = n2 -> [ c ] $ rest
@@ -843,10 +974,14 @@ let main (expr : instr_list) : (instr_list * instr_list) option =
       then [ MIdig (n - 1); MIdrop; MIdup k ] $ rest
       else [ MIdig (n - 1); MIdrop; MIdup (k - 1) ] $ rest
     | MIdup k :: MIdig n :: rest when n = k -> [ MIdig (n - 1); MIdup 1 ] $ rest
-    | MIdug n1 :: mono :: MIdig n2 :: rest when n1 = n2 && has_arity (1, 1) mono && n1 > 1
-      -> [ MIdig 1; mono; MIdig 1 ] $ rest
-    | MIdig n :: MIdig 1 :: mono :: MIdig 1 :: rest when n >= 1 && has_arity (1, 1) mono
-      -> [ mono; MIdig n ] $ rest
+    | MIdug n1 :: mono :: MIdig n2 :: rest
+      when n1 = n2
+           && has_arity (1, 1) mono
+           && (not (may_have_side_effects mono))
+           && n1 > 1 -> [ MIdig 1; mono; MIdig 1 ] $ rest
+    | MIdig n :: MIdig 1 :: mono :: MIdig 1 :: rest
+      when n >= 1 && has_arity (1, 1) mono && not (may_have_side_effects mono) ->
+      [ mono; MIdig n ] $ rest
     | MIdug n1 :: MIdig n2 :: MIdrop :: rest when n1 <> n2 && n1 >= 1 && n2 >= 1 ->
       if n1 > n2
       then [ MIdig (n2 + 1); MIdrop; MIdug (n1 - 1) ] $ rest
@@ -926,7 +1061,8 @@ let main (expr : instr_list) : (instr_list * instr_list) option =
     | MIcomment comment :: MIdig 1 :: rest -> [ MIdig 1; MIcomment comment ] $ rest
     | MIcomment comment :: MIdig n :: MIdrop :: rest ->
       [ MIdig n; MIdrop; MIcomment comment ] $ rest
-    | mono :: MIdig n :: MIdrop :: rest when n >= 1 && has_arity (1, 1) mono ->
+    | mono :: MIdig n :: MIdrop :: rest
+      when n >= 1 && has_arity (1, 1) mono && not (may_have_side_effects mono) ->
       [ MIdig n; MIdrop; mono ] $ rest
     | (MIiter { instr = MI2 Cons } as mono) :: MIdig n :: MIdrop :: rest when n > 1 ->
       [ MIdig (n + 1); MIdrop; mono ] $ rest
@@ -1018,16 +1154,20 @@ let main (expr : instr_list) : (instr_list * instr_list) option =
     | MIdig 1 :: MIdup 1 :: MIdug 2 :: rest -> [ MIdup 2 ] $ rest
     | MIdup 2 :: MIdig 1 :: MIdrop :: rest -> [ MIdrop; MIdup 1 ] $ rest
     | (MIdig n | MIdug n) :: _ as instrs -> dig_dug ~with_comments:false n instrs
-    | MIdup 1 :: MIdug 2 :: p :: MIdig 1 :: rest when has_arity (1, 1) p ->
+    | MIdup 1 :: MIdug 2 :: p :: MIdig 1 :: rest
+      when has_arity (1, 1) p && not (may_have_side_effects p) ->
       [ MIdup 1; p; MIdig 2 ] $ rest
     | MIdup 1 :: MIfield [ D ] :: MIdug 2 :: MIfield [ A ] :: rest ->
       [ MIunpair [ true; true ]; MIdig 2; MIdig 1 ] $ rest
     | MIdup 1 :: MIdup 2 :: rest -> [ MIdup 1; MIdup 1 ] $ rest
     | MIdup 1 :: MIdup 1 :: f :: push :: MIdig 3 :: rest
-      when has_arity (1, 1) f && is_pure_push push -> [ MIdup 1; f; push; MIdup 3 ] $ rest
+      when has_arity (1, 1) f
+           && (not (may_have_side_effects f))
+           && is_pure_push push -> [ MIdup 1; f; push; MIdup 3 ] $ rest
     | MIdup 1 :: f :: push :: MIdup 3 :: MIdup 1 :: MIdug 4 :: rest
-      when has_arity (1, 1) f && is_pure_push push ->
-      [ MIdup 1; MIdup 1; f; push; MIdup 3 ] $ rest
+      when has_arity (1, 1) f
+           && (not (may_have_side_effects f))
+           && is_pure_push push -> [ MIdup 1; MIdup 1; f; push; MIdup 3 ] $ rest
     | MI0 (Self None) :: MI1 Address :: rest -> [ MI0 Self_address ] $ rest
     | _ -> rewrite_none
   in

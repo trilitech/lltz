@@ -45,6 +45,8 @@ type 'ty prim1 =
   | Concat1 (** Concatenation of a list.*)
   | Size (** Size / Length.*)
   | Address (** Address of a contract.*)
+  | Index_address (** Index of an address in the global registry (Tallinn).*)
+  | Get_address_index (** Lookup address index in the global registry (Tallinn).*)
   | Implicit_account (** Implicit Account of a key_hash.*)
   | Is_implicit_account (** Is_implicit Account of an address.*)
   | Contract of string option * 'ty (** Contract of an address and entrypoint.*)
