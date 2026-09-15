@@ -1,5 +1,20 @@
 final: prev:
 with prev; {
+  # crates.io API returns 403 for curl's default User-Agent; fetch via static CDN
+  # (same change as nixpkgs import-cargo-lock / fetchCrate).
+  rustPlatform =
+    prev.rustPlatform
+    // {
+      importCargoLock = prev.callPackage (
+        prev.writeText "import-cargo-lock.nix" (
+          builtins.replaceStrings
+          ["\"https://crates.io/api/v1/crates\""]
+          ["\"https://static.crates.io/crates\""]
+          (builtins.readFile (prev.path + "/pkgs/build-support/rust/import-cargo-lock.nix"))
+        )
+      ) {};
+    };
+
   ocaml-ng =
     ocaml-ng
     // (with ocaml-ng; {
@@ -143,7 +158,7 @@ with prev; {
             version = "v21-ligo";
             src = octezSource;
             cargoRoot = "src/rust_deps";
-            cargoDeps = rustPlatform.importCargoLock {
+            cargoDeps = final.rustPlatform.importCargoLock {
               lockFile = "${octezSource.outPath}/src/rust_deps/Cargo.lock";
             };
             postPatch = ''
