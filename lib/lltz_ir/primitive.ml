@@ -42,6 +42,8 @@ type t =
   | Not
   | Size
   | Address
+  | Index_address
+  | Get_address_index
   | Implicit_account
   | Is_implicit_account
   | Contract of string option * Type.t

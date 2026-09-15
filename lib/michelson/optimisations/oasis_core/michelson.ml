@@ -1422,6 +1422,18 @@ let mi_is_implicit_account =
     | _ -> None)
 ;;
 
+let mi_index_address =
+  mk_spec_basic "INDEX_ADDRESS" ~arities:(1, 1) (function
+    | { mt = MT0 Address; _ } :: _ -> Some [ mt_nat ]
+    | _ -> None)
+;;
+
+let mi_get_address_index =
+  mk_spec_basic "GET_ADDRESS_INDEX" ~arities:(1, 1) (function
+    | { mt = MT0 Address; _ } :: _ -> Some [ mt_option mt_nat ]
+    | _ -> None)
+;;
+
 let mi_voting_power =
   mk_spec_basic "VOTING_POWER" ~arities:(1, 1) (function
     | { mt = MT0 Key_hash; _ } :: _ -> Some [ mt_nat ]
@@ -1523,6 +1535,8 @@ let spec_of_prim1 p =
   | Address -> mi_address
   | Implicit_account -> mi_implicit_account
   | Is_implicit_account -> mi_is_implicit_account
+  | Index_address -> mi_index_address
+  | Get_address_index -> mi_get_address_index
   | Voting_power -> mi_voting_power
   | Size -> mi_size
   | Car | Cdr -> assert false
@@ -1711,6 +1725,8 @@ let name_of_instr_exn = function
         | Address
         | Implicit_account
         | Is_implicit_account
+        | Index_address
+        | Get_address_index
         | Contract _
         | Pack
         | Unpack _
@@ -2134,6 +2150,8 @@ module Of_micheline = struct
          | "SELF_ADDRESS", [] -> MI0 Self_address
          | "IMPLICIT_ACCOUNT", [] -> MI1 Implicit_account
          | "IS_IMPLICIT_ACCOUNT", [] -> MI1 Is_implicit_account
+         | "INDEX_ADDRESS", [] -> MI1 Index_address
+         | "GET_ADDRESS_INDEX", [] -> MI1 Get_address_index
          | "TRANSFER_TOKENS", [] -> MI3 Transfer_tokens
          | "CHECK_SIGNATURE", [] -> MI3 Check_signature
          | "SET_DELEGATE", [] -> MI1 Set_delegate
@@ -2496,6 +2514,8 @@ module To_micheline = struct
           | Address
           | Implicit_account
           | Is_implicit_account
+          | Index_address
+          | Get_address_index
           | Pack
           | Hash_key
           | Blake2b

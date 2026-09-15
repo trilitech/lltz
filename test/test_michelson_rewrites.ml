@@ -2484,6 +2484,36 @@ let%expect_test "main_bubble_up_dip_after_one_to_one_mono" =
     ->
     { DROP ; PUSH int 123 } |}]
 
+(* INDEX_ADDRESS mutates the global address registry. A 1-1 instruction that
+   would otherwise bubble through DIP { PUSH }; DROP (see the NOT case above)
+   must not, or the registry write is lost. *)
+let%expect_test "index_address_does_not_bubble_through_dip_then_drop" =
+  test_instructions
+    [ MI1 Index_address
+    ; MIdip { instr = MIseq [ mk (MIpush (mt_int, MLiteral.small_int 123)) ] }
+    ; MIdrop
+    ];
+  [%expect {|
+    { INDEX_ADDRESS ; DIP { PUSH int 123 } ; DROP }
+    ->
+    { INDEX_ADDRESS ; DROP ; PUSH int 123 } |}]
+
+(* IF { INDEX_ADDRESS } { NOT } has arity (2, 1). Without may_have_side_effects
+   the IF would count as harmless and [i; DROP] would collapse to { DROP ; DROP }.
+   Instead DROP is pushed into both branches: INDEX_ADDRESS; DROP is kept (registry
+   write), while pure NOT; DROP simplifies to DROP. *)
+let%expect_test "if_index_address_then_drop_is_preserved" =
+  test_instructions
+    [ MIif
+        ( { instr = MIseq [ mk (MI1 Index_address) ] }
+        , { instr = MIseq [ mk (MI1 Not) ] } )
+    ; MIdrop
+    ];
+  [%expect {|
+    { IF { INDEX_ADDRESS } { NOT } ; DROP }
+    ->
+    { IF { INDEX_ADDRESS ; DROP } { DROP } } |}]
+
 let%expect_test "main_bubble_up_dip_push" =
   test_instructions
     [ MIpush (mt_string, MLiteral.string "pushed")
