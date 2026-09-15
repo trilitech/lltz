@@ -138,6 +138,30 @@ let%expect_test "mutez large" =
     Optimised:
     { PUSH mutez 10000000 } |}]
 
+let%test_unit "large numeric constants preserve precision" =
+  let boundaries =
+    List.map
+      ~f:Z.of_string
+      [ "4611686018427387903"; "4611686018427387904"; "9223372036854775807" ]
+  in
+  List.iter boundaries ~f:(fun expected ->
+    let constants =
+      Lltz_ir.Expr.[ Nat expected; Int expected; Mutez expected ]
+    in
+    List.iter constants ~f:(fun constant ->
+      match LM.convert_constant constant with
+      | Tezos_micheline.Micheline.Int (_, actual) ->
+        if Z.equal expected actual
+        then ()
+        else
+          failwithf
+            "numeric constant changed from %s to %s"
+            (Z.to_string expected)
+            (Z.to_string actual)
+            ()
+      | _ ->
+        Stdlib.failwith "numeric constant did not compile to a Micheline integer"))
+
 (* String Tests *)
 let%expect_test "string empty" =
   test_expr (string "");
